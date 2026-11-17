@@ -14,12 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`save_as_template`** (queue item 21), beta until its live check: saves
-  the active part, assembly or drawing as a `.prtdot`, `.asmdot` or
-  `.drwdot` copy, by path or by name into SolidWorks' template folder, so
+- **`save_as_template`** (queue item 21), checked live on SolidWorks 2026:
+  saves the active part, assembly or drawing as a `.prtdot`, `.asmdot` or
+  `.drwdot`, by path or by name into SolidWorks' template folder, so
   `create_part` (and the others) can start the next document with the same
-  units, material and properties. 135 tools.
-- **Material properties** (queue item 20): `get_material` also returns the
+  units, material and properties. SolidWorks then has the template open in
+  place of the document, as File > Save As does, and the reply says so.
+  135 tools.
+- **Material properties** (queue item 20), checked live on SolidWorks 2026:
+  `get_material` also returns the
   material's elastic modulus, Poisson's ratio, shear modulus, tensile, yield
   and compressive strength, density, thermal expansion, conductivity and
   specific heat, in SI units with SolidWorks' labels, read from the

@@ -27,13 +27,24 @@ SolidWorks' default templates or template folders; sheet-format files
 
 ## Decisions
 
-### 1. A copy, so the document stays open as itself
+### 1. The template opens in place of the document, and the reply says so
 
-`SaveAs3(path, 0, Copy | Silent)` writes the template and leaves the open
-document on its own path. Without the copy option the open part would
-become the template, and the next `save_file` would write the template.
-The adapter checks after the call that the file exists and that the
-document's path is unchanged.
+The plan was `SaveAs3(path, 0, Copy | Silent)`, leaving the open document
+on its own path. Live on SolidWorks 2026 (2026-11-16) the copy option made
+no difference, through `IModelDoc2.SaveAs3` or `IModelDocExtension.SaveAs`,
+for a part never saved or a saved one: SolidWorks has the template open in
+place of the document afterwards, as its own File > Save As does, and a
+saved document's file is left as last saved. So the adapter calls
+`IModelDocExtension.SaveAs(path, 0, Silent, null, errors, warnings)`,
+checks the file exists, and compares the document's path and title before
+and after (the path of a document never saved reads empty both times, so
+the title is needed); the reply's `document_became_template` and the tool's
+`warning` tell the agent the template is now open and `save_file` would
+change it.
+
+*Alternative:* close the template and reopen the original. Rejected: a
+document never saved has no original, and a saved one would lose changes
+made since its last save.
 
 ### 2. Type from the document, checked first
 
@@ -67,8 +78,8 @@ Rejected: the tool's path checks would then run after SolidWorks is asked.
 
 ## Risks / Trade-offs
 
-- [`SaveAs3` with the copy option ignored for templates] → the live test
-  checks the open part's path is unchanged after the save.
+- [The template is the open document after the save] → the reply warns, and
+  the skill's workflow starts the next part from the template.
 - [A template keeps geometry] → templates are usually empty; the
   description says to save from a part with no features when only settings
   are wanted. A part with geometry is allowed (SolidWorks allows it).

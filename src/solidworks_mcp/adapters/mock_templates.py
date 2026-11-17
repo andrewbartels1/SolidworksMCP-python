@@ -79,6 +79,17 @@ class MockTemplatesMixin:
                 getattr(adapter, "_custom_properties", {}).get((key, ""), {})
             ),
         }
+        # As in SolidWorks, the template is now the open document: its state
+        # moves to the template's path.
+        for store, old, new in (
+            ("_materials", key, file_path),
+            ("_custom_properties", (key, ""), (file_path, "")),
+            ("_models", key, file_path),
+        ):
+            held = adapter.__dict__.get(store, {})
+            if old in held:
+                held[new] = held.pop(old)
+        model.path = file_path
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data={
@@ -88,7 +99,9 @@ class MockTemplatesMixin:
                     file_path, list(self._mock_template_folders)
                 ),
                 "template_folders": list(self._mock_template_folders),
-                "document_path": key,
+                # Mock documents are never on disk.
+                "document_path": None,
+                "document_became_template": True,
             },
         )
 

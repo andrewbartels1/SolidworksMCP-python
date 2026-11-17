@@ -765,13 +765,14 @@ async def register_file_management_tools(
         `create_part`, `create_assembly` or `create_drawing` as `template`. A part
         saves as .prtdot, an assembly as .asmdot, a drawing as .drwdot. Give
         `file_path`, or `name` to save in SolidWorks' first template folder so it also
-        shows in File > New. The open document stays as it was: the template is a
-        copy. Save from a part with no features when only its settings should carry
+        shows in File > New. Afterwards SolidWorks has the template open in place of
+        the document, as File > Save As does (a saved document's file is left as last
+        saved); the reply's `warning` says so. Save from a part with no features when only its settings should carry
         over. The path is checked before SolidWorks is asked: the extension must
         match, the folder must exist, and a file already there is kept unless
         `overwrite` is on. Needs: an open, active document. Changes: writes the
         template. Returns: `data` with `file_path`, `document_type`,
-        `in_template_folder` and `template_folders`.
+        `in_template_folder`, `template_folders` and `document_became_template`.
 
         Args:
             input_data: `file_path` or `name` (one is required); `overwrite` is off.
@@ -813,7 +814,7 @@ async def register_file_management_tools(
         result = await adapter.save_as_template(target)
         require_success(result, "Failed to save the template")
         data = result.data or {}
-        return {
+        reply: dict[str, Any] = {
             "status": "success",
             "message": f"Saved the {data.get('document_type', 'document')} template "
             f"{target}; start a new one from it with template: {target!r}",
@@ -821,6 +822,21 @@ async def register_file_management_tools(
             "data": data,
             "execution_time": result.execution_time,
         }
+        if data.get("document_became_template"):
+            original = data.get("document_path")
+            kept = (
+                f"{original} is unchanged on disk, as last saved."
+                if original
+                else "The document had never been saved, so it now exists only "
+                "as this template."
+            )
+            reply["warning"] = (
+                f"SolidWorks now has the template {target} open in place of the "
+                f"document, as File > Save As does, so save_file would change the "
+                f"template. {kept} Start the next part with create_part and this "
+                "template."
+            )
+        return reply
 
     @mcp.tool()
     async def get_file_properties() -> dict[str, Any]:

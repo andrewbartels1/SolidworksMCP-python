@@ -35,3 +35,12 @@ class RateLimitError(SolidWorksMCPError):
     """Exception raised when rate limit is exceeded."""
 
     pass
+
+
+class InputRefused(ValueError):
+    """The adapter checked an input against the document and refused it.
+
+    An expected answer, not a fault: a section line that misses its view, a
+    point with nothing to dimension. It is logged as one line, without a
+    traceback, and the tools classify it as ``invalid_input``.
+    """

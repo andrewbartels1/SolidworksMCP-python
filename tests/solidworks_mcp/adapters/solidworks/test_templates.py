@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
+from solidworks_mcp.adapters.solidworks import templates
 from solidworks_mcp.adapters.solidworks.templates import (
     SolidWorksTemplatesMixin,
     in_folders,
@@ -47,12 +48,13 @@ class _Harness(SolidWorksTemplatesMixin):
 
 
 class _Part:
-    """A part whose ``SaveAs3`` writes the file and can misbehave on request."""
+    """A part whose extension's ``SaveAs`` writes the file, or misbehaves."""
 
-    def __init__(self, kind: int = 1, code: Any = 0, moves: bool = False) -> None:
-        self.kind, self.code, self.moves = kind, code, moves
+    def __init__(self, kind: int = 1, ok: Any = True, moves: bool = False) -> None:
+        self.kind, self.ok, self.moves = kind, ok, moves
         self.path = "C:/work/plate.SLDPRT"
         self.calls: list[tuple[Any, ...]] = []
+        self.Extension = SimpleNamespace(SaveAs=self._save_as)
 
     def GetType(self) -> int:
         return self.kind
@@ -60,13 +62,23 @@ class _Part:
     def GetPathName(self) -> str:
         return self.path
 
-    def SaveAs3(self, path: str, version: int, options: int) -> Any:
+    def GetTitle(self) -> str:
+        return Path(self.path).name if self.path else "Part1"
+
+    def _save_as(self, path: str, version: int, options: int, *rest: Any) -> Any:
         self.calls.append((path, version, options))
-        if self.code == 0:
+        if self.ok:
             Path(path).write_bytes(b"template")
         if self.moves:
             self.path = path
-        return self.code
+        return self.ok
+
+
+@pytest.fixture(autouse=True)
+def _plain_com(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No pywin32 wrapping: flagged objects and null callouts pass through."""
+    monkeypatch.setattr(templates._sw_type_info, "flagged", lambda obj, *_: obj)
+    monkeypatch.setattr(templates, "_null_callout", lambda: None)
 
 
 def test_split_folders() -> None:
@@ -80,8 +92,9 @@ def test_in_folders_compares_windows_paths() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_part_saves_a_copy_as_prtdot(tmp_path: Path) -> None:
-    part = _Part()
+async def test_a_saved_part_saves_as_prtdot(tmp_path: Path) -> None:
+    """As live, SolidWorks then has the template open; the reply says so."""
+    part = _Part(moves=True)
     target = str(tmp_path / "Plate.prtdot")
     harness = _Harness(part, f"{tmp_path};C:/elsewhere")
 
@@ -93,14 +106,15 @@ async def test_a_part_saves_a_copy_as_prtdot(tmp_path: Path) -> None:
         "document_type": "part",
         "extension": ".prtdot",
     }
-    # Version 0 (current), options 3 (silent and copy).
-    assert part.calls == [(target, 0, 3)]
+    # Version 0 (current), options 1 (silent).
+    assert part.calls == [(target, 0, 1)]
     assert result.data == {
         "file_path": target,
         "document_type": "part",
         "in_template_folder": True,
         "template_folders": [str(tmp_path), "C:/elsewhere"],
         "document_path": "C:/work/plate.SLDPRT",
+        "document_became_template": True,
     }
 
 
@@ -130,12 +144,22 @@ async def test_refusals_before_solidworks_is_asked(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_failed_save_and_a_switched_document(tmp_path: Path) -> None:
-    failed = await _Harness(_Part(code=1)).save_as_template(str(tmp_path / "x.prtdot"))
-    switched = await _Harness(_Part(moves=True)).save_as_template(
-        str(tmp_path / "y.prtdot")
+async def test_a_failed_save(tmp_path: Path) -> None:
+    failed = await _Harness(_Part(ok=False)).save_as_template(
+        str(tmp_path / "x.prtdot")
     )
 
     assert "didn't write the template" in failed.error
-    assert "SaveAs3 returned 1" in failed.error
-    assert "the open document is now" in switched.error
+    assert "SaveAs returned False" in failed.error
+
+
+@pytest.mark.asyncio
+async def test_a_part_never_saved_becomes_the_template(tmp_path: Path) -> None:
+    """SolidWorks ignores the copy option for a document never saved."""
+    unsaved = _Part(moves=True)
+    unsaved.path = ""
+
+    result = await _Harness(unsaved).save_as_template(str(tmp_path / "y.prtdot"))
+
+    assert result.data["document_path"] is None
+    assert result.data["document_became_template"] is True

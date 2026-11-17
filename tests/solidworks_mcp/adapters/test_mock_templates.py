@@ -27,6 +27,9 @@ async def test_a_new_part_starts_from_the_template(
     await adapter.set_custom_property("Company", "Acme")
 
     saved = await adapter.save_as_template("C:/Templates/Plate.prtdot")
+    # As in SolidWorks, the template is now the open document, with its state.
+    assert adapter._current_model.path == "C:/Templates/Plate.prtdot"
+    assert (await adapter.get_material()).data["material"] == "6061-T6 (SS)"
     made = await adapter.create_part("Next", template="C:/Templates/Plate.prtdot")
     material = await adapter.get_material()
     properties = await adapter.get_custom_properties()
@@ -37,7 +40,8 @@ async def test_a_new_part_starts_from_the_template(
         "document_type": "part",
         "in_template_folder": True,
         "template_folders": ["C:/Templates"],
-        "document_path": "Mock://Plate.sldprt",
+        "document_path": None,
+        "document_became_template": True,
     }
     assert made.data.properties["units"] == "in"
     assert adapter._current_model.name == "Blank"

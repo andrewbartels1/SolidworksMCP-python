@@ -1,9 +1,12 @@
 """Save the active document as a template (queue item 21).
 
-``IModelDoc2.SaveAs3`` with ``swSaveAsOptions_Copy`` writes a ``.prtdot``,
-``.asmdot`` or ``.drwdot`` and leaves the open document on its own path.
-The template folders are SolidWorks' ``swFileLocationsDocumentTemplates``
-preference, the folders File > New shows.
+``IModelDocExtension.SaveAs`` writes a ``.prtdot``, ``.asmdot`` or
+``.drwdot``. SolidWorks then has the template open in place of the
+document, as File > Save As does: seen live on SolidWorks 2026 for a part
+never saved and for a saved one, and ``swSaveAsOptions_Copy`` doesn't
+change it. The template folders are SolidWorks'
+``swFileLocationsDocumentTemplates`` preference, the folders File > New
+shows.
 """
 
 from __future__ import annotations
@@ -12,8 +15,10 @@ import ntpath
 import os
 from typing import Any, cast
 
+from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
-from .io import _doc_type
+from .features import _null_callout
+from .io import _byref_int, _doc_type
 
 #: The template extension for each document type (1 part, 2 assembly,
 #: 3 drawing).
@@ -22,8 +27,8 @@ TEMPLATE_EXTENSIONS: dict[int, str] = {1: ".prtdot", 2: ".asmdot", 3: ".drwdot"}
 DOCUMENT_TYPES: dict[int, str] = {1: "part", 2: "assembly", 3: "drawing"}
 #: ``swUserPreferenceStringValue_e.swFileLocationsDocumentTemplates``.
 _SW_PREF_TEMPLATE_FOLDERS = 6
-#: ``swSaveAsOptions_Silent | swSaveAsOptions_Copy``.
-_SAVE_AS_SILENT_COPY = 1 | 2
+#: ``swSaveAsOptions_Silent``.
+_SAVE_AS_SILENT = 1
 #: ``swSaveAsCurrentVersion``.
 _SAVE_AS_CURRENT_VERSION = 0
 
@@ -102,10 +107,12 @@ class SolidWorksTemplatesMixin:
         )
 
     async def save_as_template(self, file_path: str) -> AdapterResult[dict[str, Any]]:
-        """Save a copy of the active document as a template at ``file_path``.
+        """Save the active document as a template at ``file_path``.
 
-        The open document keeps its own path: ``SaveAs3`` runs with the copy
-        option, and the path is read before and after to prove it.
+        SolidWorks then has the template open in place of the document (see
+        the module docstring); the document's file, if it had one, is left
+        as last saved. The title and path are read before and after, so the
+        reply says what is open now.
 
         Args:
             file_path: The template's full path, with the document's template
@@ -113,8 +120,9 @@ class SolidWorksTemplatesMixin:
 
         Returns:
             AdapterResult[dict[str, Any]]: ``file_path``, ``document_type``,
-            ``in_template_folder``, ``template_folders`` and
-            ``document_path`` (the open document's own path, unchanged).
+            ``in_template_folder``, ``template_folders``, ``document_path``
+            (the open document's path before the save, ``None`` if never
+            saved) and ``document_became_template``.
         """
         adapter = cast("Any", self)
         if adapter.currentModel is None:
@@ -129,26 +137,35 @@ class SolidWorksTemplatesMixin:
                 f"{file_path!r} isn't one."
             )
 
+        def _read(model: Any, name: str) -> str:
+            """A string member of the document; empty when unreadable."""
+            value = adapter._attempt(
+                lambda: adapter._get_attr_or_call(model, name), default=""
+            )
+            return str(value or "")
+
+        def _identity(model: Any) -> tuple[str, str]:
+            """The document's path and title."""
+            return _read(model, "GetPathName"), _read(model, "GetTitle")
+
         def _save() -> dict[str, Any]:
             model = adapter.currentModel
-            before = adapter._attempt(
-                lambda: adapter._get_attr_or_call(model, "GetPathName"), default=""
+            before = _identity(model)
+            ext = _sw_type_info.flagged(model.Extension, "IModelDocExtension")
+            errors, warnings = _byref_int(), _byref_int()
+            ok = ext.SaveAs(
+                file_path,
+                _SAVE_AS_CURRENT_VERSION,
+                _SAVE_AS_SILENT,
+                _null_callout(),
+                errors,
+                warnings,
             )
-            code = model.SaveAs3(
-                file_path, _SAVE_AS_CURRENT_VERSION, _SAVE_AS_SILENT_COPY
-            )
-            if code not in (0, True) or not os.path.isfile(file_path):
+            if not ok or not os.path.isfile(file_path):
                 raise RuntimeError(
                     f"SolidWorks didn't write the template {file_path!r} "
-                    f"(SaveAs3 returned {code!r})."
-                )
-            after = adapter._attempt(
-                lambda: adapter._get_attr_or_call(model, "GetPathName"), default=""
-            )
-            if (before or "") != (after or ""):
-                raise RuntimeError(
-                    f"The template was written, but the open document is now "
-                    f"{after!r} instead of {before!r}; reopen the original."
+                    f"(SaveAs returned {ok!r}, error code "
+                    f"{getattr(errors, 'value', errors)!r})."
                 )
             folders = self._template_folders()
             return {
@@ -156,7 +173,8 @@ class SolidWorksTemplatesMixin:
                 "document_type": DOCUMENT_TYPES[kind],
                 "in_template_folder": in_folders(file_path, folders),
                 "template_folders": folders,
-                "document_path": before or None,
+                "document_path": before[0] or None,
+                "document_became_template": _identity(model) != before,
             }
 
         return cast(

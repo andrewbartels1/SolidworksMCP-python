@@ -19,5 +19,5 @@
 
 ## 5. Live check
 
-- [ ] 5.1 `tests/live/test_live_sw_material_properties.py`: AISI 1020 assigned and its properties read; 6061-T6 and ABS read by name without assigning them (ABS with no yield); an unknown name refused
-- [ ] 5.2 Sign-off, archive, the queue updated
+- [x] 5.1 (passed 2026-11-16, first run; density x volume matched the mass SolidWorks measured, 0.2528 kg) `tests/live/test_live_sw_material_properties.py`: AISI 1020 assigned and its properties read; 6061-T6 and ABS read by name without assigning them (ABS with no yield); an unknown name refused
+- [x] 5.2 Sign-off, archive, the queue updated

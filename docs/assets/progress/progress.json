@@ -2,8 +2,8 @@
  "tools": {
   "total": 135,
   "by_level": {
-   "stable": 126,
-   "beta": 1,
+   "stable": 127,
+   "beta": 0,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -782,8 +782,8 @@
    {
     "name": "save_as_template",
     "family": "file_management",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 21's live check).",
+    "level": "stable",
+    "reason": "",
     "summary": "Save the active part, assembly or drawing as a template, so new documents start from it."
    },
    {

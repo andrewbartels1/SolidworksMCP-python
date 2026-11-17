@@ -89,6 +89,40 @@ async def test_refusals_change_nothing(
     assert part._mock_templates().keys() == {str(existing)}
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("original", "said"),
+    [
+        (None, "it now exists only as this template"),
+        ("C:/work/plate.SLDPRT", "C:/work/plate.SLDPRT is unchanged on disk"),
+    ],
+)
+async def test_the_template_open_in_place_is_warned_about(
+    tmp_path: Path, original: str | None, said: str
+) -> None:
+    class _Real(MockSolidWorksAdapter):
+        async def save_as_template(self, file_path: str) -> AdapterResult[Any]:
+            return AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data={
+                    "document_type": "part",
+                    "document_path": original,
+                    "document_became_template": True,
+                },
+            )
+
+    adapter = _Real({})
+    await adapter.connect()
+    await adapter.create_part("Plate")
+    target = str(tmp_path / "Plate.prtdot")
+
+    result = await (await _tool(adapter))({"file_path": target})
+
+    assert result["status"] == "success"
+    assert result["warning"].startswith(f"SolidWorks now has the template {target}")
+    assert said in result["warning"]
+
+
 @pytest.mark.parametrize(
     ("data", "error"),
     [

@@ -11,8 +11,9 @@ removed and nothing replaced them.
 - A new tool, `save_as_template`, saves the active part, assembly or drawing
   as a template (`.prtdot`, `.asmdot`, `.drwdot`, from the document's type).
   It takes either a full `file_path` or a `name`, saved in SolidWorks'
-  first template folder so it appears in File > New. The open document
-  stays as it was: the template is a copy.
+  first template folder so it appears in File > New. Afterwards SolidWorks
+  has the template open in place of the document, as its own File > Save
+  As does; the reply says so.
 - A file already there is refused unless `overwrite` is on; a path whose
   extension doesn't match the document is refused before SolidWorks is
   asked.
@@ -31,7 +32,7 @@ None. `create_part`'s `template` already takes a `.prtdot` path.
 
 - New adapter method `save_as_template` on the base adapter interface, the
   circuit breaker, the connection pool, the real adapter
-  (`adapters/solidworks/io.py`: `IModelDoc2.SaveAs3` with the copy option,
+  (`adapters/solidworks/templates.py`: `IModelDocExtension.SaveAs`,
   run in `_handle_com_operation`) and the mock adapter.
 - `tools/file_management.py`: the tool; support level beta until its live
   check; hints, catalog, verb list (`save_` is listed).

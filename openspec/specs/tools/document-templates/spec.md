@@ -1,21 +1,31 @@
-## ADDED Requirements
+# tools/document-templates Specification
 
+## Purpose
+TBD - created by archiving change save-as-template. Update Purpose after archive.
+## Requirements
 ### Requirement: Save the active document as a template
 
-`save_as_template` SHALL save a copy of the active document as a template of
-its type: a part as `.prtdot`, an assembly as `.asmdot`, a drawing as
-`.drwdot`. The active document SHALL stay open under its own path and
-unchanged. The reply SHALL give `file_path`, the document `type`, and
-`in_template_folder` (whether the file is in one of SolidWorks' document
-template folders).
+`save_as_template` SHALL save the active document as a template of its
+type: a part as `.prtdot`, an assembly as `.asmdot`, a drawing as `.drwdot`.
+A document saved before SHALL be left on disk as last saved. The reply
+SHALL give `file_path`, the `document_type`, `in_template_folder` (whether
+the file is in one of SolidWorks' document template folders) and
+`document_became_template`; when SolidWorks has the template open in place
+of the document, as its own File > Save As does, a `warning` SHALL say so
+and that `save_file` would then change the template.
 
 #### Scenario: A part set up once starts the next one
 
 - **WHEN** a part in MMGS with material 6061-T6 (SS) and a custom property
   `Company` is saved with `save_as_template`, and `create_part` is called
   with that template
-- **THEN** the new part has the same units, material and `Company` value,
-  and the first part is still open under its own path
+- **THEN** the new part has the same units, material and `Company` value
+
+#### Scenario: The template opens in place of the document
+
+- **WHEN** a part saved as `bracket.sldprt` is saved with `save_as_template`
+- **THEN** the reply's `warning` says the template is now the open document
+  and that `bracket.sldprt` is unchanged on disk
 
 #### Scenario: Saved by name into the template folder
 
@@ -48,3 +58,4 @@ written.
 
 - **WHEN** no document is active
 - **THEN** the call fails as `no_active_document`
+
