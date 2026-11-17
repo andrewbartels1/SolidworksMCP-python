@@ -23,6 +23,16 @@ toolsets allow, by name, with the same result as calling it directly.
   through `call_tool`
 - **THEN** the call fails and says the tool is not in the active toolsets
 
+### Requirement: Search mode leaves deprecated tools out
+In search mode, deprecated tools SHALL be neither found by `search_tools`
+nor run by `call_tool`, so a search returns the tool that replaces one.
+List mode SHALL keep listing them until they are removed.
+
+#### Scenario: Mass properties
+- **WHEN** the agent searches "mass properties volume" in search mode
+- **THEN** `get_mass_properties` is found and the deprecated
+  `calculate_mass_properties` is not
+
 ### Requirement: List mode is the default
 With `SOLIDWORKS_MCP_TOOL_MODE` unset or `list`, the server SHALL list the
 toolsets' tools directly, with no `search_tools` or `call_tool`. Any other

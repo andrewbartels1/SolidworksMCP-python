@@ -122,6 +122,28 @@ async def test_search_mode_finds_and_calls_the_same_tools() -> None:
 
 
 @pytest.mark.asyncio
+async def test_search_mode_leaves_deprecated_tools_out() -> None:
+    searched = await _server(("all",), "search")
+    listed = await _server(("all",), "list")
+
+    async with Client(searched) as client:
+        found = await client.call_tool(
+            "search_tools", {"query": "mass properties volume"}
+        )
+        old = await client.call_tool(
+            "call_tool",
+            {"name": "calculate_mass_properties", "arguments": {}},
+            raise_on_error=False,
+        )
+
+    names = [t["name"] for t in json.loads(found.content[0].text)]
+    assert "get_mass_properties" in names
+    assert "calculate_mass_properties" not in names
+    assert old.is_error
+    assert "calculate_mass_properties" in await _listed(listed)
+
+
+@pytest.mark.asyncio
 async def test_core_descriptions_only_point_inside_core_or_say_where(
     families: dict[str, str],
 ) -> None:

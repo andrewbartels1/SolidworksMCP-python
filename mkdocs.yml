@@ -8,6 +8,10 @@ repo_name: SolidworksMCP-python
 repo_url: https://github.com/andrewbartels1/SolidworksMCP-python
 edit_uri: edit/main/docs/
 
+# Generated fragments included by pymdownx.snippets, not pages of their own.
+exclude_docs: |
+  assets/progress/tool-list-size.md
+
 # Validation
 validation:
   omitted_files: warn

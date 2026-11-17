@@ -87,7 +87,7 @@ Every tool's name, description and inputs are sent to the model on every turn, s
 | `docs` | Lookups in the SolidWorks API help |
 | `all` | Everything (the default) |
 
-**`SOLIDWORKS_MCP_TOOL_MODE=search`** lists four tools in place of the rest: `get_model_info`, `reset_circuit_breaker`, `search_tools` (finds tools from a plain-language description, with their inputs) and `call_tool` (runs one). The model searches before each new kind of step; the server's instructions tell it how. The search covers only the chosen toolsets. `list` is the default.
+**`SOLIDWORKS_MCP_TOOL_MODE=search`** lists four tools in place of the rest: `get_model_info`, `reset_circuit_breaker`, `search_tools` (finds tools from a plain-language description, with their inputs) and `call_tool` (runs one). The model searches before each new kind of step; the server's instructions tell it how. The search covers only the chosen toolsets and leaves deprecated tools out, so it returns their replacements. `list` is the default.
 
 What each choice sends on every turn, measured on this release (tokens are bytes divided by 4, an estimate):
 

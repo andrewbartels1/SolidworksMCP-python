@@ -363,6 +363,10 @@ It works only with the circuit-breaker adapter wrapper (the default for real Sol
 
 </details>
 
+### A shorter tool list
+
+All 135 tools cost about 55,000 tokens a turn. `SOLIDWORKS_MCP_TOOL_MODE=search` lists four instead (about 900 tokens); `SOLIDWORKS_MCP_TOOLSETS=core,drawing` lists only those groups. See [Choose which tools a client sees](https://andrewbartels1.com/SolidworksMCP-python/getting-started/installation/#4-choose-which-tools-a-client-sees).
+
 ## Teach your agent the workflow
 
 Each tool's description says what that tool does. The `solidworks-mcp` skill covers what spans tools: the order to build in (sketch, close it, then the feature), which inputs take millimetres and which take metres, how to pick faces and edges, checking the result with `verify_model`, recovering from errors, and the tools that don't work yet. Install it into Claude Code with:

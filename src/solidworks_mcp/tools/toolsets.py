@@ -37,6 +37,8 @@ ALL = "all"
 TOOL_MODES = ("list", "search")
 #: Tools listed beside ``search_tools`` and ``call_tool`` in search mode.
 ALWAYS_VISIBLE = ("get_model_info", "reset_circuit_breaker")
+#: The tag ``ToolRegistrar`` gives deprecated tools.
+DEPRECATED_TAG = "level:deprecated"
 #: How many tools one search returns.
 SEARCH_RESULTS = 5
 
@@ -86,7 +88,8 @@ def apply_tool_visibility(mcp: Any, toolsets: tuple[str, ...], mode: str) -> Non
     """Show only the chosen toolsets, and in search mode only search and call.
 
     Call it after every tool is registered. The toolset filter comes first,
-    so a search finds only tools in the chosen toolsets.
+    so a search finds only tools in the chosen toolsets. Search mode also
+    leaves deprecated tools out, so a search returns their replacements.
 
     Args:
         mcp: The FastMCP server.
@@ -97,6 +100,7 @@ def apply_tool_visibility(mcp: Any, toolsets: tuple[str, ...], mode: str) -> Non
     if families is not None:
         mcp.enable(tags=set(families), only=True)
     if mode == "search":
+        mcp.disable(tags={DEPRECATED_TAG})
         mcp.add_transform(
             BM25SearchTransform(
                 max_results=SEARCH_RESULTS, always_visible=list(ALWAYS_VISIBLE)
