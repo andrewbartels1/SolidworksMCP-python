@@ -313,6 +313,11 @@ module = [
     "pywintypes",
     "win32api",
     "win32con",
+    # Optional extras, not installed by every environment that type-checks.
+    "PIL",
+    "PIL.*",
+    "faiss",
+    "sentence_transformers",
 ]
 ignore_missing_imports = true
 
