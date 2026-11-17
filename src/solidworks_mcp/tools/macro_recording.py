@@ -14,6 +14,7 @@ from fastmcp import FastMCP
 from pydantic import Field
 
 from ..adapters.base import SolidWorksAdapter
+from .docs_discovery import _index_for_lookup
 from .input_compat import CompatInput
 from .tool_boundary import (
     ToolOperationError,
@@ -21,6 +22,7 @@ from .tool_boundary import (
     require_capability,
     with_tool_boundary,
 )
+from .vba_check import check_vba
 
 # Input schemas for macro operations
 
@@ -123,14 +125,44 @@ class MacroPlaybackInput(CompatInput):
 #: Why VBA source wasn't run, and how to allow it.
 VBA_SOURCE_OFF = (
     "Running VBA source is turned off on this server, so nothing was written "
-    "or run. VBA can do anything you can on this computer; to allow it, start "
-    "the server with SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1. Or save the macro as "
-    "a .swp in SolidWorks and pass macro_path."
+    "or run. To allow it, the user starts the server with "
+    "SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=restricted (SolidWorks calls only) or "
+    "full (anything the user can do). Or save the macro as a .swp in "
+    "SolidWorks and pass macro_path."
 )
+
+#: Why restricted mode can't check the source.
+VBA_CHECK_NEEDS_LIBRARY = (
+    "Restricted VBA source is checked against the SolidWorks type library, "
+    "and none could be read here, so nothing was written or run."
+)
+
+
+def _type_library_names(config: Any) -> tuple[set[str], set[str], set[str]]:
+    """The type library's member, interface and enum names, from the API index.
+
+    Raises:
+        ToolOperationError: No index could be built.
+    """
+    index = _index_for_lookup(None, None, config).index
+    com_objects: dict[str, Any] = index.get("com_objects") or {}
+    if not com_objects:
+        raise ToolOperationError(VBA_CHECK_NEEDS_LIBRARY)
+    members: set[str] = set()
+    for record in com_objects.values():
+        members.update(record.get("methods", []))
+        members.update(record.get("properties", []))
+    constants: set[str] = set()
+    for name, record in (index.get("enums") or {}).items():
+        constants.add(name)
+        constants.update(m["name"] for m in record.get("members", []))
+    return members, set(com_objects), constants
 
 
 def _write_source(source: str, config: Any) -> Path:
     """Write VBA source to a new ``.swb`` file, when the server allows it.
+
+    ``restricted`` first checks the source with :func:`check_vba`.
 
     Args:
         source: The macro's VBA text.
@@ -140,10 +172,20 @@ def _write_source(source: str, config: Any) -> Path:
         Path: The written file, under ``<temp>/solidworks_mcp/macros``.
 
     Raises:
-        ToolOperationError: Running VBA source isn't allowed.
+        ToolOperationError: VBA source is off, or restricted mode refused it.
     """
-    if not getattr(config, "allow_vba_source", False):
+    level = getattr(config, "allow_vba_source", "off")
+    if level not in ("restricted", "full"):
         raise ToolOperationError(VBA_SOURCE_OFF)
+    if level == "restricted":
+        members, interfaces, constants = _type_library_names(config)
+        refused = check_vba(source, members, constants, interfaces)
+        if refused:
+            raise ToolOperationError(
+                "Restricted mode refused this VBA source; nothing was written "
+                "or run. Restricted macros may use SolidWorks calls on the "
+                "open documents only. Refused: " + "; ".join(refused)
+            )
     folder = Path(tempfile.gettempdir()) / "solidworks_mcp" / "macros"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"vba-{uuid.uuid4().hex[:12]}.swb"
@@ -174,20 +216,18 @@ async def register_macro_recording_tools(
     async def execute_macro(input_data: MacroPlaybackInput) -> dict[str, Any]:
         """Run a SolidWorks macro (.swp, or legacy .swb), or VBA source text, in the running SolidWorks, calling its `main` procedure.
 
-        Use it to run an existing macro file, or VBA you wrote (for example from a
-        `generate_vba_*` tool) as `vba_source`. VBA source runs only when the user
-        started the server with SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1; otherwise it is
-        refused as `vba_source_off`, so ask the user, never set it yourself. The
-        source is written to a .swb file, and the reply gives `source_file` and the
-        `vba_source` that ran. The macro must not wait for the user (no MsgBox or
-        forms): a dialog still open after `dialog_timeout` seconds (30) is answered
-        with Cancel, or its only button, and the run fails as
-        `macro_waited_for_user`; a Yes/No prompt is left for the user. It runs
-        `repeat_count` times, `pause_between_runs` seconds apart, and stops at the
-        first run that fails. Needs: SolidWorks running and the macro file on disk
-        (or the setting for source). Changes: whatever the macro does; it can't be
-        undone from here. Returns: `runs_completed` and `data` from the last run,
-        with `macro_path`, `module_name`, `proc_name` and `errors`.
+        Use it for a macro file, or VBA you wrote as `vba_source`. Source runs only
+        if the user set SOLIDWORKS_MCP_ALLOW_VBA_SOURCE to restricted or full, else
+        `vba_source_off`: ask the user, never set it yourself. Restricted source may
+        call SolidWorks on the open documents only, else `vba_source_refused`,
+        naming each line. The reply gives `source_file` and the `vba_source` run.
+        The macro must not wait for the user: a dialog still open after
+        `dialog_timeout` s (30) is answered with Cancel or its only button, and the
+        run fails as `macro_waited_for_user`; a Yes/No prompt is left. It runs
+        `repeat_count` times, `pause_between_runs` s apart, stopping at the first
+        failure. Needs: SolidWorks running. Changes: whatever the macro does; it
+        can't be undone from here. Returns: `runs_completed` and `data` from the
+        last run (`macro_path`, `module_name`, `proc_name`, `errors`).
 
         Args:
             input_data: The macro to run. Give `macro_path` (or `macro_file`), or

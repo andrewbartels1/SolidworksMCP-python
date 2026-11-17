@@ -70,6 +70,10 @@ class AdapterType(StrEnum):
     POWERSHELL = "powershell"  # PowerShell bridge (future)
 
 
+#: The values of ``allow_vba_source``, least access first.
+VBA_SOURCE_LEVELS = ("off", "restricted", "full")
+
+
 class SolidWorksMCPConfig(BaseModel):
     """Main configuration for SolidWorks MCP Server.
 
@@ -402,10 +406,11 @@ class SolidWorksMCPConfig(BaseModel):
     )
 
     # === Running VBA source (queue item 26) ===
-    allow_vba_source: bool = Field(
-        default=False,
-        description="Let execute_macro run VBA source text, not only macro "
-        "files. VBA can do anything the user can, so it is off unless set "
+    allow_vba_source: str = Field(
+        default="off",
+        description="Whether execute_macro runs VBA source text: off (the "
+        "default), restricted (only source that passes the SolidWorks-only "
+        "check) or full (anything; VBA can do whatever the user can) "
         "(SOLIDWORKS_MCP_ALLOW_VBA_SOURCE).",
     )
 
@@ -471,6 +476,29 @@ class SolidWorksMCPConfig(BaseModel):
                 f"tool_mode must be one of {', '.join(TOOL_MODES)}, not {v!r}"
             )
         return mode
+
+    @field_validator("allow_vba_source")
+    @classmethod
+    def validate_allow_vba_source(cls, v: str) -> str:
+        """Check the VBA source level.
+
+        Args:
+            v: ``off``, ``restricted`` or ``full``.
+
+        Returns:
+            str: The level, lower case.
+
+        Raises:
+            ValueError: For any other value, including ``1`` and ``true``,
+                so nobody gets full access by guessing.
+        """
+        level = str(v).strip().lower()
+        if level not in VBA_SOURCE_LEVELS:
+            raise ValueError(
+                "allow_vba_source (SOLIDWORKS_MCP_ALLOW_VBA_SOURCE) must be "
+                f"one of {', '.join(VBA_SOURCE_LEVELS)}, not {v!r}"
+            )
+        return level
 
     @field_validator("cache_dir")
     @classmethod

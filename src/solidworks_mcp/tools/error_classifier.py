@@ -128,10 +128,19 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
     ),
     ErrorRule(
+        error_type="vba_source_refused",
+        hint=(
+            "Rewrite the macro without the refused names: use SolidWorks calls "
+            "on the open documents only, and the tools (open_model, save_file, "
+            "the exports) for files."
+        ),
+        patterns=(r"restricted mode refused this vba source",),
+    ),
+    ErrorRule(
         error_type="vba_source_off",
         hint=(
             "Ask the user whether to start the server with "
-            "SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1; don't set it yourself."
+            "SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=restricted (or full); don't set it yourself."
         ),
         patterns=(r"running vba source is turned off",),
     ),

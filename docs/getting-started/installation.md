@@ -110,9 +110,42 @@ For Claude Code: `claude mcp add solidworks --scope user -e SOLIDWORKS_MCP_TOOL_
 
 ## 5. Let `execute_macro` run VBA source (off by default)
 
-`execute_macro` runs macro files. With **`SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1`** it also runs VBA text, such as what the `generate_vba_*` tools write, so a model can write a macro and run it in one step. The text is saved as a `.swb` file under your temp folder, and the reply names the file and repeats the source that ran.
+`execute_macro` runs macro files. **`SOLIDWORKS_MCP_ALLOW_VBA_SOURCE`** decides whether it also runs VBA text, such as what the `generate_vba_*` tools write, so a model can write a macro and run it in one step. VBA runs inside SolidWorks with your Windows account's rights, so this is off unless you choose otherwise.
 
-VBA can do anything you can do on this computer, including deleting files and running programs. Turn this on only if you trust what your client sends, and look at the source in each reply. When it's off, the call is refused as `vba_source_off` and nothing is written or run. Set it in the `env` of the client's `solidworks` entry, as above.
+| Value | What `vba_source` does |
+| --- | --- |
+| `off` (the default; also when unset) | Refused as `vba_source_off`. Nothing is written or run. |
+| `restricted` | Runs only if the source passes the SolidWorks-only check below; otherwise refused as `vba_source_refused`, listing every refused name and its line. Nothing is written or run when refused. |
+| `full` | Runs whatever the source says, unchecked. Choose it only for macros you have read and trust. |
+
+Any other value, including `1`, `true` or `yes`, stops the server at start with these three listed, so nobody gets `full` by guessing.
+
+When it runs, the text is saved as `<temp>\solidworks_mcp\macros\vba-<random>.swb` (the files are kept, so you can see what ran), and the reply gives that `source_file` and repeats the `vba_source`. The [dialog watchdog](../user-guide/tool-catalog/macro-recording.md) applies as for any macro.
+
+### What `restricted` allows
+
+Comments and text in quotes are ignored. Every other name in the source must be one of:
+
+- a VBA keyword, or a safe VBA function: maths, text, conversions, dates, `MsgBox`, `InputBox`, `Err`, `Debug.Print`, `vb…` constants;
+- a name the macro declares itself (`Dim`, `Const`, `Sub`/`Function` and their parameters, loop variables, labels, `Type`/`Enum`);
+- a SolidWorks enum or enum value (`swDocPART`), or type name (`ModelDoc2`);
+- `Application.SldWorks`, the way to reach SolidWorks;
+- after a `.`, a member of the SolidWorks type library installed on this machine.
+
+An undeclared variable is refused too; declare it with `Dim`.
+
+### What `restricted` refuses
+
+- **VBA that reaches outside SolidWorks:** `AppActivate`, `Application`, `CallByName`, `ChDir`, `ChDrive`, `Close`, `CreateObject`, `CurDir`, `CurDir$`, `Declare`, `DeleteSetting`, `Dir`, `Dir$`, `Environ`, `Environ$`, `FileCopy`, `FileDateTime`, `FileLen`, `FileSystem`, `FreeFile`, `Get`, `GetAllSettings`, `GetAttr`, `GetObject`, `GetSetting`, `Input`, `Interaction`, `Kill`, `Line`, `Load`, `Lock`, `MkDir`, `Name`, `Open`, `Print`, `Put`, `Reset`, `RmDir`, `SaveSetting`, `Seek`, `SendKeys`, `SetAttr`, `Shell`, `Unload`, `Unlock`, `VBA`, `Width`, `Write`.
+- **SolidWorks members that touch files, run code, close or quit, or change what lasts beyond the open documents:** `AddCallback`, `AddIns`, `AddSearchFolder`, `CallBack`, `ClickDialogControl`, `CloseAllDocuments`, `CloseDoc`, `CopyDocument`, `DownloadFromMySolidWorksSettings`, `ExitApp`, `GetAddInObject`, `GetCommandManager`, `ImportSwSettings`, `InsertObject`, `InsertObjectFromFile`, `JournalManager`, `LoadAddIn`, `LoadAdminSettingsFile`, `LoadModel`, `LoadPointsFromFile`, `OpenCompFile`, `PrintDirect`, `PrintFile`, `PrintToFile`, `Quit`, `QuitDoc`, `RemoveAllCommandItems`, `RemoveCallback`, `RemoveSearchFolder`, `RenameDocument`, `ReplaceCommandItem`, `RunAttachedMacro`, `RunBatchSaveProcess`, `RunCommand`, `RunJournalCmd`, `RunMacro`, `RunMacro2`, `RunXMLCommand`, `SendDataForNetworkJob`, `SetAddinCallbackInfo`, `SetAddinCallbackInfo2`, `SetCurrentWorkingDirectory`, `SetDialogButtonState`, `SetDialogControlText`, `SetSearchFolders`, `UnloadAddIn`, `UploadToMySolidWorksSettings`, `WriteJournalToMacro`, `WriteToJournalFile`, and every member whose name starts with `save…`, `export…`, `opendoc…`, `loadfile…`, `closeandreopen…`, `setuserpreference…`, `printout…`, `iprintout…`, `addcommand…`, `removecommand…`, `addtoolbarcommand…`, `createcommandgroup…`.
+
+So a restricted macro works on the documents already open. Opening, saving and exporting are done with the tools (`open_model`, `save_file`, `export_*`), which you can see in the conversation.
+
+### What the check can't promise
+
+It reads the source before it runs; it is not a sandbox, and Windows can't take rights away from one macro inside SolidWorks. Allowed SolidWorks calls can still change or delete geometry in the open documents (undo works as usual), show dialogs, and use a lot of time. The check has no exceptions you can add per macro: if `restricted` refuses something you need, either do that step with a tool or use `full` for that macro.
+
+Set it in the `env` of the client's `solidworks` entry, as in section 4: `"SOLIDWORKS_MCP_ALLOW_VBA_SOURCE": "restricted"`.
 
 ## Install from source
 

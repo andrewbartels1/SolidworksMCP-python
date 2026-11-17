@@ -333,7 +333,7 @@ async def _run_source(config, monkeypatch, tmp_path, **inputs):
 async def test_vba_source_runs_from_a_swb_when_allowed(monkeypatch, tmp_path) -> None:
     from pathlib import Path
 
-    config = SolidWorksMCPConfig(allow_vba_source=True)
+    config = SolidWorksMCPConfig(allow_vba_source="full")
 
     reply, seen = await _run_source(config, monkeypatch, tmp_path)
 
@@ -352,7 +352,7 @@ async def test_vba_source_is_refused_when_not_allowed(monkeypatch, tmp_path) -> 
 
     assert reply["status"] == "error"
     assert reply["error_type"] == "vba_source_off"
-    assert "SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1" in reply["message"]
+    assert "SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=restricted" in reply["message"]
     assert seen == []
     assert not (tmp_path / "solidworks_mcp").exists()
 
@@ -360,9 +360,17 @@ async def test_vba_source_is_refused_when_not_allowed(monkeypatch, tmp_path) -> 
 def test_the_setting_is_off_by_default_and_read_from_the_environment(
     monkeypatch,
 ) -> None:
-    assert SolidWorksMCPConfig().allow_vba_source is False
-    monkeypatch.setenv("SOLIDWORKS_MCP_ALLOW_VBA_SOURCE", "1")
-    assert SolidWorksMCPConfig.from_env().allow_vba_source is True
+    assert SolidWorksMCPConfig().allow_vba_source == "off"
+    monkeypatch.setenv("SOLIDWORKS_MCP_ALLOW_VBA_SOURCE", " Restricted ")
+    assert SolidWorksMCPConfig.from_env().allow_vba_source == "restricted"
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes", "on"])
+def test_a_guessed_value_stops_the_server(value) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="off, restricted, full"):
+        SolidWorksMCPConfig(allow_vba_source=value)
 
 
 @pytest.mark.parametrize(
@@ -378,3 +386,66 @@ def test_vba_source_input_is_checked(inputs, message) -> None:
 
     with pytest.raises(ValidationError, match=message):
         MacroPlaybackInput(**inputs)
+
+
+_INDEX = {
+    "com_objects": {
+        "ISldWorks": {"methods": ["RunMacro2"], "properties": ["ActiveDoc"]},
+        "IModelDoc2": {"methods": ["ClearSelection2"], "properties": []},
+    },
+    "enums": {"swDocumentTypes_e": {"members": [{"name": "swDocPART", "value": 1}]}},
+}
+
+
+def _with_index(monkeypatch, index):
+    import solidworks_mcp.tools.macro_recording as module
+
+    monkeypatch.setattr(
+        module, "_index_for_lookup", lambda *_a: type("S", (), {"index": index})()
+    )
+
+
+@pytest.mark.asyncio
+async def test_restricted_source_that_passes_runs(monkeypatch, tmp_path) -> None:
+    _with_index(monkeypatch, _INDEX)
+    config = SolidWorksMCPConfig(allow_vba_source="restricted")
+    source = (
+        "Sub main()\n    Dim swApp As SldWorks\n    Set swApp = Application.SldWorks\n"
+        "    swApp.ActiveDoc.ClearSelection2 swDocPART\nEnd Sub\n"
+    )
+
+    reply, seen = await _run_source(config, monkeypatch, tmp_path, vba_source=source)
+
+    assert reply["status"] == "success", reply
+    assert len(seen) == 1
+
+
+@pytest.mark.asyncio
+async def test_restricted_source_that_reaches_out_is_refused(
+    monkeypatch, tmp_path
+) -> None:
+    _with_index(monkeypatch, _INDEX)
+    config = SolidWorksMCPConfig(allow_vba_source="restricted")
+    source = (
+        'Sub main()\n    Shell "cmd"\n    Application.SldWorks.RunMacro2 "m"\nEnd Sub\n'
+    )
+
+    reply, seen = await _run_source(config, monkeypatch, tmp_path, vba_source=source)
+
+    assert reply["error_type"] == "vba_source_refused"
+    assert "line 2: Shell: reaches outside SolidWorks" in reply["message"]
+    assert "line 3: RunMacro2" in reply["message"]
+    assert seen == []
+    assert not (tmp_path / "solidworks_mcp").exists()
+
+
+@pytest.mark.asyncio
+async def test_restricted_without_a_type_library_refuses(monkeypatch, tmp_path) -> None:
+    _with_index(monkeypatch, {})
+    config = SolidWorksMCPConfig(allow_vba_source="restricted")
+
+    reply, seen = await _run_source(config, monkeypatch, tmp_path)
+
+    assert reply["status"] == "error"
+    assert "checked against the SolidWorks type library" in reply["message"]
+    assert seen == []
