@@ -45,7 +45,7 @@ Add one dimension to a drawing view, between edges picked by points on the sheet
 
 Points are `[x, y]` in sheet millimetres on a view's edges or vertices; read the views' outlines with `check_drawing`. Two parallel edges give their distance, one edge its length, a circle's edge its radius or diameter, two lines their angle. The reply gives the measured value. For the model's own dimensions use `insert_model_dimensions`.
 
-**Prerequisite:** An active drawing. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+**Prerequisite:** An active drawing.
 
 **Parameters:**
 
@@ -103,7 +103,7 @@ Cut a section view along a line across a drawing view, and place it on the sheet
 
 The line's ends are sheet millimetres and must cross the view, for example through a hole's centre. A line that misses the view, or a position off the sheet, is refused (`invalid_input`) before anything changes.
 
-**Prerequisite:** An active drawing with the parent view. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+**Prerequisite:** An active drawing with the parent view.
 
 **Parameters:**
 
@@ -134,7 +134,7 @@ Magnify a circular area of a drawing view as a detail view, at a scale.
 
 The circle's centre is sheet millimetres inside the view. A centre outside the view, or a position off the sheet, is refused before anything changes.
 
-**Prerequisite:** An active drawing with the parent view. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+**Prerequisite:** An active drawing with the parent view.
 
 **Parameters:**
 
@@ -167,7 +167,7 @@ Change the active drawing sheet's format and paper size, keeping every view.
 
 Give a format name SolidWorks has (`a2 - iso`) or a `.slddrt` path. The paper size comes from the name unless given. The views are checked to be the same afterwards; the title block keeps its values, which are properties.
 
-**Prerequisite:** An active drawing. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+**Prerequisite:** An active drawing.
 
 **Parameters:**
 
@@ -192,7 +192,7 @@ Dimension one drawing view with SolidWorks' auto-dimension (baseline or chain).
 
 It adds reference dimensions measured from the view's edges. Prefer `insert_model_dimensions`, which shows the model's own dimensions; use this for a view that has none to bring in, then `arrange_dimensions`. It fails when nothing is added.
 
-**Prerequisite:** An active drawing with that view. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+**Prerequisite:** An active drawing with that view.
 
 **Parameters:**
 
@@ -217,7 +217,7 @@ Check the active drawing is complete before exporting it: views, dimensions, tit
 
 Read-only. Errors fail the drawing: `view_off_sheet` and `dangling_annotation`. Warnings don't: `view_not_dimensioned` (isometric and detail views excepted), `title_block_field_empty` (title, drawn by, revision) and `bom_missing` (an assembly with no BOM). Each finding names the tool that fixes it. It checks completeness, not a drafting standard. This tool was `check_drawing_standards`, which never worked.
 
-**Prerequisite:** An active drawing. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+**Prerequisite:** An active drawing.
 
 **Parameters:** none.
 
@@ -288,7 +288,7 @@ Change the active drawing's title-block fields: title, drawing number, drawn by,
 
 Each field is written to the property the sheet format shows, the same mapping `generate_drawing_package` uses: the title is the drawn model's `Description`, the others are the drawing's own properties (`DrawingNo`, `DrawnBy`, `DrawnDate`, `Revision`, `COMPANYNAME`). Fields not given keep their values. The ISO format's DWG NO. box shows the file name, not `DrawingNo`.
 
-**Prerequisite:** An active drawing of a model. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+**Prerequisite:** An active drawing of a model.
 
 **Parameters:**
 

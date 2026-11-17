@@ -36,12 +36,12 @@
 
 ## 6. Live bundle (one set, run together, then fixes one by one)
 
-- [ ] 6.1 (`tests/live/test_live_sw_drawing_pack.py` written 2026-11-16, not yet run; the BOM-on-A3 check for #158 is left out, as no assembly is drawn) Live tests: a section through a plate's hole and one off the view; a 3:1 corner detail; revision B on a package drawing; A3 to A2 keeping views and title values; width 60 and Ø6 dimensions; auto-dimension on the front view; `check_drawing` on a finished package, a view off the sheet and an assembly with no BOM; `insert_bom_table` on the A3 ISO format, checked on the sheet (#158)
-- [ ] 6.2 Hand the user the bundle; fix each failure afterwards, one at a time; move each tool to stable when its tests pass
+- [x] 6.1 (`tests/live/test_live_sw_drawing_pack.py`, passed on SolidWorks 2026 on 2026-11-16 after the fixes in design decision 7; the detail magnifies the bore in the section, not a plain corner; the off-sheet and no-BOM checks are unit-tested; the BOM-on-A3 check for #158 is left out, as no assembly is drawn) Live tests: a section through a plate's hole and one off the view; a 3:1 corner detail; revision B on a package drawing; A3 to A2 keeping views and title values; width 60 and Ø6 dimensions; auto-dimension on the front view; `check_drawing` on a finished package, a view off the sheet and an assembly with no BOM; `insert_bom_table` on the A3 ISO format, checked on the sheet (#158)
+- [x] 6.2 Hand the user the bundle; fix each failure afterwards, one at a time; move each tool to stable when its tests pass
 
 ## 7. Docs and finish
 
 - [x] 7.1 Drawing catalog pages, the drawing tutorial's "What is and isn't live today" table, the agent skill's drawing workflow (views, then dimensions, then `check_drawing`, then export)
 - [x] 7.2 CHANGELOG (Added; Changed: `check_drawing_standards` is now `check_drawing`), progress bars regenerated
 - [x] 7.3 Full mock suite at 100% coverage, ruff, `mkdocs build --strict`
-- [ ] 7.4 Sign-off, PR (no attribution) closing #102, a comment on #158 for the BOM check, archive, the queue updated
+- [x] 7.4 Sign-off, PR (no attribution) closing #102, a comment on #158 for the BOM check, archive, the queue updated

@@ -14,8 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **The drawing pack** (queue item 12, #102), beta until its live check
-  passes: `create_section_view` (a line across a view), `create_detail_view`
+- **The drawing pack** (queue item 12, #102), stable, checked live
+  on SolidWorks 2026: `create_section_view` (a line across a view), `create_detail_view`
   (a circle in a view, at a scale), `add_dimension` (edges picked by sheet
   points, the value read back), `auto_dimension_view` (baseline or chain,
   counted before and after), `update_title_block` (revision, title and the

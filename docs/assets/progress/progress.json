@@ -2,8 +2,8 @@
  "tools": {
   "total": 134,
   "by_level": {
-   "stable": 119,
-   "beta": 7,
+   "stable": 126,
+   "beta": 0,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -68,8 +68,8 @@
    {
     "name": "add_dimension",
     "family": "drawing",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 12's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Add one dimension to a drawing view, between edges picked by points on the sheet."
    },
    {
@@ -180,8 +180,8 @@
    {
     "name": "auto_dimension_view",
     "family": "drawing",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 12's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Dimension one drawing view with SolidWorks' auto-dimension (baseline or chain)."
    },
    {
@@ -194,8 +194,8 @@
    {
     "name": "check_drawing",
     "family": "drawing",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 12's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Check the active drawing is complete before exporting it: views, dimensions, title block, BOM."
    },
    {
@@ -271,8 +271,8 @@
    {
     "name": "create_detail_view",
     "family": "drawing",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 12's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Magnify a circular area of a drawing view as a detail view, at a scale."
    },
    {
@@ -348,8 +348,8 @@
    {
     "name": "create_section_view",
     "family": "drawing",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 12's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Cut a section view along a line across a drawing view, and place it on the sheet."
    },
    {
@@ -929,15 +929,15 @@
    {
     "name": "update_sheet_format",
     "family": "drawing",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 12's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Change the active drawing sheet's format and paper size, keeping every view."
    },
    {
     "name": "update_title_block",
     "family": "drawing",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 12's live bundle).",
+    "level": "stable",
+    "reason": "",
     "summary": "Change the active drawing's title-block fields: title, drawing number, drawn by, date, revision, company."
    },
    {
