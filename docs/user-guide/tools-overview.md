@@ -16,6 +16,33 @@ The SolidWorks MCP Server provides 139 specialized tools for CAD automation. Thi
 - The mock adapter stands in for SolidWorks in tests. Its results show that a
   call is wired up, not that the CAD result is right; check that on SolidWorks.
 
+## What each tool needs from SolidWorks
+
+Any licence that runs SolidWorks is enough, Makers included: no tool calls an
+add-in (Simulation, PDM, Routing, PhotoView) or a feature SolidWorks sells
+only with Professional or Premium. Every live check ran on SOLIDWORKS
+Professional for Makers 2026; Standard itself hasn't been run yet.
+
+Each tool's `needs:` tag says what it needs. All but the 20 below need
+SolidWorks running (`needs:running`).
+
+### Needs nothing
+
+These work with no SolidWorks on the machine (`needs:nothing`):
+`generate_vba_code`, `generate_vba_extrusion`, `generate_vba_revolve`,
+`generate_vba_assembly_insert`, `generate_vba_drawing_views`,
+`generate_vba_batch_export`, `generate_vba_part_modeling`,
+`generate_vba_assembly_mates`, `generate_vba_drawing_dimensions`,
+`generate_vba_file_operations`, `generate_vba_macro_recorder`,
+`compare_templates`, `compare_drawing_versions`, `reset_circuit_breaker`.
+
+### Needs SolidWorks installed, not running
+
+These read SolidWorks' installed files and never start it
+(`needs:installed`): `discover_solidworks_docs`,
+`search_solidworks_api_help`, `lookup_api_method`, `lookup_api_interface`,
+`find_related_api_members`, `list_hole_sizes`.
+
 ## Tool Categories
 
 <div class="grid cards" markdown>

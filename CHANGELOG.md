@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **What each tool needs from SolidWorks** (queue item 16, #79): every tool
+  has a `needs:` tag, `nothing`, `installed` or `running`, from one table
+  (`tools/requirements.py`). The tools overview lists the 20 tools that
+  don't need SolidWorks running, and says any licence that runs SolidWorks
+  is enough: no tool calls an add-in or a Professional- or Premium-only
+  feature.
 - **Sheet metal** (queue item 15, #57), checked live on SolidWorks 2026:
   `create_base_flange` (a plate or a bent profile, with thickness, bend
   radius and K-factor read back), `add_edge_flange` (a flange off an edge

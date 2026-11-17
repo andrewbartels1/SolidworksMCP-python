@@ -41,7 +41,11 @@ async def test_spot_checks(mock_adapter) -> None:
     assert tools["list_features"].annotations.readOnlyHint is True
     assert tools["delete_feature"].annotations.destructiveHint is True
     assert tools["create_extrusion"].annotations.readOnlyHint is False
-    assert tools["create_extrusion"].tags == {"modeling", "level:stable"}
+    assert tools["create_extrusion"].tags == {
+        "modeling",
+        "level:stable",
+        "needs:running",
+    }
     assert tools["save_file"].annotations.destructiveHint is True
 
 
