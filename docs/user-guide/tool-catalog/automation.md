@@ -25,12 +25,10 @@ Write a VBA macro skeleton for an operation you describe: the SolidWorks connect
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `operation_description` | `str?` | — | `None` | Description of the operation to generate VBA for |
-| `operation_type` | `str?` | — | `None` | Operation type alias |
-| `parameters` | `Dict[str, Any]` | ✅ | `` | Operation parameters |
-| `target_document` | `str` | — | `Part` | Target document type (Part, Assembly, Drawing) |
-| `include_error_handling` | `bool` | — | `True` | Include error handling in generated code |
-| `code_style` | `str` | — | `professional` | Code style (simple, professional, advanced) |
+| `operation_description` | `str?` | — | `null` | Description of the operation to generate VBA for |
+| `operation_type` | `str?` | — | `null` | Operation type alias |
+| `target_document` | `str` | — | `"Part"` | The document type the macro runs on; it stops, printing why, on any other |
+| `include_error_handling` | `bool` | — | `true` | Include error handling in generated code |
 
 **Sample call:**
 

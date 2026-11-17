@@ -67,7 +67,7 @@ These read SolidWorks' installed files and never start it
 
     ---
 
-    Drawings from a model: views, notes and centre marks. Section and detail views, dimensions and the title block are planned.
+    Drawings from a model: standard, section and detail views, dimensions, notes, centre marks, the sheet format and title block, and a drawing check.
 
     [**13 tools available** :octicons-arrow-right-24:](tool-catalog/drawing.md)
 
@@ -150,6 +150,14 @@ These read SolidWorks' installed files and never start it
     Compare two template files.
 
     [**1 tool available** :octicons-arrow-right-24:](tool-catalog/template-management.md)
+
+- :material-restart:{ .lg .middle } **Server Admin**
+
+    ---
+
+    Reset the circuit breaker the server uses to pause a failing operation.
+
+    [**1 tool available** :octicons-arrow-right-24:](tool-catalog/server-admin.md)
 
 - :material-book-search:{ .lg .middle } **Docs Discovery**
 

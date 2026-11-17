@@ -31,10 +31,7 @@ Place one named view of a part or assembly on the active drawing sheet.
 **Sample call:**
 
 ```json
-{
-  "model_path": null,
-  "view_type": "example"
-}
+{"model_path": "C:\\Temp\\mcp_demo\\part.SLDPRT", "view_type": "orthographic", "orientation": "front"}
 ```
 
 ---
@@ -223,6 +220,12 @@ Read-only. Errors fail the drawing: `view_off_sheet` and `dangling_annotation`. 
 
 **Returns:** `passed`, `errors`, `warnings`, `findings` (each `rule`, `severity`, `message` and maybe `view`), `views` and `report` (the facts read: sheet size, view outlines and dimension counts, title block, BOM, dangling count).
 
+**Sample call:**
+
+```json
+{}
+```
+
 ---
 
 ### `create_technical_drawing`
@@ -235,14 +238,8 @@ Place a model's three standard views (front, top and side) on the active drawing
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `template` | `str?` | — | `None` | Drawing template file path |
-| `model_file` | `str?` | — | `None` | Model file to create drawing from |
-| `sheet_size` | `str` | — | `A3` | Sheet size |
-| `title` | `str` | — | `` | Drawing title |
-| `output_path` | `str?` | — | `None` | Output drawing path |
-| `sheet_format` | `str?` | — | `None` | Sheet format |
-| `scale` | `str` | — | `1:1` | Drawing scale |
-| `auto_populate_views` | `bool` | — | `False` | Automatically populate standard views |
+| `model_file` | `str?` | — | `null` | Model file (.sldprt or .sldasm) to draw |
+| `projection` | `str` | — | `"third_angle"` | Projection the views are laid out in |
 
 **Sample call:**
 
