@@ -19,7 +19,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeVar, cast
 
 from fastmcp import FastMCP
 from loguru import logger
@@ -61,8 +61,8 @@ IndexStatus = Literal["ready", "rebuilt", "unavailable"]
 MemberType = Literal["method", "property"]
 
 #: Validates one saved member record into its model.
-#: (pydantic takes the annotated union; its stubs expect a class.)
-_MEMBER: TypeAdapter[ApiMethod | ApiProperty] = TypeAdapter(ApiMember)  # type: ignore[arg-type]
+#: (pydantic takes the annotated union; some versions' stubs expect a class.)
+_MEMBER: TypeAdapter[ApiMethod | ApiProperty] = TypeAdapter(cast(Any, ApiMember))
 
 #: Each interface record's name lists, by member type.
 _MEMBER_LISTS: tuple[tuple[MemberType, str], ...] = (
