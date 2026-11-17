@@ -1643,6 +1643,115 @@ class SolidWorksAdapter(ABC):
             error="add_note is not implemented by this adapter",
         )
 
+    async def create_section_view(
+        self,
+        view: str,
+        line_start: list[float],
+        line_end: list[float],
+        position: list[float],
+        label: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a section view cut along a line across a drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_section_view is not implemented by this adapter",
+        )
+
+    async def create_detail_view(
+        self,
+        view: str,
+        center: list[float],
+        radius: float,
+        position: list[float],
+        scale: str = "2:1",
+        label: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a detail view of a circle in a drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_detail_view is not implemented by this adapter",
+        )
+
+    async def add_dimension(
+        self,
+        dimension_type: str,
+        entity1_point: list[float],
+        position: list[float],
+        entity2_point: list[float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add one dimension between drawing entities picked at sheet points.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_dimension is not implemented by this adapter",
+        )
+
+    async def auto_dimension_view(
+        self,
+        view: str,
+        scheme: str = "baseline",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Auto-dimension one drawing view.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="auto_dimension_view is not implemented by this adapter",
+        )
+
+    async def update_sheet_format(
+        self,
+        sheet_format: str,
+        paper_size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Change the active sheet's format and paper size, keeping its views.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="update_sheet_format is not implemented by this adapter",
+        )
+
+    async def update_title_block(
+        self,
+        fields: dict[str, str],
+    ) -> AdapterResult[dict[str, Any]]:
+        """Write title-block fields on the active drawing.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="update_title_block is not implemented by this adapter",
+        )
+
+    async def drawing_report(self) -> AdapterResult[dict[str, Any]]:
+        """Read what check_drawing judges on the active drawing.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="drawing_report is not implemented by this adapter",
+        )
+
     async def list_drawing_views(self) -> AdapterResult[list[str]]:
         """List the views on the active drawing.
 

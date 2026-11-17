@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The drawing pack** (queue item 12, #102), stable, checked live
+  on SolidWorks 2026: `create_section_view` (a line across a view), `create_detail_view`
+  (a circle in a view, at a scale), `add_dimension` (edges picked by sheet
+  points, the value read back), `auto_dimension_view` (baseline or chain,
+  counted before and after), `update_title_block` (revision, title and the
+  rest, written to the properties the format shows), `update_sheet_format`
+  (a new format and paper size, the views kept) and `check_drawing`. No
+  tool is planned any more.
+
 - **Changes in chosen configurations** (queue item 13, section 3):
   `set_dimension` and `suppress_feature` take `configurations`: `this` (the
   active one, as before), `all`, or a list of names, and the reply names
@@ -108,6 +117,8 @@ Found building the monitor stand demo (#206):
 
 ### Changed
 
+- `check_drawing_standards`, which never worked, is now `check_drawing`: a
+  read-only completeness check whose findings name the tool that fixes each.
 - **The monitor stand demo** sketches its pocket on the stand's top face,
   with no reference plane, and its camera turns to an isometric view after
   each feature (`--look` in the script).

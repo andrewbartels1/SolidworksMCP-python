@@ -142,7 +142,15 @@ Step by step instead:
 2. `insert_model_dimensions`, then `arrange_dimensions` (it reports any
    overlap it couldn't clear; `set_sheet_scale` gives more room).
 3. `auto_center_marks`, `add_note`, and for an assembly `insert_bom_table`.
-4. `save_file` with a `.slddrw` path, and `export_pdf`.
+4. `check_drawing`, then fix what it finds.
+5. `save_file` with a `.slddrw` path, and `export_pdf`.
+
+Finishing a drawing: `create_section_view` (a line across a view, in sheet
+mm) and `create_detail_view` (a circle in a view, at a scale) add views;
+`add_dimension` picks edges by sheet points and replies with the value;
+`update_title_block` changes the revision and other fields;
+`update_sheet_format` moves to a bigger sheet, keeping the views. Read the
+views' outlines from `check_drawing` to work out the points.
 
 ## Exporting
 

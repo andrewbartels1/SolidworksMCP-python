@@ -1,10 +1,9 @@
-## Purpose
+# tools/drawing-dimensions Specification
 
+## Purpose
 `add_dimension` and `auto_dimension_view` put dimensions on drawing views,
 by hand or automatically, so a drawing with views is a deliverable.
-
-## ADDED Requirements
-
+## Requirements
 ### Requirement: One dimension between picked entities
 `add_dimension` SHALL take `dimension_type` (`horizontal`, `vertical`,
 `aligned`, `radial`, `diameter` or `angular`), `entity1_point` and, for
@@ -42,4 +41,6 @@ dimensions added.
 
 #### Scenario: A view that doesn't exist
 - **WHEN** `view` names no view on the sheet
-- **THEN** the call fails with `invalid_input` listing the views
+- **THEN** the call fails with `not_found` listing the views, as the other
+  drawing tools do for an unknown view
+

@@ -100,6 +100,41 @@ module as plain functions on that data (unit-tested without COM). The tool
 is the renamed `check_drawing_standards`; the old name was planned and
 never worked, so no deprecation is needed.
 
+### 7. What changed while building it (2026-11-16)
+
+- **Sheet to view space** uses the view's sketch:
+  `IView.GetSketch().ModelToSketchTransform` maps the drawing's document
+  space (the sheet) into the view's sketch, scale and offset included, the
+  mapping the hole positions use. The first live run (2026-11-16) used
+  `IView.GetXform` (elements 9-10 and 12) and put the detail circle in empty
+  space and the section line off the hole.
+- **Auto-dimension** selects the view (`SelectByID2` as `DRAWINGVIEW`)
+  after activating it, as `insert_model_dimensions`' fallback does; the
+  first live run only activated it, and `AutoDimension` returned success
+  with nothing added.
+- **Dimensions** use `AddHorizontalDimension2`, `AddVerticalDimension2`,
+  `AddRadialDimension2`, `AddDiameterDimension2` and `AddDimension2`
+  (aligned and angular) after the picks, rather than
+  `IModelDocExtension.AddDimension` with a direction: each places a typed
+  dimension directly. The value is the dimension's `SystemValue`.
+- **The sheet format** is applied with `IDrawingDoc.SetupSheet5`, the call
+  `generate_drawing_package` already makes live, keeping the sheet's scale
+  and projection, instead of `SetTemplateName` and `ReloadTemplate`.
+- **The title block** writes each field to its property directly (the title
+  to the model's `Description` through the first view's referenced
+  document, the rest to the drawing), rather than re-running the package's
+  mapping and fit; `drawing_number` goes to the drawing's `DrawingNo`. The
+  ISO format's DWG NO. box shows the file name, not that property.
+- **Errors** follow the other drawing tools: an unknown view is `not_found`,
+  a part instead of a drawing `wrong_document_type`; geometry refusals
+  (off the sheet, a line missing the view, nothing at a pick point, an
+  unknown format) are `invalid_input`.
+- **The rules** are in `tools/drawing_check.py`; the mock adapter's drawing
+  pack is its own mixin (`adapters/mock_drawing_pack.py`).
+- **Enum values** (`swAutodimScheme_e` chain is 3, `swDetViewStyle_e`,
+  `swDetCircleShowType_e`, `swDrawingViewTypes_e`, `swTableAnnotationType_e`,
+  `swDwgPaperSizes_e`) were read from the installed `swconst.tlb`.
+
 ## Risks / Trade-offs
 
 - [Sheet-to-view coordinate conversion for the section line] → the

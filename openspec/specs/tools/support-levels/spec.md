@@ -33,7 +33,7 @@ The check SHALL fail when a level contradicts what the code shows. A `planned` t
 
 #### Scenario: After the clean-up
 - **WHEN** the levels are counted after this change
-- **THEN** exactly seven tools are `planned`, all drawing tools, each naming queue item 12
+- **THEN** no tool is `planned`: the seven drawing tools the honest tool list left planned are built
 
 ### Requirement: The level is visible to clients
 

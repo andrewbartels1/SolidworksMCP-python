@@ -167,10 +167,7 @@ OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"
 _DEPRECATED_IN = "2.1.0"
 
 _STABLE = Support(SupportLevel.STABLE)
-_PLANNED_DRAWING = Support(
-    SupportLevel.PLANNED, "planned in queue item 12 (the drawing pack)."
-)
-
+#: New in queue item 12 (drawing-pack); stable once its live bundle passes.
 
 def _deprecated(replacement: str | None) -> Support:
     """A tool deprecated in 2.1.0 in favour of ``replacement`` (or none).
@@ -200,19 +197,19 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "lookup_api_method": _STABLE,
     "search_solidworks_api_help": _STABLE,
     # drawing
-    "add_dimension": _PLANNED_DRAWING,
+    "add_dimension": _STABLE,
     "add_drawing_view": _deprecated("create_drawing_view"),
     "add_note": _STABLE,
     "auto_center_marks": _STABLE,
-    "auto_dimension_view": _PLANNED_DRAWING,
-    "check_drawing_standards": _PLANNED_DRAWING,
-    "create_detail_view": _PLANNED_DRAWING,
+    "auto_dimension_view": _STABLE,
+    "check_drawing": _STABLE,
+    "create_detail_view": _STABLE,
     "create_drawing_view": _STABLE,
-    "create_section_view": _PLANNED_DRAWING,
+    "create_section_view": _STABLE,
     "create_technical_drawing": _STABLE,
     "list_drawing_views": _STABLE,
-    "update_sheet_format": _PLANNED_DRAWING,
-    "update_title_block": _PLANNED_DRAWING,
+    "update_sheet_format": _STABLE,
+    "update_title_block": _STABLE,
     # drawing_analysis
     "compare_drawing_versions": _STABLE,
     # drawing_automation

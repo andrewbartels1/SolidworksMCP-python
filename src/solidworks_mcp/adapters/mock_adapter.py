@@ -30,6 +30,7 @@ from .base import (
     SolidWorksModel,
     SweepParameters,
 )
+from .mock_drawing_pack import MockDrawingPackMixin
 from .solidworks.drawing_standard import gtol_problem
 from .solidworks.features import _AXIS_PLANE_PAIRS
 from .solidworks.hole_library import HoleSizeError, describe, sample_library
@@ -138,7 +139,7 @@ class _BoolCallable:
         return bool(self._getter())
 
 
-class MockSolidWorksAdapter(SolidWorksAdapter):
+class MockSolidWorksAdapter(MockDrawingPackMixin, SolidWorksAdapter):
     """Mock adapter that simulates SolidWorks operations.
 
     Args:

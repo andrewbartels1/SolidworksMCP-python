@@ -118,11 +118,11 @@ This page maps every major SolidWorks API area against what this MCP server impl
 | `create_drawing_view` | Creates a model view in a drawing (simulated) | IDrawingDoc::CreateDrawViewFromModelView3 |
 | `add_dimension` | Adds a dimension in a drawing (simulated) | IModelDocExtension::AddSmartDimension2 |
 | `add_note` | Adds a text note (simulated) | IAnnotationView::InsertNote |
-| `create_section_view` | Creates a section view (simulated) | IDrawingDoc::CreateSectionView5 |
-| `create_detail_view` | Creates a detail view (simulated) | IDrawingDoc::CreateDetailViewAt4 |
-| `update_sheet_format` | Applies a sheet format template (simulated) | ISheet::SetSheetInfo2 |
-| `auto_dimension_view` | Auto-dimensions a view (simulated) | IModelDocExtension::AddSmartDimension2 |
-| `check_drawing_standards` | Validates against drafting standards (simulated) | Internal |
+| `create_section_view` | A section view along a line across a view | IDrawingDoc::CreateSectionViewAt5 |
+| `create_detail_view` | A detail view of a circle, at a scale | IDrawingDoc::CreateDetailViewAt4 |
+| `update_sheet_format` | A new sheet format and paper size, views kept | IDrawingDoc::SetupSheet5 |
+| `auto_dimension_view` | Auto-dimensions one view, counted before and after | IDrawingDoc::AutoDimension |
+| `check_drawing` | Completeness check: views on the sheet, dimensions, title block, BOM, dangling annotations | IView::GetOutline, IAnnotation::IsDangling |
 | `create_technical_drawing` | Full drawing-from-model workflow | IDrawingDoc |
 | `add_drawing_view` | Add/update/delete a drawing view | IDrawingDoc |
 | `add_annotation` | Add annotation (note, balloon, symbol) | IAnnotationView |

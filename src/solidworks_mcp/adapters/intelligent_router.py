@@ -79,7 +79,6 @@ class IntelligentRouter:
             # "check_interference": changes as components are mated or moved;
             # a cached answer ignored the changes (#209).
             # Drawing analysis operations
-            "check_drawing_standards",
             "compare_drawing_versions",
             # Classification and indexing
             "classify_feature_tree",

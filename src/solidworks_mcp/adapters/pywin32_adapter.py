@@ -26,6 +26,7 @@ from .base import (
 from .solidworks import (
     SolidWorksConfigurationsMixin,
     SolidWorksDocumentationMixin,
+    SolidWorksDrawingPackMixin,
     SolidWorksDrawingStandardMixin,
     SolidWorksFeaturesMixin,
     SolidWorksIOMixin,
@@ -1710,6 +1711,7 @@ class _FeatureSelectionService:
 
 
 class PyWin32Adapter(
+    SolidWorksDrawingPackMixin,
     SolidWorksDrawingStandardMixin,
     SolidWorksDocumentationMixin,
     SolidWorksSketchMixin,
