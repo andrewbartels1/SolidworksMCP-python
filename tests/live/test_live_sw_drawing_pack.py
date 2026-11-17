@@ -45,6 +45,7 @@ def _centre(box: list[float]) -> tuple[float, float]:
     return (box[0] + box[2]) / 2, (box[1] + box[3]) / 2
 
 
+@pytest.mark.timeout(1200)  # paced for a demo: a hold on every step
 async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
     """Section, detail, dimensions, title block and format on a package drawing."""
     adapter = scratch.adapter
