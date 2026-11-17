@@ -86,7 +86,11 @@ async def _start_server(config: SolidWorksMCPConfig) -> Any:
     """
     from ..server import SolidWorksMCPServer
 
-    server = SolidWorksMCPServer(config)
+    # The checks call tools directly, so every tool is listed whatever the
+    # user's toolsets and mode; the report says what those settings list.
+    server = SolidWorksMCPServer(
+        config.model_copy(update={"toolsets": "all", "tool_mode": "list"})
+    )
     await server.setup()
     await server.adapter.connect()
     return server
@@ -117,7 +121,12 @@ async def run_selftest(
     try:
         async with Client(server.mcp) as client:
             call = ToolCaller(client)
-            environment = await read_environment(server.adapter, config.solidworks_year)
+            environment = await read_environment(
+                server.adapter,
+                config.solidworks_year,
+                tuple(config.toolsets.split(",")),
+                config.tool_mode,
+            )
             guard = DocumentGuard(call)
             async with guard:
                 results = await run_areas(AREAS, Context(call, guard.folder))

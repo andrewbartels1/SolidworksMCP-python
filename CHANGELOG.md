@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Shorter tool lists** (queue item 14, #176): `SOLIDWORKS_MCP_TOOLSETS`
+  lists only some groups of tools (`core`, `drawing`, `automation`, `vba`,
+  `docs`; `all` by default), and `SOLIDWORKS_MCP_TOOL_MODE=search` lists
+  four tools in place of the rest, `search_tools` and `call_tool` among
+  them: about 900 tokens a turn instead of about 55,000. The server's
+  instructions and the skill follow the settings, `selftest` reports them,
+  and the installation guide has the measured sizes. Nothing changes with
+  neither set.
+
 - **`save_as_template`** (queue item 21), checked live on SolidWorks 2026:
   saves the active part, assembly or drawing as a `.prtdot`, `.asmdot` or
   `.drwdot`, by path or by name into SolidWorks' template folder, so

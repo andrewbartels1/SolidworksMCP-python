@@ -269,3 +269,33 @@ class TestConfigValidatorCoverage:
         """Line 328 — validate_adapter_type just returns the value."""
         cfg = SolidWorksMCPConfig(mock_solidworks=True, adapter_type=AdapterType.MOCK)
         assert cfg.adapter_type == AdapterType.MOCK
+
+
+class TestToolVisibilitySettings:
+    """SOLIDWORKS_MCP_TOOLSETS and SOLIDWORKS_MCP_TOOL_MODE (queue item 14)."""
+
+    def test_defaults_list_every_tool(self) -> None:
+        config = SolidWorksMCPConfig()
+
+        assert (config.toolsets, config.tool_mode) == ("all", "list")
+
+    def test_values_are_read_from_the_environment_and_normalised(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("SOLIDWORKS_MCP_TOOLSETS", "Drawing, core")
+        monkeypatch.setenv("SOLIDWORKS_MCP_TOOL_MODE", " Search ")
+
+        config = SolidWorksMCPConfig.from_env()
+
+        assert (config.toolsets, config.tool_mode) == ("core,drawing", "search")
+
+    @pytest.mark.parametrize(
+        ("field", "value", "error"),
+        [
+            ("toolsets", "core,drawng", "Unknown toolset"),
+            ("tool_mode", "browse", "tool_mode must be one of list, search"),
+        ],
+    )
+    def test_a_typo_stops_the_server(self, field: str, value: str, error: str) -> None:
+        with pytest.raises(ValueError, match=error):
+            SolidWorksMCPConfig(**{field: value})

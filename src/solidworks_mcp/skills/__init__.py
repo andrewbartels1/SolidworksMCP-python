@@ -22,7 +22,8 @@ SolidWorks MCP server: drive SolidWorks parts, assemblies and drawings.
 - Start with `get_model_info` (or `list_open_documents`) to see what is open.
 - Build in this order: `create_part`, `create_sketch`, draw (`add_rectangle`, \
 `add_circle`, ...), `exit_sketch`, then the feature (`create_extrusion`, \
-`create_cut_extrude`, `create_revolve`). Features use the sketch `sketch_name` \nnames, or the one you closed last.
+`create_cut_extrude`, `create_revolve`). Features use the sketch `sketch_name` \
+names, or the one you closed last.
 - Inputs are millimetres and degrees unless a field says metres.
 - A tool's success does not prove the geometry is right: finish a build with \
 `verify_model`, giving the size, volume or counts you expect.
@@ -34,3 +35,35 @@ features and `undo` steps back.
 Full guidance (workflows, selection, units, known limits): read the resource \
 skill://solidworks-mcp/SKILL.md.
 """
+
+#: Added in search mode (``SOLIDWORKS_MCP_TOOL_MODE=search``).
+_SEARCH_MODE = """
+Search mode is on: most tools aren't listed. Call `search_tools` with what you \
+want to do in plain words ("fillet edges", "save as STEP"); it returns the \
+best matches with their inputs. Run one with `call_tool`, giving its `name` \
+and `arguments`. Search again for each new kind of step.
+"""
+
+
+def server_instructions(
+    toolsets: tuple[str, ...] = ("all",), mode: str = "list"
+) -> str:
+    """The instructions for the chosen toolsets and tool mode.
+
+    Args:
+        toolsets: The toolsets shown, or ``("all",)``.
+        mode: ``list`` or ``search``.
+
+    Returns:
+        str: :data:`SERVER_INSTRUCTIONS`, plus a line naming the toolsets
+        when some are hidden and a paragraph on searching in search mode.
+    """
+    text = SERVER_INSTRUCTIONS
+    if "all" not in toolsets:
+        text += (
+            f"\nOnly these toolsets are on: {', '.join(toolsets)}. Tools from the "
+            "others are hidden; the user turns them on with SOLIDWORKS_MCP_TOOLSETS.\n"
+        )
+    if mode == "search":
+        text += _SEARCH_MODE
+    return text

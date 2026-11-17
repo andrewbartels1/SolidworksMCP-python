@@ -281,8 +281,8 @@ async def register_export_tools(
     async def export_pdf(input_data: ExportFileInput) -> dict[str, Any]:
         """Export the active document to PDF, like File > Save As with the PDF type.
 
-        Use it to share a drawing; `generate_drawing_package` already saves a PDF with
-        the drawing it creates. SolidWorks picks the format from the file's extension,
+        Use it to share a drawing; `generate_drawing_package` (drawing toolset) already
+        saves a PDF with the drawing it creates. SolidWorks picks the format from the file's extension,
         so end `file_path` in .pdf. Needs: an open, active drawing (a part or assembly
         gives a PDF of the view). Changes: writes the file, creating its folder and
         replacing a file already there; the open document is unchanged. Returns:

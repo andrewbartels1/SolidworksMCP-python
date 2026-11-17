@@ -389,6 +389,18 @@ class SolidWorksMCPConfig(BaseModel):
         default=False, description="Use mock SolidWorks for testing"
     )
 
+    # === Which tools a client sees (queue item 14) ===
+    toolsets: str = Field(
+        default="all",
+        description="Comma-separated toolsets to list: core, drawing, "
+        "automation, vba, docs, or all (SOLIDWORKS_MCP_TOOLSETS).",
+    )
+    tool_mode: str = Field(
+        default="list",
+        description="list (every visible tool) or search (search_tools and "
+        "call_tool in their place) (SOLIDWORKS_MCP_TOOL_MODE).",
+    )
+
     model_config = ConfigDict(
         extra="allow"  # Allow extra fields for test configurations
     )
@@ -411,6 +423,46 @@ class SolidWorksMCPConfig(BaseModel):
         if self.allowed_origins and not self.cors_origins:
             self.cors_origins = list(self.allowed_origins)
         return self
+
+    @field_validator("toolsets")
+    @classmethod
+    def validate_toolsets(cls, v: str) -> str:
+        """Check the toolsets, so a typo stops the server instead of hiding tools.
+
+        Args:
+            v: Comma-separated toolset names, or ``all``.
+
+        Returns:
+            str: The names, comma-separated, in the toolset table's order.
+        """
+        # Imported here: the tools package imports the adapters, which import
+        # this module.
+        from .tools.toolsets import parse_toolsets
+
+        return ",".join(parse_toolsets(v))
+
+    @field_validator("tool_mode")
+    @classmethod
+    def validate_tool_mode(cls, v: str) -> str:
+        """Check the tool mode.
+
+        Args:
+            v: ``list`` or ``search``.
+
+        Returns:
+            str: The mode, lower case.
+
+        Raises:
+            ValueError: For any other value.
+        """
+        from .tools.toolsets import TOOL_MODES
+
+        mode = v.strip().lower()
+        if mode not in TOOL_MODES:
+            raise ValueError(
+                f"tool_mode must be one of {', '.join(TOOL_MODES)}, not {v!r}"
+            )
+        return mode
 
     @field_validator("cache_dir")
     @classmethod

@@ -21,7 +21,9 @@ def generated() -> dict[str, str]:
     return build(_ROOT)
 
 
-@pytest.mark.parametrize("name", ["progress.svg", "progress.json", "tables.html"])
+@pytest.mark.parametrize(
+    "name", ["progress.svg", "progress.json", "tables.html", "tool-list-size.md"]
+)
 def test_the_committed_file_is_up_to_date(name: str, generated: dict[str, str]) -> None:
     committed = (_ROOT / OUTPUT_DIR / name).read_text(encoding="utf-8")
 

@@ -59,3 +59,27 @@ async def test_a_reference_file_is_read_through_the_skill_template(
         )
 
     assert content[0].text == expected
+
+
+@pytest.mark.asyncio
+async def test_the_instructions_and_list_follow_the_settings(
+    mock_config: SolidWorksMCPConfig,
+) -> None:
+    """With core in search mode, a client sees four tools and is told to search."""
+    config = mock_config.model_copy(update={"toolsets": "core", "tool_mode": "search"})
+    server = SolidWorksMCPServer(config)
+    await server.setup()
+
+    async with Client(server.mcp) as client:
+        instructions = client.initialize_result.instructions
+        listed = {t.name for t in await client.list_tools()}
+
+    assert "Only these toolsets are on: core." in instructions
+    assert "Search mode is on" in instructions
+    assert listed == {
+        "get_model_info",
+        "reset_circuit_breaker",
+        "search_tools",
+        "call_tool",
+    }
+    assert server.state.tool_count == 135

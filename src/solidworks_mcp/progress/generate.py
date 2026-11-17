@@ -10,7 +10,9 @@ It writes, under ``docs/assets/progress/``:
 - ``progress.svg``: the README image;
 - ``progress.json``: every tool's family, level and summary, and the
   coverage of each core interface;
-- ``tables.html``: the docs page's HTML tables, readable without scripts.
+- ``tables.html``: the docs page's HTML tables, readable without scripts;
+- ``tool-list-size.md``: the size of the tool list per toolset and mode
+  (:mod:`.tool_list_size`).
 
 ``tests/integration/test_progress_up_to_date.py`` fails when any of them is
 out of date.
@@ -36,10 +38,11 @@ from ..tools.tool_boundary import tool_family
 from .com_coverage import ComCoverage, Snapshot, adapter_sources, called_names, measure
 from .snapshot import SNAPSHOT_PATH
 from .svg import render
+from .tool_list_size import build as tool_list_size
 
 #: The generated files, relative to the repository root.
 OUTPUT_DIR = Path("docs/assets/progress")
-OUTPUTS = ("progress.svg", "progress.json", "tables.html")
+OUTPUTS = ("progress.svg", "progress.json", "tables.html", "tool-list-size.md")
 
 # Material for MkDocs wraps Markdown tables in these so wide ones scroll;
 # raw HTML tables need them written out.
@@ -197,6 +200,7 @@ def build(root: Path) -> dict[str, str]:
         "progress.svg": render(counts, coverage),
         "progress.json": progress_json(rows, coverage),
         "tables.html": tables_html(rows, coverage),
+        "tool-list-size.md": tool_list_size(),
     }
 
 
