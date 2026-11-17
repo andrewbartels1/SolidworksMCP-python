@@ -1034,6 +1034,51 @@ def _describe_open_document(
     }
 
 
+def _open_documents(adapter: Any) -> list[dict[str, Any]]:
+    """Every open document's title, path and type (``_describe_open_document``)."""
+    docs = _coerce_dispatch_sequence(
+        adapter._attempt(lambda: adapter.swApp.GetDocuments(), default=None)
+    )
+    return [_describe_open_document(adapter, d, None, None) for d in docs]
+
+
+def _close_new_unsaved_assemblies(
+    adapter: Any, before: set[str | None], return_to: str | None
+) -> list[str]:
+    """Close assemblies a call opened and never saved; reactivate ``return_to``.
+
+    SolidWorks' Save Bodies feature can leave a new, unsaved assembly open
+    (issue #101). Only a document that wasn't open before the call, is an
+    assembly and has no file is closed, so nothing the user had open is
+    touched and nothing saved is lost.
+
+    Args:
+        adapter: A connected adapter.
+        before: Titles of the documents open before the call.
+        return_to: Title of the document to make active again, if one was
+            closed.
+
+    Returns:
+        list[str]: Titles of the documents closed.
+    """
+    closed = []
+    for doc in _open_documents(adapter):
+        title = doc["title"]
+        if (
+            title
+            and title not in before
+            and doc["type"] == "Assembly"
+            and not doc["path"]
+        ):
+            adapter._attempt(lambda t=title: adapter.swApp.CloseDoc(t))
+            closed.append(title)
+    if closed and return_to:
+        adapter._attempt(
+            lambda: adapter.swApp.ActivateDoc3(return_to, False, 0, _byref_int())
+        )
+    return closed
+
+
 # --- Geometry summary ------------------------------------------------------
 # Read-only helpers for ``get_model_geometry_summary``. None of them rebuilds
 # the model or touches the selection (COM pitfall #23), so the summary can be
@@ -3705,7 +3750,9 @@ class SolidWorksIOMixin:
 
         Returns:
             AdapterResult[dict[str, Any]]: The body, the written path, the new
-            feature's name, and every solid-body name found. ``ERROR`` when
+            feature's name, every solid-body name found, and
+            ``closed_documents``: any new, unsaved assembly SolidWorks opened
+            alongside, which is closed (issue #101). ``ERROR`` when
             the active document is not a part, the body is absent, the parent
             directory is missing, or no file was written.
         """
@@ -3777,6 +3824,10 @@ class SolidWorksIOMixin:
             if os.path.exists(target):
                 os.remove(target)
 
+            open_before = {d["title"] for d in _open_documents(adapter)}
+            part_title = adapter._attempt(
+                lambda: adapter._get_attr_or_call(model, "GetTitle"), default=None
+            )
             feature = adapter._attempt(
                 lambda: manager.CreateSaveBodyFeature(
                     _variant_array(pythoncom.VT_DISPATCH, [match]),
@@ -3788,6 +3839,9 @@ class SolidWorksIOMixin:
                 default=None,
             )
             adapter._attempt(lambda: model.EditRebuild3(), default=None)
+            closed = _close_new_unsaved_assemblies(
+                adapter, open_before, str(part_title) if part_title else None
+            )
 
             if not os.path.exists(target):
                 raise Exception(
@@ -3808,6 +3862,7 @@ class SolidWorksIOMixin:
                 "file_path": target,
                 "feature": str(feat_name) if feat_name else None,
                 "solid_bodies": names,
+                "closed_documents": closed,
             }
 
         return cast(

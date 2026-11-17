@@ -1420,8 +1420,9 @@ async def register_file_management_tools(
         Use it to split a multibody part into parts, e.g. after `create_extrusion`
         without merging. Needs: an open, active part with the named body and an existing
         target folder. Changes: adds a Save Bodies feature to the part and writes the
-        new .sldprt. Returns: `data` with `body`, `file_path`, `feature` and
-        `solid_bodies` (every body name, to correct a wrong one).
+        new .sldprt; closes any new, unsaved assembly SolidWorks opens alongside.
+        Returns: `data` with `body`, `file_path`, `feature`, `solid_bodies` (every
+        body name, to correct a wrong one) and `closed_documents`.
 
         Args:
             input_data: The body. `body_name` and `file_path` (a .sldprt) are
