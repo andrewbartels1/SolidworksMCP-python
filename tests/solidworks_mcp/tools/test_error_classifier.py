@@ -93,6 +93,11 @@ def classifier() -> ErrorClassifier:
             "wrong_document_type",
         ),
         (
+            "add_edge_flange needs a sheet-metal part; this part has no "
+            "sheet-metal body.",
+            "wrong_document_type",
+        ),
+        (
             "list_model_dimensions needs an active part or assembly document",
             "wrong_document_type",
         ),

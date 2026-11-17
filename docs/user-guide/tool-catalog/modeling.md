@@ -609,7 +609,7 @@ Draft faces of the active part by an angle, e.g. for a moulded part.
 
 Start a sheet-metal part: a base flange from a sketch, with its thickness, bend radius and K-factor.
 
-A closed sketch (a rectangle) makes a flat plate; an open one (a line or an L) makes a bent profile extruded by `depth`. The thickness, radius and K-factor are read back from the feature. Beta: not yet checked on SolidWorks (queue item 15's live check).
+A closed sketch (a rectangle) makes a flat plate; an open one (a line or an L) makes a bent profile extruded by `depth`. The thickness, radius and K-factor are read back from the feature.
 
 **Prerequisite:** Active part with the profile sketch closed.
 
@@ -636,7 +636,7 @@ A closed sketch (a rectangle) makes a flat plate; an open one (a line or an L) m
 
 Add a flange to one edge of a sheet-metal part, at a length and angle.
 
-Pick the edge with a point on it in mm. `length` is measured from that edge: on a 2 mm sheet a 20 mm flange stands 22 mm above the bottom face. The reply's `edge_length_mm` shows which edge was picked. Beta: not yet checked on SolidWorks (queue item 15's live check).
+Pick the edge with a point on it in mm. `length` is measured from that edge: on a 2 mm sheet a 20 mm flange stands 22 mm above the bottom face. The reply's `edge_length_mm` shows which edge was picked.
 
 **Prerequisite:** A sheet-metal part (`create_base_flange` first).
 
@@ -662,7 +662,7 @@ Pick the edge with a point on it in mm. `length` is measured from that edge: on 
 
 Bend a sheet-metal part along a line sketched on one of its faces.
 
-Sketch a line across a face (`create_sketch` with `face_point`, then `add_line`), close the sketch, then call this. SolidWorks chooses which side of the line stays put; the reply's `bounding_box_mm` shows which side moved, and `reverse` bends the other way. Beta: not yet checked on SolidWorks (queue item 15's live check).
+Sketch a line across a face (`create_sketch` with `face_point`, then `add_line`), close the sketch, then call this. SolidWorks chooses which side of the line stays put; the reply's `bounding_box_mm` shows which side moved, and `reverse` bends the other way.
 
 **Prerequisite:** A sheet-metal part and the bend-line sketch, closed.
 
@@ -687,7 +687,7 @@ Sketch a line across a face (`create_sketch` with `face_point`, then `add_line`)
 
 Flatten a sheet-metal part to its blank, or fold it back, and measure it.
 
-Flattened, `bounding_box_mm` is the blank to cut: a 100 x 60 x 2 mm plate with a 20 mm flange (2 mm radius, K 0.5) flattens to 100 x 78.71 mm. Then `export_flat_pattern` writes the DXF. Fold it back before adding more features. Beta: not yet checked on SolidWorks (queue item 15's live check).
+Flattened, `bounding_box_mm` is the blank to cut: a 100 x 60 x 2 mm plate with a 20 mm flange (2 mm radius, K 0.5) flattens to 100 x 78.71 mm. Then `export_flat_pattern` writes the DXF. Fold it back before adding more features.
 
 **Prerequisite:** A sheet-metal part.
 

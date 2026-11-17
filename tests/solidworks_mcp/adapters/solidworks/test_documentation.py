@@ -809,6 +809,17 @@ async def test_export_flat_pattern_needs_a_sheet_metal_body(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_export_flat_pattern_needs_the_part_saved(tmp_path) -> None:
+    """ExportToDWG2 reads the part from its file (seen live)."""
+    part = _sheet_metal_part(True)
+    part.GetPathName = lambda: ""
+
+    result = await _Harness(part).export_flat_pattern(str(tmp_path / "x.dxf"))
+
+    assert "never been saved; save it with save_file" in result.error
+
+
+@pytest.mark.asyncio
 async def test_export_flat_pattern_reports_a_failed_export(tmp_path) -> None:
     result = await _Harness(_sheet_metal_part(True, writes=False)).export_flat_pattern(
         str(tmp_path / "x.dwg")

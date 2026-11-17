@@ -2,8 +2,8 @@
  "tools": {
   "total": 139,
   "by_level": {
-   "stable": 127,
-   "beta": 4,
+   "stable": 131,
+   "beta": 0,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -89,8 +89,8 @@
    {
     "name": "add_edge_flange",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 15's live check).",
+    "level": "stable",
+    "reason": "",
     "summary": "Add a flange to one edge of a sheet-metal part, at a length and angle."
    },
    {
@@ -264,8 +264,8 @@
    {
     "name": "create_base_flange",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 15's live check).",
+    "level": "stable",
+    "reason": "",
     "summary": "Start a sheet-metal part: a base flange from a sketch, with its thickness, bend radius and K-factor."
    },
    {
@@ -383,8 +383,8 @@
    {
     "name": "create_sketched_bend",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 15's live check).",
+    "level": "stable",
+    "reason": "",
     "summary": "Bend a sheet-metal part along a line sketched on one of its faces."
    },
    {
@@ -880,8 +880,8 @@
    {
     "name": "set_flat_pattern",
     "family": "modeling",
-    "level": "beta",
-    "reason": "not yet checked on SolidWorks (queue item 15's live check).",
+    "level": "stable",
+    "reason": "",
     "summary": "Flatten a sheet-metal part to its blank, or fold it back, and measure it."
    },
    {

@@ -17,5 +17,5 @@
 
 ## 4. Live check
 
-- [ ] 4.1 `tests/live/test_live_sw_sheet_metal.py`: a 100 x 60 x 2 mm plate; a 20 mm flange on a long edge; the flat blank's width against the K-factor's; a sketched bend on a second plate; a block refused; the DXF exported
-- [ ] 4.2 Fixes one at a time, the decisions recorded in the design; the tools stable when they pass; archive; queue updated; PR closing #57
+- [x] 4.1 (passed 2026-11-16 after the probes in the design; the part is saved before the DXF, which `export_flat_pattern` now asks for) `tests/live/test_live_sw_sheet_metal.py`: a 100 x 60 x 2 mm plate; a 20 mm flange on a long edge; the flat blank's width against the K-factor's; a sketched bend on a second plate; a block refused; the DXF exported
+- [x] 4.2 Fixes one at a time, the decisions recorded in the design; the tools stable when they pass; archive; queue updated; PR closing #57
