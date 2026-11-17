@@ -13,6 +13,7 @@ from typing import Any, cast
 from ...utils.sw_dependencies import dependency_paths
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
+from .configurations import THIS_CONFIGURATION, configuration_scope
 from .face_selection import mate_entity_label
 
 try:
@@ -1858,15 +1859,23 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("get_dimension", _get),
         )
 
-    async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
+    async def set_dimension(
+        self, name: str, value: float, configurations: str | list[str] = "this"
+    ) -> AdapterResult[dict[str, Any]]:
         """Set a named model dimension in millimetres and rebuild.
+
+        In the active configuration the proven ``SystemValue`` write is kept;
+        ``"all"`` or a list of names goes through
+        ``IDimension.SetSystemValue3(value, option, names)``.
 
         Args:
             name: Fully-qualified dimension name.
             value: New value in millimetres.
+            configurations: ``"this"``, ``"all"`` or configuration names.
 
         Returns:
-            AdapterResult[None]: Result of the set operation.
+            AdapterResult[dict[str, Any]]: ``configurations``, the names the
+            value was set in.
         """
         adapter = self._adapter(self)
         if not adapter.currentModel:
@@ -1874,19 +1883,28 @@ class SolidWorksIOMixin:
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
 
-        def _set() -> None:
+        def _set() -> dict[str, Any]:
             """Set the dimension value."""
+            option, names, array = configuration_scope(adapter, configurations)
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
 
-            # SetValue3 has gen_py parameter mapping issues on SW 2025.
-            # SystemValue (in meters) is reliable.
             value_m = value / 1000.0
-            adapter._attempt(
-                lambda: setattr(dimension, "SystemValue", value_m),
-                default=None,
-            )
+            if option == THIS_CONFIGURATION:
+                # SetValue3 has gen_py parameter mapping issues on SW 2025.
+                # SystemValue (in meters) is reliable.
+                adapter._attempt(
+                    lambda: setattr(dimension, "SystemValue", value_m),
+                    default=None,
+                )
+            else:
+                status = dimension.SetSystemValue3(value_m, option, array)
+                if status != 0:  # swSetValue_Successful
+                    raise Exception(
+                        f"SetSystemValue3 refused {name} in {', '.join(names)} "
+                        f"(swSetValueReturnStatus_e {status})."
+                    )
 
             # Rebuild: try EditRebuild3 first, fall back to ForceRebuild3
             rebuilt = adapter._attempt(
@@ -1898,9 +1916,10 @@ class SolidWorksIOMixin:
                 )
             if rebuilt is None:
                 raise Exception("Failed to set dimension")
+            return {"configurations": names}
 
         return cast(
-            AdapterResult[None],
+            AdapterResult[dict[str, Any]],
             adapter._handle_com_operation("set_dimension", _set),
         )
 

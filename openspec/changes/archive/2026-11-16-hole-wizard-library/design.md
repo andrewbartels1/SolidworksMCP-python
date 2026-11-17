@@ -50,7 +50,10 @@ is a table entry, later).
 2. **Open read-only and immutable:** `sqlite3.connect("file:...?mode=ro&immutable=1", uri=True)`.
    SolidWorks may have the file open; `immutable` takes no lock and writes
    nothing. Table names come from the library's own rows; every one is
-   checked against `sqlite_master` and quoted, never formatted from input.
+   checked against the file's table list. Revised in review (PR #234,
+   Bandit B608): no SQL is built as text. A SQLModel engine over that
+   connection (`NullPool`, so it closes after each read) reflects the table
+   and reads it with `select()`, so SQLAlchemy quotes every identifier.
 3. **Finding the file**, first hit wins: the `SOLIDWORKS_MCP_HOLE_LIBRARY`
    setting (a file path); `Toolbox Data Location` from HKCU, then HKLM, for
    each installed SolidWorks year, newest first, with
@@ -71,6 +74,18 @@ is a table entry, later).
 7. **Unreadable library:** `list_hole_sizes` fails (the spec forbids an
    empty answer); `create_hole` goes ahead with the codes it has and adds a
    warning, since the hole may still build.
+
+8. **A size with its pitch** (found while building it): the ISO tapped
+   table lists coarse threads without the pitch (`M6`, not `M6x1.0`), though
+   `HoleWizard5` accepted `M6x1.0` live. `M6x1.0` is matched to the `M6` row
+   when that row's pitch is 1.0, and the table's spelling is passed on.
+9. **The file is closed after each read** (`contextlib.closing`): `with
+   sqlite3.connect()` only commits, and a connection left open would keep
+   SolidWorks' own library file locked on Windows. The unit tests found it.
+10. **Unit tests never read this machine's library:** a conftest gives the
+   real adapter's tests the built-in sample library (`sample_library()`, the
+   mock adapter's), and the reader is tested against a SQLite file each test
+   builds.
 
 ## Adding sizes (not in this change)
 

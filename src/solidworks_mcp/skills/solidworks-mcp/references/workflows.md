@@ -73,8 +73,9 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
 ## Standard holes, threads, shells and ribs
 
 - **A hole for a screw:** `create_hole` with a point on the face where the
-  hole's centre goes, the `hole_type` and the size SolidWorks lists
-  (`M6`, `M6x1.0` for tapped). More holes on the same face go in
+  hole's centre goes, the `hole_type` and a size from `list_hole_sizes`
+  (`M6`, `#10`; on a simple hole `M6` is a clearance hole, `6` a drilled
+  one). An unknown size is refused with the nearest ones. More holes on the same face go in
   `positions` (points in mm): one feature, a hole at each point. A
   regular row or grid can also use `pattern_linear`. A simple hole can't
   be through all in SolidWorks: it is made blind through the part, and the
@@ -101,6 +102,15 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
 
 To turn a feature off without deleting it, `suppress_feature`. After
 `delete_feature`, call `list_features`: dependents may have gone too.
+
+## Variants of one part (configurations)
+
+1. `create_configuration` with a name (`Long`); the active one doesn't change.
+2. `set_dimension` or `suppress_feature` with `configurations: ["Long"]`
+   changes only `Long`; `"all"` changes every one. Without it, only the
+   active configuration changes.
+3. `activate_configuration` to look at a variant; `get_dimension` reads the
+   active one.
 
 ## An assembly
 

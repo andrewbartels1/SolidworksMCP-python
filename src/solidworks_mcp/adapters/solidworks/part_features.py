@@ -32,6 +32,14 @@ from .features import (
     _select_named_feature,
     _with_volume_change,
 )
+from .hole_library import (
+    HoleLibraryError,
+    HoleSizeError,
+    ResolvedHole,
+    describe,
+    find_library,
+    unchecked,
+)
 from .rebuild_diagnostics import explain
 from .rebuild_inspector import collect_rebuild_issues
 
@@ -44,19 +52,12 @@ HOLE_TYPES: dict[str, int] = {
 }
 
 #: ``swWzdHoleStandards_e``.
-HOLE_STANDARDS: dict[str, int] = {"ansi_inch": 0, "iso": 8}
-
-#: ``(hole_type, standard) -> swWzdHoleStandardFastenerTypes_e``: the
-#: fastener list each hole type is sized from.
-HOLE_FASTENERS: dict[tuple[str, str], int] = {
-    ("simple", "iso"): 143,  # swStandardISODrillSizes
-    ("simple", "ansi_inch"): 18,  # swStandardAnsiInchAllDrillSizes
-    ("counterbore", "iso"): 139,  # swStandardISOSocketHeadCap
-    ("counterbore", "ansi_inch"): 9,  # swStandardAnsiInchSocketCapScrew
-    ("countersink", "iso"): 141,  # swStandardISOCTSKFlatHead
-    ("countersink", "ansi_inch"): 15,  # swStandardAnsiInchFlatHead82
-    ("tapped", "iso"): 147,  # swStandardISOTappedHole
-    ("tapped", "ansi_inch"): 27,  # swStandardAnsiInchTappedHole
+HOLE_STANDARDS: dict[str, int] = {
+    "ansi_inch": 0,
+    "ansi_metric": 1,
+    "din": 4,
+    "iso": 8,
+    "jis": 9,
 }
 
 #: ``swEndConditions_e`` for holes.
@@ -683,6 +684,35 @@ class SolidWorksPartFeaturesMixin:
 
         return await self._measured("create_rib", build)
 
+    async def list_hole_sizes(
+        self,
+        standard: str,
+        hole_type: str,
+        fastener: str | None = None,
+        size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """The Hole Wizard hole types and sizes, read from the installed library.
+
+        A file read (:mod:`.hole_library`), no COM: it works whether or not
+        SolidWorks is running.
+
+        Args:
+            standard: A key of :data:`HOLE_STANDARDS`.
+            hole_type: ``simple``, ``counterbore``, ``countersink`` or ``tapped``.
+            fastener: One hole type's name, to list only its sizes.
+            size: One size, to read its dimensions.
+
+        Returns:
+            The hole types with their sizes, or one size's dimensions; an
+            error naming where the library was looked for, or the nearest
+            sizes.
+        """
+        try:
+            data = describe(find_library(), standard, hole_type, fastener, size)
+        except (HoleLibraryError, HoleSizeError) as exc:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)
+
     async def create_hole(
         self,
         face_point: list[float],
@@ -692,6 +722,7 @@ class SolidWorksPartFeaturesMixin:
         end_condition: str = "through_all",
         depth: float | None = None,
         positions: list[list[float]] | None = None,
+        fastener: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Hole Wizard holes at points on a flat face (``HoleWizard5``).
 
@@ -707,17 +738,26 @@ class SolidWorksPartFeaturesMixin:
             face_point: ``[x, y, z]`` mm on the face, where the first hole goes.
             hole_type: A key of :data:`HOLE_TYPES`.
             standard: A key of :data:`HOLE_STANDARDS`.
-            size: The size as SolidWorks lists it (``M6``, ``M6x1.0``, ``#10``).
+            size: The size as the library lists it (``M6``, ``#10``); a bare
+                diameter or a pitch is matched to the table's spelling.
             end_condition: A key of :data:`HOLE_END_CONDITIONS`.
             depth: Hole depth for a blind hole, mm.
             positions: Further ``[x, y, z]`` mm points on the same face.
+            fastener: The hole type's name from ``list_hole_sizes``; the
+                default for the kind and size when ``None``.
 
         Returns:
-            The hole's name, inputs, ``hole_count``, ``end_condition_used``
-            and volume change. When adding the positions fails, the hole is
-            removed again and the error says why.
+            The hole's name, inputs, ``fastener``, ``hole_count``,
+            ``end_condition_used`` and volume change. A size the library
+            lacks is refused before any COM call, with the nearest sizes.
+            When adding the positions fails, the hole is removed again and
+            the error says why.
         """
         adapter: Any = self
+        try:
+            chosen = _resolve_hole(standard, hole_type, size, fastener)
+        except HoleSizeError as exc:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
         extra = [list(p) for p in positions or []]
         made: dict[str, str | None] = {}
 
@@ -739,8 +779,8 @@ class SolidWorksPartFeaturesMixin:
                 return manager.HoleWizard5(
                     HOLE_TYPES[hole_type],  # GenericHoleType
                     HOLE_STANDARDS[standard],  # StandardIndex
-                    HOLE_FASTENERS[(hole_type, standard)],  # FastenerTypeIndex
-                    size,  # SSize
+                    chosen.code,  # FastenerTypeIndex
+                    chosen.size,  # SSize
                     HOLE_END_CONDITIONS[end],  # EndType
                     -1.0,  # Diameter (from the size table)
                     depth_m,  # Depth
@@ -756,7 +796,8 @@ class SolidWorksPartFeaturesMixin:
                 )
 
             blind_depth = _mm(depth) if depth is not None else -1.0
-            end_used, warnings = end_condition, []
+            end_used = end_condition
+            warnings = [chosen.warning] if chosen.warning else []
             feature = make(end_condition, blind_depth)
             if feature is None and hole_type == "simple" and end_condition != "blind":
                 blind_depth = _through_depth_m(adapter, model)
@@ -769,8 +810,9 @@ class SolidWorksPartFeaturesMixin:
                 )
             if feature is None:
                 raise RuntimeError(
-                    f"HoleWizard5 made no hole ({hole_type}, {standard}, {size}); "
-                    "check the size is one SolidWorks lists for that standard."
+                    f"HoleWizard5 made no hole ({hole_type}, {standard}, "
+                    f'"{chosen.fastener}" {chosen.size}); check the face is flat '
+                    "and the hole fits on it."
                 )
             name = _feature_name(adapter, feature)
             made["name"] = name
@@ -791,7 +833,8 @@ class SolidWorksPartFeaturesMixin:
                 "thread_depth_mm": None if thread_m is None else thread_m * 1000,
                 "hole_type": hole_type,
                 "standard": standard,
-                "size": size,
+                "fastener": chosen.fastener,
+                "size": chosen.size,
                 "end_condition": end_condition,
                 "end_condition_used": end_used,
                 "depth_mm": depth if end_used == end_condition else blind_depth * 1000,
@@ -932,3 +975,21 @@ class SolidWorksPartFeaturesMixin:
             AdapterResult[dict[str, Any]],
             adapter._handle_com_operation("sketch_convert_entities", build),
         )
+
+
+def _resolve_hole(
+    standard: str, hole_type: str, size: str, fastener: str | None
+) -> ResolvedHole:
+    """The hole type, index and size to ask ``HoleWizard5`` for.
+
+    Checked against the installed library; when it can't be read, the
+    default hole type is tried with a warning (design decision 7).
+
+    Raises:
+        HoleSizeError: For a size or hole type the library lacks.
+    """
+    try:
+        library = find_library()
+    except HoleLibraryError as exc:
+        return unchecked(standard, hole_type, size, fastener, str(exc))
+    return library.resolve(standard, hole_type, size, fastener)

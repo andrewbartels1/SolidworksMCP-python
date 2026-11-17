@@ -9,6 +9,7 @@ import math
 
 import pytest
 
+from solidworks_mcp.adapters.base import AdapterResultStatus
 from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
 
@@ -79,3 +80,30 @@ async def test_convert_entities_needs_an_open_sketch(
     assert refused.error == "No active sketch"
     assert made.data["count"] == 5
     assert set(made.data["entities"]) <= mock._sketch_entity_ids
+
+
+@pytest.mark.asyncio
+async def test_holes_are_checked_against_the_sample_library(
+    mock: MockSolidWorksAdapter,
+) -> None:
+    drill = await mock.create_hole([0, 0, 20], "simple", "iso", "6", "blind", 10)
+    inch = await mock.create_hole(
+        [0, 0, 20], "counterbore", "ansi_inch", "#10", fastener="Cap"
+    )
+    unknown = await mock.create_hole([0, 0, 20], "simple", "iso", "M7")
+
+    assert (drill.data["fastener"], drill.data["size"]) == ("Drill sizes", "Ø6.0")
+    assert drill.data["volume_change"] == pytest.approx(-math.pi * 9 * 10)
+    assert inch.data["volume_change"] == pytest.approx(-math.pi * 9 * 40)
+    assert "nearest: M4, M5, M6, M8, M10" in (unknown.error or "")
+
+
+@pytest.mark.asyncio
+async def test_list_hole_sizes(mock: MockSolidWorksAdapter) -> None:
+    tapped = await mock.list_hole_sizes("ansi_inch", "tapped")
+    cap = await mock.list_hole_sizes("iso", "counterbore", "Cap (4762)", "M8")
+    din = await mock.list_hole_sizes("din", "simple", "Drill sizes")
+
+    assert tapped.data["hole_types"][0]["sizes"][:2] == ["#6-32", "#8-32"]
+    assert cap.data["dimensions"]["cbore_depth"] == 8.6
+    assert din.status == AdapterResultStatus.ERROR

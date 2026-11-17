@@ -4,7 +4,7 @@ Create and manipulate SolidWorks parts, assemblies, and drawings. These are the 
 
 > **Prerequisite:** An active SolidWorks session. Most feature tools require an open Part document.
 
-**Total tools in this category: 37**
+**Total tools in this category: 38**
 
 ## Measured change
 
@@ -236,6 +236,8 @@ Read one dimension of the active model by its full name, e.g. "D1@Sketch1".
 
 Change one length dimension of the active model, in mm, and rebuild.
 
+It changes the active configuration only, unless `configurations` is `"all"` or a list of names; the reply's `configurations` names where it was set. An unknown name is refused (`invalid_input`) before anything changes.
+
 **Prerequisite:** Active document with named dimensions
 
 **Parameters:**
@@ -246,12 +248,15 @@ Change one length dimension of the active model, in mm, and rebuild.
 | `dimension_name` | `str?` | — | `None` | Dimension name alias |
 | `value` | `float` | ✅ | `` | New dimension value in millimeters |
 | `units` | `str?` | — | `None` | Units alias |
+| `configurations` | `str \| list[str]` | — | `this` | `this` (the active configuration), `all`, or names from `list_configurations` |
 
 **Sample call:**
 
 ```json
 {
-  "value": 50.0
+  "name": "D1@Boss-Extrude1",
+  "value": 50.0,
+  "configurations": ["Long"]
 }
 ```
 
@@ -431,7 +436,7 @@ Add a reference point on an edge (at a distance or percentage along it) or at th
 
 Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at a point on a flat face.
 
-Every point in `positions` adds another hole to the same feature, as placing holes on sketch points does in the Hole Wizard. SolidWorks makes no simple hole through all, so a simple `through_all` hole is made blind through the part; the reply's `end_condition_used` says `blind` and a warning explains.
+Every point in `positions` adds another hole to the same feature, as placing holes on sketch points does in the Hole Wizard. Sizes are checked against SolidWorks' Hole Wizard library first (see [`list_hole_sizes`](#list_hole_sizes)): a size that isn't there is refused with the nearest ones, and nothing is made. On a simple hole a screw size (`M6`, `#10`) makes a clearance hole and a bare diameter (`6`) a drilled one; the reply's `fastener` names the hole type used. SolidWorks makes no simple hole through all, so a simple `through_all` hole is made blind through the part; the reply's `end_condition_used` says `blind` and a warning explains.
 
 **Prerequisite:** Active part with a flat face at `face_point`.
 
@@ -441,8 +446,9 @@ Every point in `positions` adds another hole to the same feature, as placing hol
 |-----------|------|----------|---------|-------------|
 | `face_point` | `list[float]` | ✅ | `` | `[x, y, z]` in mm on a flat face: the hole's centre |
 | `hole_type` | `str` | ✅ | `` | `simple`, `counterbore`, `countersink` or `tapped` |
-| `standard` | `str` | — | `iso` | `iso` or `ansi_inch` |
-| `size` | `str` | ✅ | `` | As SolidWorks lists it: `M6`, `M6x1.0` (tapped), `#10`, `1/4` |
+| `standard` | `str` | — | `iso` | `iso`, `ansi_inch`, `ansi_metric`, `din` or `jis` |
+| `size` | `str` | ✅ | `` | As `list_hole_sizes` lists it: `M6`, `#10`, `1/4`; `M6x1.0` finds the coarse M6 thread |
+| `fastener` | `str?` | — | `None` | A hole type's name from `list_hole_sizes` (e.g. `Dowel Holes`); the usual one when omitted |
 | `end_condition` | `str` | — | `through_all` | `through_all` or `blind` |
 | `depth` | `float?` | — | `None` | Blind depth in mm (required for `blind`) |
 | `positions` | `list[list[float]]?` | — | `None` | More holes in the same feature: `[x, y, z]` mm points on the same face |
@@ -455,6 +461,35 @@ Every point in `positions` adds another hole to the same feature, as placing hol
   "hole_type": "counterbore",
   "size": "M6",
   "positions": [[30, 10, 20], [10, 30, 20]]
+}
+```
+
+---
+
+### `list_hole_sizes`
+
+List the Hole Wizard's hole types and sizes for a standard, or one size's dimensions.
+
+Read from SolidWorks' installed Hole Wizard library (the Toolbox file `swbrowser.sldedb`, found through the registry or the `SOLIDWORKS_MCP_HOLE_LIBRARY` setting), read-only, so it works without SolidWorks running. With `size`, it gives that size's dimensions as the library stores them: counterbore diameter and depth, head diameter, pitch, in mm (inches for `ansi_inch`).
+
+**Prerequisite:** SolidWorks' Toolbox library on this machine.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `hole_type` | `str` | ✅ | `` | `simple`, `counterbore`, `countersink` or `tapped` |
+| `standard` | `str` | — | `iso` | `iso`, `ansi_inch`, `ansi_metric`, `din` or `jis` |
+| `fastener` | `str?` | — | `None` | One hole type's name (e.g. `Screw Clearances`): only its sizes |
+| `size` | `str?` | — | `None` | One size (e.g. `M6`): its dimensions |
+
+**Sample call:**
+
+```json
+{
+  "hole_type": "counterbore",
+  "fastener": "Cap (4762)",
+  "size": "M6"
 }
 ```
 

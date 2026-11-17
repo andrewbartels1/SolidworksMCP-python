@@ -1298,6 +1298,23 @@ class SolidWorksAdapter(ABC):
             error="create_rib is not implemented by this adapter",
         )
 
+    async def list_hole_sizes(
+        self,
+        standard: str,
+        hole_type: str,
+        fastener: str | None = None,
+        size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """List the Hole Wizard hole types and sizes of a standard.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_hole_sizes is not implemented by this adapter",
+        )
+
     async def create_hole(
         self,
         face_point: list[float],
@@ -1307,6 +1324,7 @@ class SolidWorksAdapter(ABC):
         end_condition: str = "through_all",
         depth: float | None = None,
         positions: list[list[float]] | None = None,
+        fastener: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add a Hole Wizard hole at a point on a flat face.
 
@@ -1710,13 +1728,14 @@ class SolidWorksAdapter(ABC):
         )
 
     async def suppress_feature(
-        self, name: str, suppress: bool = True
+        self, name: str, suppress: bool = True, configurations: str | list[str] = "this"
     ) -> AdapterResult[dict[str, Any]]:
         """Suppress or unsuppress a named feature.
 
         Args:
             name (str): Feature name.
             suppress (bool): True to suppress, False to unsuppress.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
             AdapterResult[dict[str, Any]]: The resulting state, or error.
@@ -1865,15 +1884,18 @@ class SolidWorksAdapter(ABC):
         pass
 
     @abstractmethod
-    async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
+    async def set_dimension(
+        self, name: str, value: float, configurations: str | list[str] = "this"
+    ) -> AdapterResult[dict[str, Any]]:
         """Set the value of a dimension.
 
         Args:
             name (str): The name value.
             value (float): The value value.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
-            AdapterResult[None]: The result produced by the operation.
+            AdapterResult[dict[str, Any]]: ``configurations``, the names set in.
         """
         pass
 

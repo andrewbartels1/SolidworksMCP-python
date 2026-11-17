@@ -367,7 +367,7 @@ Extends `IModelDoc2` for drawings: sheets, views, annotations, BOM tables, revis
 | Linear pattern (`FeatureLinearPattern3`) | **Missing** (High) | Array of features/bodies |
 | Circular pattern (`FeatureCircularPattern3`) | **Missing** (High) | Rotational array of features |
 | Mirror feature (`InsertMirrorFeature2`) | **Missing** (High) | Mirror features about a plane |
-| Hole Wizard (`HoleWizard5`) | **Missing** (High) | Parametric holes per ANSI/ISO standards |
+| Hole Wizard (`HoleWizard5`) | Added (`create_hole`, `list_hole_sizes`) | Parametric holes per ANSI/ISO standards |
 | Draft feature (`InsertDraftXpert`) | **Missing** (Medium) | Parting line draft |
 | `InsertDome` | **Missing** (Low) | Dome feature |
 | `InsertSplit` | **Missing** (Low) | Split body feature |
@@ -635,6 +635,11 @@ These are the most impactful gaps — operations that a typical modeling workflo
 
 **Tools to add:**
 - `create_hole_wizard(standard: str, type: str, size: str, depth: float | None, position_x: float, position_y: float, plane: str)` → `IFeatureManager::HoleWizard5`
+
+**Status (2026-11-16):** `create_hole` (`HoleWizard5`, several holes per feature
+through its position sketch) and `list_hole_sizes`, which reads the hole types
+and sizes from the Toolbox library file (`swbrowser.sldedb`, SQLite, read-only)
+rather than COM, so sizes are checked before the hole is asked for.
 
 ---
 

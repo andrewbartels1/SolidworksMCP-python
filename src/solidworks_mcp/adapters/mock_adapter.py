@@ -32,6 +32,7 @@ from .base import (
 )
 from .solidworks.drawing_standard import gtol_problem
 from .solidworks.features import _AXIS_PLANE_PAIRS
+from .solidworks.hole_library import HoleSizeError, describe, sample_library
 from .solidworks.io import _normalise_unit_system as _normalise_mock_unit_system
 from .solidworks.sketch import RELATION_NAME_MAP
 
@@ -93,6 +94,10 @@ _DEFAULT_ASSEMBLY_COMPONENTS: dict[str, dict[str, Any]] = {
         },
     },
 }
+
+
+#: The mock adapter's Hole Wizard library.
+_MOCK_HOLES = sample_library()
 
 
 class _BoolCallable:
@@ -186,6 +191,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         self._sketches: dict[str, str] = {}
         self._current_sketch: str | None = None
         self._configurations_made: dict[str, list[str]] = {}
+        #: Per-configuration dimension values and suppressed features.
+        self._config_dimensions: dict[str, dict[str, float]] = {}
+        self._config_suppressed: dict[str, set[str]] = {}
         # Names currently "selected" via select_feature / select_face_edges,
         # so append and selection_count behave like the real selection set.
         self._selection: list[str] = []
@@ -1000,6 +1008,29 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             made.append(active)
         return made
 
+    def _mock_active(self) -> str:
+        """The active model's active configuration (Default with none open)."""
+        model = self._current_model
+        return (model.configuration if model else None) or "Default"
+
+    def _mock_scope(
+        self, configurations: str | list[str]
+    ) -> list[str] | AdapterResult[Any]:
+        """The configurations a change applies to, or an error for unknown names."""
+        if configurations == "this":
+            return [self._mock_active()]
+        known = self._mock_configs() if self._current_model else ["Default"]
+        if configurations == "all":
+            return list(known)
+        unknown = [n for n in configurations if n not in known]
+        if unknown:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=f"No configuration named {', '.join(repr(n) for n in unknown)}; "
+                f"the model has {', '.join(known)}.",
+            )
+        return list(configurations)
+
     async def create_configuration(
         self,
         name: str,
@@ -1077,6 +1108,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             return refused
         previous = self._current_model.configuration or "Default"
         self._current_model.configuration = name
+        self._dimensions.update(self._config_dimensions.get(name, {}))
+        if name in self._config_suppressed or previous in self._config_suppressed:
+            self._suppressed_features = set(self._config_suppressed.get(name, set()))
         self._operation_count += 1
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -2565,23 +2599,39 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
                 ),
             )
 
-    async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
-        """Mock setting a dimension value.
+    async def set_dimension(
+        self, name: str, value: float, configurations: str | list[str] = "this"
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock setting a dimension value, per configuration.
 
         Args:
             name (str): The name value.
             value (float): The value value.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
-            AdapterResult[None]: The result produced by the operation.
+            AdapterResult[dict[str, Any]]: ``configurations``, the names set in.
         """
         await asyncio.sleep(0.1)  # Fast operation
+        names = self._mock_scope(configurations)
+        if isinstance(names, AdapterResult):
+            return names
         self._operation_count += 1
-
-        self._dimensions[name] = value
+        current = self._dimensions.get(name)
+        known = self._mock_configs() if self._current_model else names
+        for config in dict.fromkeys([*known, *names]):
+            record = self._config_dimensions.setdefault(config, {})
+            if config in names:
+                record[name] = value
+            elif name not in record and current is not None:
+                record[name] = current  # the others keep the value they had
+        if self._mock_active() in names:
+            self._dimensions[name] = value
 
         return AdapterResult(
-            status=AdapterResultStatus.SUCCESS, data=None, execution_time=0.1
+            status=AdapterResultStatus.SUCCESS,
+            data={"configurations": names},
+            execution_time=0.1,
         )
 
     async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
@@ -3184,13 +3234,14 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         )
 
     async def suppress_feature(
-        self, name: str, suppress: bool = True
+        self, name: str, suppress: bool = True, configurations: str | list[str] = "this"
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock suppressing or unsuppressing a named feature.
+        """Mock suppressing or unsuppressing a named feature, per configuration.
 
         Args:
             name (str): Feature name.
             suppress (bool): True to suppress, False to unsuppress.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
@@ -3202,12 +3253,22 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error=f"Feature not found: {name}"
             )
+        names = self._mock_scope(configurations)
+        if isinstance(names, AdapterResult):
+            return names
 
         was = name in self._suppressed_features
-        if suppress:
-            self._suppressed_features.add(name)
-        else:
-            self._suppressed_features.discard(name)
+        for config in names:
+            held = self._config_suppressed.setdefault(config, set())
+            if suppress:
+                held.add(name)
+            else:
+                held.discard(name)
+        if self._mock_active() in names:
+            if suppress:
+                self._suppressed_features.add(name)
+            else:
+                self._suppressed_features.discard(name)
         self._operation_count += 1
 
         return AdapterResult(
@@ -3215,8 +3276,9 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             data={
                 "feature": name,
                 "requested": suppress,
-                "suppressed": bool(suppress),
+                "suppressed": name in self._suppressed_features,
                 "was_suppressed": was,
+                "configurations": names,
             },
             execution_time=self._delays["model_operation"],
         )
@@ -3989,6 +4051,31 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             },
         )
 
+    async def list_hole_sizes(
+        self,
+        standard: str,
+        hole_type: str,
+        fastener: str | None = None,
+        size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock Hole Wizard library: a few real ISO and ANSI inch sizes.
+
+        Args:
+            standard: The standard.
+            hole_type: The kind of hole.
+            fastener: One hole type's name.
+            size: One size, for its dimensions.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: As the real adapter's, from
+            :func:`sample_library`; other standards have no hole types.
+        """
+        try:
+            data = describe(_MOCK_HOLES, standard, hole_type, fastener, size)
+        except HoleSizeError as exc:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)
+
     async def create_hole(
         self,
         face_point: list[float],
@@ -3998,8 +4085,12 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
         end_condition: str = "through_all",
         depth: float | None = None,
         positions: list[list[float]] | None = None,
+        fastener: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock holes: cylinders of the size's diameter (6 mm when not metric).
+        """Mock holes: cylinders of the size's diameter, checked like the real ones.
+
+        The size is checked against :func:`sample_library` first, as the real
+        adapter checks the installed library.
 
         Args:
             face_point: Where the hole goes, mm.
@@ -4009,12 +4100,19 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             end_condition: Blind or through all.
             depth: Blind depth, mm.
             positions: Further points, mm; one more hole each.
+            fastener: The hole type's name; the default when ``None``.
 
         Returns:
-            AdapterResult[dict[str, Any]]: The holes and their volume change.
+            AdapterResult[dict[str, Any]]: The holes and their volume change,
+            or the nearest sizes for one the library lacks.
         """
-        match = re.match(r"^\s*M(\d+(?:\.\d+)?)", size, re.IGNORECASE)
-        radius = (float(match.group(1)) if match else 6.0) / 2.0
+        try:
+            chosen = _MOCK_HOLES.resolve(standard, hole_type, size, fastener)
+        except HoleSizeError as exc:
+            return AdapterResult(status=AdapterResultStatus.ERROR, error=str(exc))
+        found = re.search(r"\d+(?:\.\d+)?", chosen.size)
+        diameter = float(found.group(0)) if found and standard != "ansi_inch" else 6.0
+        radius = diameter / 2.0
         length = float(depth) if depth is not None else 40.0
         extra = [list(p) for p in positions or []]
         count = 1 + len(extra)
@@ -4024,7 +4122,8 @@ class MockSolidWorksAdapter(SolidWorksAdapter):
             {
                 "hole_type": hole_type,
                 "standard": standard,
-                "size": size,
+                "fastener": chosen.fastener,
+                "size": chosen.size,
                 "end_condition": end_condition,
                 "end_condition_used": end_condition,
                 "depth_mm": depth,

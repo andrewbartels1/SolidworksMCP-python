@@ -959,6 +959,25 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             },
         )
 
+    async def list_hole_sizes(
+        self,
+        standard: str,
+        hole_type: str,
+        fastener: str | None = None,
+        size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """List the Hole Wizard hole types and sizes through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_hole_sizes",
+            lambda: self.adapter.list_hole_sizes(standard, hole_type, fastener, size),
+            input_dict={
+                "standard": standard,
+                "hole_type": hole_type,
+                "fastener": fastener,
+                "size": size,
+            },
+        )
+
     async def create_hole(
         self,
         face_point: list[float],
@@ -968,12 +987,20 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         end_condition: str = "through_all",
         depth: float | None = None,
         positions: list[list[float]] | None = None,
+        fastener: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add a Hole Wizard hole at a point on a flat face through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "create_hole",
             lambda: self.adapter.create_hole(
-                face_point, hole_type, standard, size, end_condition, depth, positions
+                face_point,
+                hole_type,
+                standard,
+                size,
+                end_condition,
+                depth,
+                positions,
+                fastener,
             ),
             input_dict={
                 "face_point": face_point,
@@ -983,6 +1010,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 "end_condition": end_condition,
                 "depth": depth,
                 "positions": positions,
+                "fastener": fastener,
             },
         )
 
@@ -1572,20 +1600,23 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"name": name},
         )
 
-    async def set_dimension(self, name: str, value: float) -> AdapterResult[None]:
+    async def set_dimension(
+        self, name: str, value: float, configurations: str | list[str] = "this"
+    ) -> AdapterResult[dict[str, Any]]:
         """Set dimension through circuit breaker.
 
         Args:
             name (str): The name value.
             value (float): The value value.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
-            AdapterResult[None]: The result produced by the operation.
+            AdapterResult[dict[str, Any]]: ``configurations``, the names set in.
         """
         return await self._execute_with_circuit_breaker(
             "set_dimension",
-            lambda: self.adapter.set_dimension(name, value),
-            input_dict={"name": name, "value": value},
+            lambda: self.adapter.set_dimension(name, value, configurations),
+            input_dict={"name": name, "value": value, "configurations": configurations},
         )
 
     async def set_units(self, unit_system: str) -> AdapterResult[dict[str, Any]]:
@@ -1834,21 +1865,26 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def suppress_feature(
-        self, name: str, suppress: bool = True
+        self, name: str, suppress: bool = True, configurations: str | list[str] = "this"
     ) -> AdapterResult[dict[str, Any]]:
         """Suppress or unsuppress a feature through circuit breaker.
 
         Args:
             name (str): Feature name.
             suppress (bool): True to suppress, False to unsuppress.
+            configurations (str | list[str]): "this", "all" or names.
 
         Returns:
             AdapterResult[dict[str, Any]]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
             "suppress_feature",
-            lambda: self.adapter.suppress_feature(name, suppress),
-            input_dict={"name": name, "suppress": suppress},
+            lambda: self.adapter.suppress_feature(name, suppress, configurations),
+            input_dict={
+                "name": name,
+                "suppress": suppress,
+                "configurations": configurations,
+            },
         )
 
     async def rename_feature(

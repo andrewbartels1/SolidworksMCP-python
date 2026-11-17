@@ -289,6 +289,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "add_draft": _STABLE,
     "create_rib": _STABLE,
     "create_hole": _STABLE,
+    "list_hole_sizes": _STABLE,
     "add_cosmetic_thread": _STABLE,
     "rebuild_model": _STABLE,
     "rename_feature": _STABLE,

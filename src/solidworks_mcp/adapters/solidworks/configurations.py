@@ -19,7 +19,11 @@ from typing import Any, cast
 
 from .. import sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
-from .com_utils import as_list
+from .com_utils import as_list, string_array
+
+#: ``swInConfigurationOpts_e``, shared by ``SetSystemValue3`` and
+#: ``SetSuppression2``.
+THIS_CONFIGURATION, ALL_CONFIGURATIONS, SPECIFY_CONFIGURATION = 1, 2, 3
 
 
 def _names(adapter: Any) -> list[str]:
@@ -45,6 +49,33 @@ def _require(adapter: Any, name: str) -> list[str]:
             f"No configuration named '{name}'; the model has {', '.join(names) or 'none'}."
         )
     return names
+
+
+def configuration_scope(
+    adapter: Any, configurations: str | list[str]
+) -> tuple[int, list[str], Any]:
+    """Where a change applies: the COM option, the names, and their array.
+
+    ``"this"`` is the active configuration, ``"all"`` every one, a list those
+    named (each checked first).
+
+    Raises:
+        LookupError: For a name the model doesn't have, listing the names.
+    """
+    names = _names(adapter)
+    if configurations == "this":
+        active = _active(adapter)
+        return THIS_CONFIGURATION, [active] if active else [], None
+    if configurations == "all":
+        return ALL_CONFIGURATIONS, names, string_array(names)
+    unknown = [n for n in configurations if n not in names]
+    if unknown:
+        raise LookupError(
+            f"No configuration named {', '.join(repr(n) for n in unknown)}; the "
+            f"model has {', '.join(names) or 'none'}."
+        )
+    chosen = list(configurations)
+    return SPECIFY_CONFIGURATION, chosen, string_array(chosen)
 
 
 class SolidWorksConfigurationsMixin:

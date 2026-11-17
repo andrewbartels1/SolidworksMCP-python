@@ -1161,7 +1161,7 @@ class TestFeatureEditingTools:
         result = await tool_func(SuppressFeatureInput(name=name, suppress=True))
 
         assert result["status"] == "success"
-        assert result["message"] == f"Suppressed {name}"
+        assert result["message"] == f"Suppressed {name} in Default"
         assert result["data"]["suppressed"] is True
 
     @pytest.mark.asyncio
@@ -1178,7 +1178,7 @@ class TestFeatureEditingTools:
         result = await tool_func(SuppressFeatureInput(name=name, suppress=False))
 
         assert result["status"] == "success"
-        assert result["message"] == f"Unsuppressed {name}"
+        assert result["message"] == f"Unsuppressed {name} in Default"
 
     @pytest.mark.asyncio
     async def test_suppress_feature_reports_when_state_unreadable(
@@ -2401,3 +2401,13 @@ async def test_revolve_about_a_named_axis(mcp_server, mock_adapter) -> None:
     )
     assert missing["status"] == "error"
     assert "create_axis" in missing["message"]
+
+
+@pytest.mark.parametrize("configurations", [[], [" "]])
+def test_configurations_must_name_one(configurations: list[str]) -> None:
+    from solidworks_mcp.tools.modeling import SetDimensionInput, SuppressFeatureInput
+
+    with pytest.raises(ValueError, match="'this', 'all' or a list"):
+        SuppressFeatureInput(name="Fillet1", configurations=configurations)
+    with pytest.raises(ValueError, match="'this', 'all' or a list"):
+        SetDimensionInput(name="D1@Sketch1", value=5, configurations=configurations)

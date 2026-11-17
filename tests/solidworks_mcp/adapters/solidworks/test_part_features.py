@@ -18,7 +18,6 @@ import pytest
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.adapters.solidworks import part_features as pf
 from solidworks_mcp.adapters.solidworks.part_features import (
-    HOLE_FASTENERS,
     SolidWorksPartFeaturesMixin,
 )
 from solidworks_mcp.adapters.solidworks.rebuild_diagnostics import RawRebuildIssue
@@ -288,7 +287,7 @@ async def test_hole_wizard_arguments(picks: list[Any]) -> None:
     assert args[:8] == (
         0,
         8,
-        HOLE_FASTENERS[("counterbore", "iso")],
+        139,  # Cap (4762), from the sample library
         "M6",
         0,
         -1.0,
@@ -319,10 +318,12 @@ async def test_hole_with_no_face_or_no_feature(picks: list[Any]) -> None:
     no_hole = FakeAdapter([1000.0], feature=None)
 
     missed = await no_face.create_hole([0, 0, 20], "simple", "iso", "M6")
-    refused = await no_hole.create_hole([0, 0, 20], "simple", "iso", "M7")
+    refused = await no_hole.create_hole([0, 0, 20], "counterbore", "iso", "M8")
 
     assert missed.error == "No face at [0, 0, 20] mm to put the hole on."
-    assert "HoleWizard5 made no hole (simple, iso, M7)" in (refused.error or "")
+    assert 'HoleWizard5 made no hole (counterbore, iso, "Cap (4762)" M8)' in (
+        refused.error or ""
+    )
 
 
 @pytest.mark.asyncio
@@ -731,3 +732,91 @@ def test_a_model_point_in_sketch_space(monkeypatch: pytest.MonkeyPatch) -> None:
     assert at == [0.1, 0.2, 0.0]
     utility.CreatePoint.assert_called_once_with((1.0, 2.0, 3.0))
     point.MultiplyTransform.assert_called_once_with(transform)
+
+
+# ---- the Hole Wizard library (queue item 22) ---------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_size_the_library_lacks_makes_no_com_call(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 900.0])
+
+    result = await adapter.create_hole([0, 0, 20], "simple", "iso", "M7")
+
+    assert result.error == (
+        '"Screw Clearances" (iso) has no size "M7"; nearest: M4, M5, M6, M8, M10.'
+    )
+    adapter.manager.HoleWizard5.assert_not_called()
+    adapter.currentModel.ClearSelection2.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_named_fastener_and_a_bare_diameter(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 900.0])
+
+    result = await adapter.create_hole(
+        [0, 0, 20], "simple", "iso", "6", "blind", 5, fastener="drill sizes"
+    )
+
+    args = adapter.manager.HoleWizard5.call_args.args
+    assert args[2:4] == (143, "Ø6.0")
+    assert (result.data["fastener"], result.data["size"]) == ("Drill sizes", "Ø6.0")
+    assert "warnings" not in result.data
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_library_tries_the_default_with_a_warning(
+    picks: list[Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def missing() -> Any:
+        raise pf.HoleLibraryError("No Hole Wizard library found.")
+
+    monkeypatch.setattr(pf, "find_library", missing)
+    adapter = FakeAdapter([1000.0, 900.0])
+
+    made = await adapter.create_hole([0, 0, 20], "counterbore", "din", "M6")
+    refused = await adapter.create_hole(
+        [0, 0, 20], "counterbore", "din", "M6", fastener="Pan (7045)"
+    )
+
+    assert adapter.manager.HoleWizard5.call_args.args[1:4] == (4, 67, "M6")
+    assert made.data["warnings"] == [
+        "The size wasn't checked: No Hole Wizard library found. The hole was "
+        'attempted as "Cap (912)" M6.'
+    ]
+    assert "Leave `fastener` out" in (refused.error or "")
+
+
+@pytest.mark.asyncio
+async def test_list_hole_sizes_reads_the_library() -> None:
+    adapter = FakeAdapter([])
+
+    listed = await adapter.list_hole_sizes("iso", "countersink")
+    one = await adapter.list_hole_sizes("iso", "counterbore", size="M6")
+    unknown = await adapter.list_hole_sizes("iso", "tapped", size="M7")
+
+    assert listed.data["hole_types"] == [
+        {"name": "CTSK Flat (7046-1)", "sizes": ["M3", "M4", "M5", "M6", "M8", "M10"]}
+    ]
+    assert one.data["dimensions"] == {
+        "size": "M6",
+        "diameter": 6.0,
+        "cbore_dia": 11.0,
+        "cbore_depth": 6.4,
+    }
+    assert unknown.status == AdapterResultStatus.ERROR
+    assert "nearest: M4, M5, M6, M8, M8x1.0" in (unknown.error or "")
+
+
+@pytest.mark.asyncio
+async def test_list_hole_sizes_without_a_library(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing() -> Any:
+        raise pf.HoleLibraryError("Looked in: C:\nowhere.")
+
+    monkeypatch.setattr(pf, "find_library", missing)
+
+    result = await FakeAdapter([]).list_hole_sizes("iso", "simple")
+
+    assert result.error == "Looked in: C:\nowhere."

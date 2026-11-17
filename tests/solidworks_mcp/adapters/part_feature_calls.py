@@ -13,7 +13,12 @@ CALLS: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = [
     ("create_shell", (2.0, [[0.0, 0.0, 20.0]]), {}),
     ("add_draft", (3.0, [[20.0, 0.0, 10.0]], [0.0, 0.0, 0.0]), {"reverse": True}),
     ("create_rib", ("Sketch3", 2.0), {}),
-    ("create_hole", ([0.0, 0.0, 20.0], "counterbore", "iso", "M6"), {}),
+    (
+        "create_hole",
+        ([0.0, 0.0, 20.0], "counterbore", "iso", "M6"),
+        {"fastener": "Cap (4762)"},
+    ),
+    ("list_hole_sizes", ("iso", "simple"), {"fastener": "Screw Clearances"}),
     ("add_cosmetic_thread", ([3.0, 0.0, 20.0], "#10-24", 4.8), {"depth": 5.0}),
     (
         "sketch_convert_entities",

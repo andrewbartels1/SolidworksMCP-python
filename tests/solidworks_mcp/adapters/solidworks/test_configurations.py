@@ -194,3 +194,35 @@ async def test_active_configuration() -> None:
     assert named.data == "Default"
     assert unread.error == "The active configuration's name couldn't be read."
     assert no_model.error == "No active model"
+
+
+# ---- where a change applies (section 3) ------------------------------------------
+
+
+def _scoped(model: FakeModel, configurations: Any) -> Any:
+    adapter = FakeAdapter(model)
+    return cfg.configuration_scope(adapter, configurations)
+
+
+def test_scope_this_all_and_a_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cfg, "string_array", lambda names: ("ARRAY", *names))
+    model = FakeModel(["Default", "Long", "Short"], active="Long")
+
+    assert _scoped(model, "this") == (1, ["Long"], None)
+    assert _scoped(model, "all") == (
+        2,
+        ["Default", "Long", "Short"],
+        ("ARRAY", "Default", "Long", "Short"),
+    )
+    assert _scoped(model, ["Short"]) == (3, ["Short"], ("ARRAY", "Short"))
+    assert _scoped(FakeModel(["Default"], active=None), "this") == (1, [], None)
+
+
+def test_scope_refuses_unknown_names() -> None:
+    with pytest.raises(
+        LookupError,
+        match="No configuration named 'Tall', 'Wide'; the model has Default.",
+    ):
+        _scoped(FakeModel(["Default"]), ["Default", "Tall", "Wide"])
+    with pytest.raises(LookupError, match="the model has none"):
+        _scoped(FakeModel([]), ["Tall"])

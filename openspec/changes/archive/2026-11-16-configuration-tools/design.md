@@ -38,8 +38,13 @@ COM members, from the type library index:
 maps it to the enum both COM calls share in meaning:
 `this` → 1, `all` → 2, a list → 3 with the names as a string array
 (`VARIANT(VT_ARRAY | VT_BSTR, names)`), and `None`/`Missing` for the names
-otherwise. A list is checked against `list_configurations` in the tool
-before any COM call, so an unknown name is `invalid_input`.
+otherwise. A list is checked against the model's configuration names
+first thing in the adapter's COM operation, before anything changes, and
+the error ("No configuration named ...") is classified `invalid_input`.
+(Changed while building it: the adapter already reads the names, so the
+tool doesn't read them a second time.) For `this`, `set_dimension` keeps
+the proven `SystemValue` write; `all` passes the names array too, as
+`None` marshals as `VT_NULL`, which SolidWorks rejects for array arguments.
 
 ### 2. Suppression keeps today's path for `this`
 

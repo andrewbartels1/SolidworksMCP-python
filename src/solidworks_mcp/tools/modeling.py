@@ -390,6 +390,27 @@ class GetDimensionInput(CompatInput):
             raise ValueError("name is required")
 
 
+def _check_configurations(configurations: str | list[str]) -> None:
+    """A list of configuration names must name at least one, each non-blank.
+
+    Raises:
+        ValueError: For an empty list or a blank name.
+    """
+    if isinstance(configurations, list) and (
+        not configurations or any(not str(n).strip() for n in configurations)
+    ):
+        raise ValueError(
+            "configurations is 'this', 'all' or a list of configuration names"
+        )
+
+
+def _configurations_named(data: Any) -> list[str]:
+    """The configuration names an adapter reply says a change applied to."""
+    if isinstance(data, dict) and isinstance(data.get("configurations"), list):
+        return [str(n) for n in data["configurations"]]
+    return []
+
+
 class SetDimensionInput(CompatInput):
     """Input schema for setting a dimension value.
 
@@ -398,6 +419,7 @@ class SetDimensionInput(CompatInput):
         name (str | None): The name value.
         units (str | None): The units value.
         value (float): The value value.
+        configurations (str | list[str]): "this", "all" or configuration names.
     """
 
     name: str | None = Field(
@@ -407,6 +429,11 @@ class SetDimensionInput(CompatInput):
     dimension_name: str | None = Field(default=None, description="Dimension name alias")
     value: float = Field(description="New dimension value in millimeters")
     units: str | None = Field(default=None, description="Units alias")
+    configurations: Literal["this", "all"] | list[str] = Field(
+        default="this",
+        description="Where it applies: 'this' (the active configuration), 'all', "
+        "or a list of configuration names from `list_configurations`",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the set dimension input.
@@ -424,6 +451,7 @@ class SetDimensionInput(CompatInput):
             self.name = self.dimension_name
         if not self.name:
             raise ValueError("name is required")
+        _check_configurations(self.configurations)
 
 
 class SetUnitsInput(CompatInput):
@@ -656,12 +684,21 @@ class SuppressFeatureInput(CompatInput):
     Attributes:
         name (str): Feature name to toggle.
         suppress (bool): True to suppress, False to unsuppress.
+        configurations (str | list[str]): "this", "all" or configuration names.
     """
 
     name: str = Field(description="Feature name, e.g. 'Fillet1'")
     suppress: bool = Field(
         default=True, description="True to suppress, False to unsuppress"
     )
+    configurations: Literal["this", "all"] | list[str] = Field(
+        default="this",
+        description="Where it applies: 'this' (the active configuration), 'all', "
+        "or a list of configuration names from `list_configurations`",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        _check_configurations(self.configurations)
 
 
 class RenameFeatureInput(CompatInput):
@@ -1111,25 +1148,8 @@ def metric_diameter(size: str) -> float | None:
     return float(match.group(1)) if match else None
 
 
-def simple_iso_size(size: str) -> str:
-    """A simple ISO hole's size as SolidWorks lists it: by diameter, ``Ø4.0``.
-
-    The ISO drill table names sizes by diameter, not by screw (seen live:
-    ``Ø6.0`` builds). ``M4``, ``4``, ``4mm`` and ``Ø4`` all become ``Ø4.0``;
-    anything else is passed on unchanged. A diameter missing from the
-    installed table still makes no hole (``Ø4.0`` on a default install).
-
-    Args:
-        size: The size the caller gave.
-
-    Returns:
-        The size SolidWorks lists.
-    """
-    match = re.fullmatch(
-        r"\s*(?:M|Ø)?\s*(\d+(?:\.\d+)?)\s*(?:mm)?\s*", size, re.IGNORECASE
-    )
-    return f"Ø{float(match.group(1)):.1f}" if match else size
-
+HoleStandard = Literal["iso", "ansi_inch", "ansi_metric", "din", "jis"]
+HoleKind = Literal["simple", "counterbore", "countersink", "tapped"]
 
 Point3 = list[float]
 
@@ -1274,32 +1294,65 @@ class CreateRibInput(CompatInput):
             raise ValueError("sketch is required")
 
 
+class ListHoleSizesInput(CompatInput):
+    """Input schema for reading the Hole Wizard library.
+
+    Attributes:
+        standard (str): iso, ansi_inch, ansi_metric, din or jis.
+        hole_type (str): simple, counterbore, countersink or tapped.
+        fastener (str | None): One hole type's name, to list only its sizes.
+        size (str | None): One size, to read its dimensions.
+    """
+
+    standard: HoleStandard = Field(
+        default="iso", description="iso, ansi_inch, ansi_metric, din or jis"
+    )
+    hole_type: HoleKind = Field(
+        description="simple, counterbore, countersink or tapped"
+    )
+    fastener: str | None = Field(
+        default=None,
+        description="One hole type's name (e.g. 'Screw Clearances'): only its sizes",
+    )
+    size: str | None = Field(
+        default=None,
+        description="One size (e.g. 'M6'): its dimensions, in that hole type or "
+        "the usual one",
+    )
+
+
 class CreateHoleInput(CompatInput):
     """Input schema for a Hole Wizard hole.
 
     Attributes:
         face_point (list[float]): Where the hole goes: [x, y, z] mm on a flat face.
         hole_type (str): simple, counterbore, countersink or tapped.
-        standard (str): iso or ansi_inch.
-        size (str): The size as SolidWorks lists it.
+        standard (str): iso, ansi_inch, ansi_metric, din or jis.
+        size (str): The size as `list_hole_sizes` lists it.
         end_condition (str): through_all or blind.
         depth (float | None): Depth for a blind hole, mm.
         positions (list[list[float]] | None): More holes on the same face, mm.
+        fastener (str | None): The hole type's name from `list_hole_sizes`.
     """
 
     face_point: list[float] = Field(
         description="[x, y, z] in mm on a flat face: the hole's centre"
     )
-    hole_type: Literal["simple", "counterbore", "countersink", "tapped"] = Field(
+    hole_type: HoleKind = Field(
         description="simple, counterbore, countersink or tapped"
     )
-    standard: Literal["iso", "ansi_inch"] = Field(
-        default="iso", description="iso (metric) or ansi_inch"
+    standard: HoleStandard = Field(
+        default="iso", description="iso, ansi_inch, ansi_metric, din or jis"
     )
     size: str = Field(
-        description="Size as SolidWorks lists it: 'M6' (iso), 'M6x1.0' (iso "
-        "tapped), '#10' or '1/4' (ansi_inch). A simple iso hole is listed by "
-        "diameter ('Ø4.0'); 'M4' or '4' is converted to that."
+        description="Size as `list_hole_sizes` lists it: 'M6', '#10', '1/4'; "
+        "'M6x1.0' finds the coarse M6 thread. On a simple hole a screw size "
+        "('M6', '#10') is a clearance hole and a bare diameter ('6') a drilled one"
+    )
+    fastener: str | None = Field(
+        default=None,
+        description="Hole type by name from `list_hole_sizes`, e.g. 'Dowel "
+        "Holes' or 'Hex Bolt Grade C (4016)'; the usual one when omitted",
     )
     end_condition: Literal["through_all", "blind"] = Field(
         default="through_all", description="through_all or blind"
@@ -1323,8 +1376,6 @@ class CreateHoleInput(CompatInput):
             _point(point, "each of positions")
         if not self.size.strip():
             raise ValueError("size is required")
-        if self.hole_type == "simple" and self.standard == "iso":
-            self.size = simple_iso_size(self.size)
         if self.end_condition == "blind" and self.depth is None:
             raise ValueError("a blind hole needs depth")
 
@@ -1712,8 +1763,9 @@ async def register_modeling_tools(
     async def get_dimension(input_data: GetDimensionInput) -> dict[str, Any]:
         """Read one dimension of the active model by its full name, e.g. "D1@Sketch1".
 
-        Find names with `list_model_dimensions`. Needs: an open part or assembly.
-        Read-only. Returns: `dimension` with `name`, `value` and `units`: "mm" for a
+        Find names with `list_model_dimensions`. It reads the active configuration's
+        value; `activate_configuration` to read another. Needs: an open part or
+        assembly. Read-only. Returns: `dimension` with `name`, `value` and `units`: "mm" for a
         length, "deg" for an angle, and null for a count (such as a pattern's
         instance count).
 
@@ -1749,9 +1801,11 @@ async def register_modeling_tools(
 
         Use it to resize an existing model; find the full name with
         `list_model_dimensions` and check the result with `rebuild_model` or
-        `verify_model`. The value is always millimetres. Needs: an open part or
-        assembly. Changes: the dimension and the geometry it drives. Returns:
-        `dimension_update` with `name`, `old_value` and `new_value`.
+        `verify_model`. The value is always millimetres. It changes the active
+        configuration only, unless `configurations` is "all" or a list of names.
+        Needs: an open part or assembly. Changes: the dimension and the geometry it
+        drives. Returns: `dimension_update` with `name`, `old_value`, `new_value`
+        and `configurations` (the names it was set in).
 
         Args:
             input_data: The change. `value` (mm) is required, with `name` (or
@@ -1761,13 +1815,17 @@ async def register_modeling_tools(
             dict[str, Any]: The old and new values.
         """
         input_data = normalize_input(input_data, SetDimensionInput)
-        result = await adapter.set_dimension(input_data.name, input_data.value)
+        result = await adapter.set_dimension(
+            input_data.name, input_data.value, input_data.configurations
+        )
 
         require_success(result, context="Failed to set dimension")
         payload = result.data
+        where = _configurations_named(payload)
         return {
             "status": "success",
-            "message": f"Set dimension {input_data.name} = {input_data.value} mm",
+            "message": f"Set dimension {input_data.name} = {input_data.value} mm"
+            + (f" in {', '.join(where)}" if where else ""),
             "dimension_update": {
                 "name": input_data.name,
                 "old_value": _result_value(payload, "old_value"),
@@ -1775,6 +1833,7 @@ async def register_modeling_tools(
                     payload, "new_value", default=input_data.value
                 ),
                 "units": input_data.units or "mm",
+                "configurations": where,
             },
             "execution_time": result.execution_time,
         }
@@ -2220,10 +2279,12 @@ async def register_modeling_tools(
     async def suppress_feature(input_data: SuppressFeatureInput) -> dict[str, Any]:
         """Suppress or unsuppress a feature of the active model; suppressed features stay in the tree but are not built.
 
-        Use it to turn off a feature that breaks the rebuild without deleting it. Needs:
-        an open part or assembly. Changes: the feature's suppression state, and its
-        children's. Returns: `data` with `feature`, `requested`, `suppressed` (read
-        back; null when unreadable) and `was_suppressed`.
+        Use it to turn off a feature that breaks the rebuild without deleting it. It
+        acts in the active configuration only, unless `configurations` is "all" or a
+        list of names. Needs: an open part or assembly. Changes: the feature's
+        suppression state, and its children's. Returns: `data` with `feature`,
+        `requested`, `suppressed` (read back in the active configuration; null when
+        unreadable), `was_suppressed` and `configurations` (where it applied).
 
         Args:
             input_data: The feature. `name` is required; `suppress` defaults to on
@@ -2233,11 +2294,16 @@ async def register_modeling_tools(
             dict[str, Any]: The new state.
         """
         input_data = normalize_input(input_data, SuppressFeatureInput)
-        result = await adapter.suppress_feature(input_data.name, input_data.suppress)
+        result = await adapter.suppress_feature(
+            input_data.name, input_data.suppress, input_data.configurations
+        )
         require_success(result, context="Failed to suppress feature")
         data = result.data if isinstance(result.data, dict) else {}
         verb = "Suppressed" if input_data.suppress else "Unsuppressed"
         message = f"{verb} {input_data.name}"
+        where = _configurations_named(data)
+        if where:
+            message += f" in {', '.join(where)}"
         if data.get("suppressed") is None:
             message += " (state could not be read back)"
         return {
@@ -2753,19 +2819,63 @@ async def register_modeling_tools(
         }
 
     @mcp.tool()
+    async def list_hole_sizes(input_data: ListHoleSizesInput) -> dict[str, Any]:
+        """List the Hole Wizard's hole types and sizes for a standard, or one size's dimensions.
+
+        Read from SolidWorks' installed Hole Wizard library, so the sizes are the
+        ones `create_hole` accepts; it works without SolidWorks running. Give
+        `hole_type` for every hole type of that kind with its sizes, add `fastener`
+        for one type only, or `size` for its dimensions (counterbore diameter and
+        depth, head diameter, pitch: mm, inches for ansi_inch). Needs: SolidWorks'
+        Toolbox library on this machine (or `SOLIDWORKS_MCP_HOLE_LIBRARY`). Changes:
+        nothing. Returns: `library` with `standard`, `hole_type`, `units` and either
+        `hole_types` (each `name` and `sizes`) or `fastener` and `dimensions`.
+
+        Args:
+            input_data: What to list. `hole_type` is required; `standard` is iso.
+
+        Returns:
+            dict[str, Any]: The hole types and sizes, or one size's dimensions.
+        """
+        input_data = normalize_input(input_data, ListHoleSizesInput)
+        result = await adapter.list_hole_sizes(
+            input_data.standard,
+            input_data.hole_type,
+            input_data.fastener,
+            input_data.size,
+        )
+        require_success(result, context="Failed to read the Hole Wizard library")
+        data = result.data if isinstance(result.data, dict) else {}
+        if "dimensions" in data:
+            message = f"{data['fastener']} {data['dimensions']['size']} dimensions"
+        else:
+            names = ", ".join(t["name"] for t in data.get("hole_types", []))
+            message = (
+                f"{input_data.hole_type} hole types ({input_data.standard}): {names}"
+            )
+        return {
+            "status": "success",
+            "message": message,
+            "library": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
     async def create_hole(input_data: CreateHoleInput) -> dict[str, Any]:
         """Add a standard Hole Wizard hole (simple, counterbored, countersunk or tapped) at a point on a flat face.
 
         Use it instead of sketching a circle and cutting: the hole is sized from the
         standard, so it fits the fastener and a drawing shows its callout. Several
         holes on one face: give the rest as `positions` (one feature, a hole at each
-        point); a regular grid can also use `pattern_linear`. A simple hole can't be
-        through all in SolidWorks, so it is made blind through the part
-        (`end_condition_used`, with a warning). It fails when the volume doesn't
-        change. Needs: an open part with a flat face at `face_point`. Changes: adds
-        a hole feature. Returns: `hole` with `name`, `hole_count`, `hole_type`,
-        `standard`, `size`, `end_condition`, `end_condition_used`, and
-        `volume_before`, `volume_after` and `volume_change` (mm³).
+        point); a regular grid can also use `pattern_linear`. Sizes come from the
+        Hole Wizard library (`list_hole_sizes`): an unknown size is refused, with the
+        nearest ones, before anything is made. A simple hole can't be through all in
+        SolidWorks, so it is made blind through the part (`end_condition_used`, with
+        a warning). It fails when the volume doesn't change. Needs: an open part with
+        a flat face at `face_point`. Changes: adds a hole feature. Returns: `hole`
+        with `name`, `hole_count`, `hole_type`, `standard`, `fastener` (the hole type
+        used), `size`, `end_condition`, `end_condition_used`, and `volume_before`,
+        `volume_after` and `volume_change` (mm³).
 
         Args:
             input_data: The hole. `face_point`, `hole_type` and `size` are
@@ -2784,11 +2894,12 @@ async def register_modeling_tools(
             input_data.end_condition,
             input_data.depth,
             input_data.positions,
+            input_data.fastener,
         )
         require_success(result, context="Failed to create hole")
         data = result.data if isinstance(result.data, dict) else {}
         count = int(data.get("hole_count", 1))
-        kind = f"{input_data.size} {input_data.hole_type}"
+        kind = f"{data.get('size', input_data.size)} {input_data.hole_type}"
         return {
             "status": "success",
             "message": (
