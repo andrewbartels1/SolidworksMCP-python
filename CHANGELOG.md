@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Shorter tool lists** (queue item 14, #176): `SOLIDWORKS_MCP_TOOLSETS`
+- **Shorter tool lists** (queue item 14, #176), checked live: `SOLIDWORKS_MCP_TOOLSETS`
   lists only some groups of tools (`core`, `drawing`, `automation`, `vba`,
   `docs`; `all` by default), and `SOLIDWORKS_MCP_TOOL_MODE=search` lists
   four tools in place of the rest, `search_tools` and `call_tool` among
@@ -121,6 +121,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   matches the document (.sldprt, .sldasm, .slddrw), and no file is there.
 
 ### Fixed
+
+- **`add_fillet` on the current selection** (empty `edge_names`, after
+  `select_face_edges`) built no fillet: reading the volume first rebuilt
+  the part, which cleared the selection. It no longer reads the volume in
+  that case. Found by queue item 14's live check.
 
 Found building the monitor stand demo (#206):
 

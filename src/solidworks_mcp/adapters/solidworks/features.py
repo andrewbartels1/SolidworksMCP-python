@@ -64,7 +64,8 @@ class SolidWorksFeaturesMixin:
         anything, so besides the feature-count check inside
         :func:`_add_fillet_impl` the volume is compared before and after,
         here in the async layer for the same reason as ``mirror_feature``.
-        An unreadable volume is not treated as failure.
+        An unreadable volume is not treated as failure. With no ``edge_names``
+        (the current selection) the volume is not read: see the comment below.
 
         Args:
             radius: Fillet radius in millimetres.
@@ -76,6 +77,13 @@ class SolidWorksFeaturesMixin:
             ``volume_before`` / ``volume_after`` in its properties when they
             could be read. ``ERROR`` when the volume did not change.
         """
+        if not edge_names:
+            # "Use the current selection": reading the volume first forces a
+            # rebuild, and a rebuild clears the selection, so FeatureFillet3
+            # would find no edges (seen live 2026-11-16 after
+            # select_face_edges). The feature-count check in
+            # _add_fillet_impl still catches a fillet that builds nothing.
+            return _add_fillet_impl(self, radius, edge_names)
         before = await self.get_mass_properties()
         volume_before = (
             before.data.volume if before.is_success and before.data else None

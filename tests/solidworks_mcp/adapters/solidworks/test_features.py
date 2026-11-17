@@ -3484,6 +3484,18 @@ class TestAddFilletVolumeCheck:
         assert result.data.properties["volume_before"] == 4800.0
         assert result.data.properties["volume_after"] == 4797.4
 
+    @pytest.mark.asyncio
+    async def test_the_current_selection_is_not_rebuilt_away(self, monkeypatch) -> None:
+        """Reading the volume rebuilds, and a rebuild clears the selection."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.get_mass_properties = AsyncMock()
+        monkeypatch.setattr(features, "_add_fillet_impl", lambda *_a: _fillet_feature())
+
+        result = await adapter.add_fillet(2.0, [])
+
+        assert result.is_success
+        adapter.get_mass_properties.assert_not_called()
+
     @pytest.mark.parametrize("volumes", [[None], [4800.0, None]])
     @pytest.mark.asyncio
     async def test_unreadable_volume_trusts_the_feature_count(
