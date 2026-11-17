@@ -23,13 +23,19 @@ from fastmcp import Client, FastMCP
 
 from solidworks_mcp.tools import register_tools
 from solidworks_mcp.tools.toolsets import apply_tool_visibility
-from tests.live.evidence import evidence
+from tests.live.evidence import evidence, note
 
 pytestmark = pytest.mark.asyncio
 
 
 async def test_a_build_in_search_mode(scratch: Any) -> None:
     """Search, then call, for every step; the geometry checks out."""
+    note(
+        "Search mode, core toolset",
+        "The client sees 4 tools, not 135 (about 900 tokens a turn, not 55,000). "
+        "Each step is found with search_tools, then run with call_tool.",
+        seconds=4.0,
+    )
     mcp = FastMCP("search-live")
     await register_tools(mcp, scratch.adapter, {})
     apply_tool_visibility(mcp, ("core",), "search")
