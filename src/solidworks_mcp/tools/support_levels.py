@@ -167,6 +167,10 @@ OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"
 _DEPRECATED_IN = "2.1.0"
 
 _STABLE = Support(SupportLevel.STABLE)
+#: New in queue item 15 (sheet-metal); stable once its live check passes.
+_BETA_SHEET_METAL = Support(
+    SupportLevel.BETA, "not yet checked on SolidWorks (queue item 15's live check)."
+)
 
 
 def _deprecated(replacement: str | None) -> Support:
@@ -286,6 +290,10 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_shell": _STABLE,
     "add_draft": _STABLE,
     "create_rib": _STABLE,
+    "create_base_flange": _BETA_SHEET_METAL,
+    "add_edge_flange": _BETA_SHEET_METAL,
+    "create_sketched_bend": _BETA_SHEET_METAL,
+    "set_flat_pattern": _BETA_SHEET_METAL,
     "create_hole": _STABLE,
     "list_hole_sizes": _STABLE,
     "add_cosmetic_thread": _STABLE,

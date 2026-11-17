@@ -26,7 +26,7 @@
 ## MCP Server Guide
 
 - [Architecture Overview](https://andrewbartels1.com/SolidworksMCP-python/user-guide/architecture/): The SolidWorks MCP Server implements an intelligent, multi-layered architecture designed to overcome the limitations of traditional COM-based SolidWorks automation while providing enterprise-grade reliability and security.
-- [Tools Overview](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tools-overview/): The SolidWorks MCP Server provides 135 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
+- [Tools Overview](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tools-overview/): The SolidWorks MCP Server provides 139 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
 - [Platform and Connectivity](https://andrewbartels1.com/SolidworksMCP-python/user-guide/platform-connectivity/): This guide explains how to run SolidWorks MCP when your day-to-day workflow is Linux/WSL but real SolidWorks automation must run on Windows.
 - [Prompting Best Practices for SolidWorks MCP](https://andrewbartels1.com/SolidworksMCP-python/user-guide/prompting-best-practices/): This guide is designed for mechanical engineers and CAD users who are new to MCP tool calling.
 - [Integration Testing (Real SolidWorks)](https://andrewbartels1.com/SolidworksMCP-python/user-guide/integration-testing/): This project has two test modes: a fast default mode that needs no SolidWorks, and a full mode that adds real SolidWorks integration tests.
@@ -36,7 +36,7 @@
 
 ## Tool Catalog
 
-- [Tool Catalog — All 135 Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/): This reference documents all **135 MCP tools** registered by the SolidWorks MCP server. Each section covers one functional category with parameter tables and copy-paste sample calls.
+- [Tool Catalog — All 139 Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/): This reference documents all **139 MCP tools** registered by the SolidWorks MCP server. Each section covers one functional category with parameter tables and copy-paste sample calls.
 - [Modeling Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/modeling/): Create and manipulate SolidWorks parts, assemblies, and drawings. These are the foundational tools for any CAD workflow — opening files, creating features (extrude, revolve), and querying/setting driven dimensions.
 - [Sketching Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/sketching/): Build 2-D sketch geometry (lines, circles, arcs, splines, polygons) and apply geometric constraints and driven dimensions. Sketches are the prerequisite for every extrusion, revolve, sweep, and loft feature.
 - [Drawing Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/drawing/): Create and edit 2-D technical drawings: views, section and detail views, notes, centre marks, dimensions by hand or automatically, the title block and sheet format, and a check that the drawing is complete before it is exported. Every position is in sheet millimetres from the sheet's lower-left corner.

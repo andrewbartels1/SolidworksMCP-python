@@ -394,7 +394,8 @@ def _with_volume_change(
     data["volume_before"] = before
     data["volume_after"] = after
     data["volume_change"] = after - before
-    data["volume_ratio"] = round(after / before, 6)
+    # A first feature (a base flange) starts from nothing: no ratio.
+    data["volume_ratio"] = round(after / before, 6) if before else None
     return AdapterResult(
         status=AdapterResultStatus.SUCCESS,
         data=data,

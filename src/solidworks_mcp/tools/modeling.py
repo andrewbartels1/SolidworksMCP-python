@@ -1265,6 +1265,101 @@ class AddDraftInput(CompatInput):
         _point(self.neutral_face, "neutral_face")
 
 
+class CreateBaseFlangeInput(CompatInput):
+    """Input schema for a sheet-metal base flange.
+
+    Attributes:
+        thickness (float): Sheet thickness, mm.
+        bend_radius (float): Inside bend radius, mm.
+        k_factor (float): The bend allowance's K-factor.
+        depth (float | None): How far an open profile is extruded, mm.
+        sketch (str | None): The profile's sketch; the last closed one when omitted.
+        reverse (bool): Thicken to the other side of the sketch.
+    """
+
+    thickness: float = Field(gt=0, description="Sheet thickness, mm, e.g. 2")
+    bend_radius: float = Field(gt=0, description="Inside bend radius, mm")
+    k_factor: float = Field(
+        default=0.5, gt=0, lt=1, description="The bend allowance's K-factor"
+    )
+    depth: float | None = Field(
+        default=None,
+        gt=0,
+        description="How far an open profile (a line or an L) is extruded, mm; "
+        "required for one, not used for a closed profile",
+    )
+    sketch: str | None = Field(
+        default=None,
+        description="The profile's sketch; the last closed one when omitted",
+    )
+    reverse: bool = Field(
+        default=False, description="Thicken to the other side of the sketch"
+    )
+
+
+class AddEdgeFlangeInput(CompatInput):
+    """Input schema for an edge flange.
+
+    Attributes:
+        edge_point (list[float]): ``[x, y, z]`` mm on the edge.
+        length (float): The flange's length from the edge, mm.
+        angle (float): The flange's angle from the sheet, degrees.
+        bend_radius (float | None): Inside bend radius, mm; the sheet's when omitted.
+        flip (bool): Put the flange on the other side.
+    """
+
+    edge_point: list[float] = Field(
+        min_length=3, max_length=3, description="[x, y, z] mm on the sheet's edge"
+    )
+    length: float = Field(gt=0, description="The flange's length from the edge, mm")
+    angle: float = Field(
+        default=90.0, gt=0, lt=180, description="The flange's angle, degrees"
+    )
+    bend_radius: float | None = Field(
+        default=None,
+        gt=0,
+        description="Inside bend radius, mm; the sheet's when omitted",
+    )
+    flip: bool = Field(default=False, description="Put the flange on the other side")
+
+
+class CreateSketchedBendInput(CompatInput):
+    """Input schema for a sketched bend.
+
+    Attributes:
+        angle (float): The bend angle, degrees.
+        bend_radius (float | None): Inside bend radius, mm; the sheet's when omitted.
+        sketch (str | None): The bend line's sketch; the last closed one when omitted.
+        reverse (bool): Bend the other way.
+    """
+
+    angle: float = Field(
+        default=90.0, gt=0, lt=180, description="The bend angle, degrees"
+    )
+    bend_radius: float | None = Field(
+        default=None,
+        gt=0,
+        description="Inside bend radius, mm; the sheet's when omitted",
+    )
+    sketch: str | None = Field(
+        default=None,
+        description="The sketch holding the bend line; the last closed one when omitted",
+    )
+    reverse: bool = Field(default=False, description="Bend the other way")
+
+
+class SetFlatPatternInput(CompatInput):
+    """Input schema for flattening or folding a sheet-metal part.
+
+    Attributes:
+        flat (bool): True to flatten, False to fold back.
+    """
+
+    flat: bool = Field(
+        default=True, description="true flattens the part, false folds it back"
+    )
+
+
 class CreateRibInput(CompatInput):
     """Input schema for a rib.
 
@@ -2815,6 +2910,150 @@ async def register_modeling_tools(
             "status": "success",
             "message": f"Added a {input_data.thickness} mm rib from {input_data.sketch}",
             "rib": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def create_base_flange(input_data: CreateBaseFlangeInput) -> dict[str, Any]:
+        """Start a sheet-metal part: a base flange from a sketch, with its thickness, bend radius and K-factor.
+
+        A closed sketch (a rectangle) makes a flat plate; an open one (a line or an L)
+        makes a bent profile extruded by `depth`. Use it as a sheet-metal part's
+        first feature, then `add_edge_flange`, `create_sketched_bend` and
+        `set_flat_pattern`; export the blank with `export_flat_pattern`. The values
+        are read back from the feature. Needs: an open part with the profile sketch
+        closed. Changes: adds a Base-Flange feature and makes the part sheet metal.
+        Returns: `flange` with `name`, `thickness_mm`, `bend_radius_mm`, `k_factor`
+        and `volume_after` (mm³).
+
+        Args:
+            input_data: The flange. `thickness` and `bend_radius` (mm) are required;
+                `k_factor` is 0.5; `depth` only for an open profile.
+
+        Returns:
+            dict[str, Any]: The base flange.
+        """
+        input_data = normalize_input(input_data, CreateBaseFlangeInput)
+        result = await adapter.create_base_flange(
+            input_data.thickness,
+            input_data.bend_radius,
+            input_data.k_factor,
+            input_data.depth,
+            input_data.sketch,
+            input_data.reverse,
+        )
+        require_success(result, context="Failed to create the base flange")
+        data = result.data if isinstance(result.data, dict) else {}
+        thickness = data.get("thickness_mm", input_data.thickness)
+        return {
+            "status": "success",
+            "message": f"Made a {thickness:g} mm sheet-metal base flange from "
+            f"{data.get('sketch', 'the sketch')}",
+            "flange": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def add_edge_flange(input_data: AddEdgeFlangeInput) -> dict[str, Any]:
+        """Add a flange to one edge of a sheet-metal part, at a length and angle.
+
+        Pick the edge with a point on it in mm (`edge_point`), e.g. on the top
+        face's long edge. `length` is measured from that edge, so on a 2 mm sheet a
+        20 mm flange stands 22 mm above the bottom face. It fails when the volume
+        doesn't change. Needs: a sheet-metal part (`create_base_flange` first).
+        Changes: adds an Edge-Flange feature. Returns: `flange` with `name`,
+        `edge_length_mm` (to check the pick) and `volume_change` (mm³).
+
+        Args:
+            input_data: The flange. `edge_point` ([x, y, z] mm) and `length` (mm)
+                are required; `angle` is 90 and the bend radius the sheet's.
+
+        Returns:
+            dict[str, Any]: The edge flange.
+        """
+        input_data = normalize_input(input_data, AddEdgeFlangeInput)
+        result = await adapter.add_edge_flange(
+            input_data.edge_point,
+            input_data.length,
+            input_data.angle,
+            input_data.bend_radius,
+            input_data.flip,
+        )
+        require_success(result, context="Failed to add the edge flange")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Added a {input_data.length:g} mm edge flange at "
+            f"{input_data.angle:g}° on the {data.get('edge_length_mm')} mm edge",
+            "flange": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def create_sketched_bend(
+        input_data: CreateSketchedBendInput | None = None,
+    ) -> dict[str, Any]:
+        """Bend a sheet-metal part along a line sketched on one of its faces.
+
+        Sketch a line across a face of the sheet (`create_sketch` with `face_point`,
+        then `add_line`), close the sketch, then call this. SolidWorks chooses which
+        side of the line stays put; the reply's `bounding_box_mm` shows which side
+        moved, and `reverse` bends the other way. Needs: a sheet-metal part and the
+        bend-line sketch. Changes: adds a Sketched Bend feature. Returns: `bend`
+        with `name` and `bounding_box_mm`.
+
+        Args:
+            input_data: Nothing is required: `angle` is 90, the bend radius the
+                sheet's, and the sketch the last closed one.
+
+        Returns:
+            dict[str, Any]: The bend.
+        """
+        input_data = normalize_input(input_data, CreateSketchedBendInput)
+        result = await adapter.create_sketched_bend(
+            input_data.angle,
+            input_data.bend_radius,
+            input_data.sketch,
+            input_data.reverse,
+        )
+        require_success(result, context="Failed to create the sketched bend")
+        data = result.data if isinstance(result.data, dict) else {}
+        return {
+            "status": "success",
+            "message": f"Bent the sheet {input_data.angle:g}° along "
+            f"{data.get('sketch', 'the sketch')}",
+            "bend": data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def set_flat_pattern(
+        input_data: SetFlatPatternInput | None = None,
+    ) -> dict[str, Any]:
+        """Flatten a sheet-metal part to its blank, or fold it back, and measure it.
+
+        Flattened, `bounding_box_mm` is the blank to cut: check it against the
+        part's size and the bend allowance before `export_flat_pattern` writes the
+        DXF. Fold it back before adding more features. Needs: a sheet-metal part.
+        Changes: unsuppresses (flat) or suppresses (folded) the Flat-Pattern
+        feature. Returns: `flat`, `feature` and `bounding_box_mm`.
+
+        Args:
+            input_data: `flat` is true (flatten); false folds the part back.
+
+        Returns:
+            dict[str, Any]: The state and the part's size in it.
+        """
+        input_data = normalize_input(input_data, SetFlatPatternInput)
+        result = await adapter.set_flat_pattern(input_data.flat)
+        require_success(result, context="Failed to change the flat pattern")
+        data = result.data if isinstance(result.data, dict) else {}
+        size = (data.get("bounding_box_mm") or {}).get("size")
+        state = "Flattened: the blank is" if input_data.flat else "Folded: the part is"
+        return {
+            "status": "success",
+            "message": f"{state} {size} mm",
+            **data,
             "execution_time": result.execution_time,
         }
 

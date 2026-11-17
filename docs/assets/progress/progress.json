@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 135,
+  "total": 139,
   "by_level": {
    "stable": 127,
-   "beta": 0,
+   "beta": 4,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -85,6 +85,13 @@
     "level": "deprecated",
     "reason": "use `create_drawing_view`.",
     "summary": "Place one named view of a part or assembly on the active drawing sheet; the same as `create_drawing_view`."
+   },
+   {
+    "name": "add_edge_flange",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks (queue item 15's live check).",
+    "summary": "Add a flange to one edge of a sheet-metal part, at a length and angle."
    },
    {
     "name": "add_ellipse",
@@ -255,6 +262,13 @@
     "summary": "Add a reference axis along the model's x, y or z direction, through the origin."
    },
    {
+    "name": "create_base_flange",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks (queue item 15's live check).",
+    "summary": "Start a sheet-metal part: a base flange from a sketch, with its thickness, bend radius and K-factor."
+   },
+   {
     "name": "create_configuration",
     "family": "file_management",
     "level": "stable",
@@ -365,6 +379,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Open a new sketch on a plane or a flat face of the active part, ready for lines, circles and other sketch entities."
+   },
+   {
+    "name": "create_sketched_bend",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks (queue item 15's live check).",
+    "summary": "Bend a sheet-metal part along a line sketched on one of its faces."
    },
    {
     "name": "create_sweep",
@@ -857,6 +878,13 @@
     "summary": "Change one length dimension of the active model, in mm, and rebuild."
    },
    {
+    "name": "set_flat_pattern",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks (queue item 15's live check).",
+    "summary": "Flatten a sheet-metal part to its blank, or fold it back, and measure it."
+   },
+   {
     "name": "set_material",
     "family": "engineering_data",
     "level": "stable",
@@ -959,11 +987,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 240,
+   "covered": 251,
    "total": 2838
   },
   "api": {
-   "covered": 262,
+   "covered": 276,
    "total": 5985
   },
   "interfaces": [
@@ -1055,6 +1083,7 @@
      "InsertProtrusionSwept4",
      "InsertRib",
      "InsertSketch",
+     "InsertSketchForEdgeFlange",
      "Lock",
      "Parameter",
      "Save",
@@ -1064,6 +1093,7 @@
      "SaveAs3",
      "SaveBMP",
      "Select",
+     "SetBendState",
      "SetSaveFlag",
      "SetUserPreferenceIntegerValue",
      "SetUserPreferenceToggle",
@@ -1072,6 +1102,7 @@
      "SketchAddConstraints",
      "SketchMirror",
      "SketchOffset2",
+     "SketchUseEdge",
      "ViewZoomtofit",
      "ViewZoomtofit2"
     ],
@@ -1161,6 +1192,9 @@
    {
     "name": "IFeatureManager",
     "covered": [
+     "CreateCustomBendAllowance",
+     "CreateDefinition",
+     "CreateFeature",
      "CreateSaveBodyFeature",
      "FeatureCircularPattern5",
      "FeatureCut3",
@@ -1172,6 +1206,7 @@
      "FeatureLinearPattern5",
      "FeatureRevolve2",
      "GetFeatureCount",
+     "GetFlatPatternFolder",
      "HoleWizard5",
      "InsertCosmeticThread3",
      "InsertFeatureChamfer",
@@ -1181,7 +1216,9 @@
      "InsertProtrusionSwept4",
      "InsertRefPlane",
      "InsertReferencePoint",
-     "InsertRib"
+     "InsertRib",
+     "InsertSheetMetalBaseFlange2",
+     "InsertSheetMetalEdgeFlange2"
     ],
     "total": 268
    },
@@ -1201,6 +1238,7 @@
      "CreateSpline2",
      "InsertSketch",
      "SketchOffset2",
+     "SketchUseEdge",
      "SketchUseEdge3"
     ],
     "total": 83
@@ -1274,6 +1312,7 @@
     "covered": [
      "AutoDimension",
      "GetLineCount",
+     "GetSketchContours",
      "GetSketchPoints2",
      "GetSketchSegments"
     ],

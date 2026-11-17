@@ -344,6 +344,7 @@ class SolidWorksPartFeaturesMixin:
         build: Callable[[], dict[str, Any]],
         *,
         must_change: bool = True,
+        first_feature: bool = False,
     ) -> AdapterResult[dict[str, Any]]:
         """Run ``build`` on the COM thread and judge it by the volume.
 
@@ -352,6 +353,8 @@ class SolidWorksPartFeaturesMixin:
             build: The COM closure; returns the feature's data with ``name``.
             must_change: True for solid features; False for a cosmetic
                 thread, which must leave the volume alone.
+            first_feature: The part may have no body yet (a base flange), so
+                an unreadable volume before counts as zero.
 
         Returns:
             The feature's data plus the volume before, after and change; an
@@ -363,7 +366,13 @@ class SolidWorksPartFeaturesMixin:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"
             )
-        before = await self._volume()
+        if first_feature:
+            # The part may have no body: the summary reads 0 where the mass
+            # properties fail.
+            summary = await self.get_model_geometry_summary()  # type: ignore[attr-defined]
+            before = (summary.data or {}).get("volume_mm3") or 0.0
+        else:
+            before = await self._volume()
         result = cast(
             AdapterResult[dict[str, Any]],
             adapter._handle_com_operation(operation, build),

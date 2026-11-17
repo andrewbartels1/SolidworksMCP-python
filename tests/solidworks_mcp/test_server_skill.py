@@ -82,4 +82,6 @@ async def test_the_instructions_and_list_follow_the_settings(
         "search_tools",
         "call_tool",
     }
-    assert server.state.tool_count == 135
+    from solidworks_mcp.progress.tool_list_size import listed_tools
+
+    assert server.state.tool_count == len(await listed_tools(("all",), "list"))

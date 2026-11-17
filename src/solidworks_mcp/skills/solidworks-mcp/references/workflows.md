@@ -95,6 +95,20 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
   copies edges (or a face's outline) exactly; cut or extrude from that
   sketch instead of re-drawing the edge at guessed coordinates.
 
+## Sheet metal (a bracket, a cover)
+
+1. `create_part`, `create_sketch` on a plane, `add_rectangle` (or an open
+   line or L for a bent profile), `exit_sketch`.
+2. `create_base_flange` with `thickness`, `bend_radius` and `k_factor`
+   (`depth` for an open profile).
+3. `add_edge_flange` with a point on the edge and a `length` measured from
+   that edge.
+4. For a bend across a face: `create_sketch` with `face_point`, `add_line`,
+   `exit_sketch`, then `create_sketched_bend`. SolidWorks keeps one side
+   fixed; read the reply's box to see which.
+5. `set_flat_pattern` with `flat: true` gives the blank's size; check it,
+   `export_flat_pattern` for the DXF, then `flat: false` to fold it back.
+
 ## Changing an existing model
 
 1. `open_model`, then `list_features` and `list_model_dimensions`.
