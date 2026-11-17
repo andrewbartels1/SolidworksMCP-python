@@ -8,6 +8,7 @@ from .features import SolidWorksFeaturesMixin
 from .io import SolidWorksIOMixin
 from .part_features import SolidWorksPartFeaturesMixin
 from .selection import SolidWorksSelectionMixin
+from .sheet_metal import SolidWorksSheetMetalMixin
 from .sketch import SolidWorksSketchMixin
 from .templates import SolidWorksTemplatesMixin
 
@@ -20,6 +21,7 @@ __all__ = [
     "SolidWorksIOMixin",
     "SolidWorksPartFeaturesMixin",
     "SolidWorksSelectionMixin",
+    "SolidWorksSheetMetalMixin",
     "SolidWorksSketchMixin",
     "SolidWorksTemplatesMixin",
 ]

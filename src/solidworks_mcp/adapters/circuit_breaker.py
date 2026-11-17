@@ -513,6 +513,61 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"file_path": file_path},
         )
 
+    async def create_base_flange(
+        self,
+        thickness: float,
+        bend_radius: float,
+        k_factor: float = 0.5,
+        depth: float | None = None,
+        sketch: str | None = None,
+        reverse: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """A sheet-metal base flange from a sketch. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_base_flange",
+            lambda: self.adapter.create_base_flange(
+                thickness, bend_radius, k_factor, depth, sketch, reverse
+            ),
+        )
+
+    async def add_edge_flange(
+        self,
+        edge_point: list[float],
+        length: float,
+        angle: float = 90.0,
+        bend_radius: float | None = None,
+        flip: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """A flange off the sheet edge nearest a point. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_edge_flange",
+            lambda: self.adapter.add_edge_flange(
+                edge_point, length, angle, bend_radius, flip
+            ),
+        )
+
+    async def create_sketched_bend(
+        self,
+        angle: float = 90.0,
+        bend_radius: float | None = None,
+        sketch: str | None = None,
+        reverse: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bend the sheet along a sketched line. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_sketched_bend",
+            lambda: self.adapter.create_sketched_bend(
+                angle, bend_radius, sketch, reverse
+            ),
+        )
+
+    async def set_flat_pattern(self, flat: bool) -> AdapterResult[dict[str, Any]]:
+        """Flatten the sheet-metal part, or fold it back. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_flat_pattern",
+            lambda: self.adapter.set_flat_pattern(flat),
+        )
+
     async def get_template_folders(self) -> AdapterResult[dict[str, Any]]:
         """Read the template folders through circuit breaker.
 

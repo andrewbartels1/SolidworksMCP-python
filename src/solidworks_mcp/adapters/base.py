@@ -434,6 +434,71 @@ class SolidWorksAdapter(ABC):
             error="save_file is not implemented by this adapter",
         )
 
+    async def create_base_flange(
+        self,
+        thickness: float,
+        bend_radius: float,
+        k_factor: float = 0.5,
+        depth: float | None = None,
+        sketch: str | None = None,
+        reverse: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """A sheet-metal base flange from a sketch.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_base_flange is not implemented by this adapter",
+        )
+
+    async def add_edge_flange(
+        self,
+        edge_point: list[float],
+        length: float,
+        angle: float = 90.0,
+        bend_radius: float | None = None,
+        flip: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """A flange off the sheet edge nearest a point.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_edge_flange is not implemented by this adapter",
+        )
+
+    async def create_sketched_bend(
+        self,
+        angle: float = 90.0,
+        bend_radius: float | None = None,
+        sketch: str | None = None,
+        reverse: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bend the sheet along a sketched line.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_sketched_bend is not implemented by this adapter",
+        )
+
+    async def set_flat_pattern(self, flat: bool) -> AdapterResult[dict[str, Any]]:
+        """Flatten the sheet-metal part, or fold it back.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_flat_pattern is not implemented by this adapter",
+        )
+
     async def get_template_folders(self) -> AdapterResult[dict[str, Any]]:
         """SolidWorks' document template folders and the active document's template extension.
 

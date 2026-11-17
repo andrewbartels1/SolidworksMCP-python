@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sheet metal** (queue item 15, #57), checked live on SolidWorks 2026:
+  `create_base_flange` (a plate or a bent profile, with thickness, bend
+  radius and K-factor read back), `add_edge_flange` (a flange off an edge
+  picked by a point, its length measured from that edge),
+  `create_sketched_bend` and `set_flat_pattern` (flatten or fold, with the
+  blank's size). With the existing `export_flat_pattern`, a part goes from
+  sketch to DXF; the flanged test plate's blank measured 78.7124 mm
+  against 78.712 by hand. `export_flat_pattern` now asks for a part
+  never saved to be saved first (SolidWorks reads it from its file).
+  139 tools.
+
 - **Shorter tool lists** (queue item 14, #176), checked live: `SOLIDWORKS_MCP_TOOLSETS`
   lists only some groups of tools (`core`, `drawing`, `automation`, `vba`,
   `docs`; `all` by default), and `SOLIDWORKS_MCP_TOOL_MODE=search` lists

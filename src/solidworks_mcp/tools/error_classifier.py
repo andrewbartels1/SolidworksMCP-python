@@ -137,6 +137,7 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         patterns=(
             r"(requires|needs) an? (active )?(part|assembly|drawing)"
             r"( or (part|assembly|drawing))? document",
+            r"needs a sheet-metal part",
         ),
     ),
     ErrorRule(

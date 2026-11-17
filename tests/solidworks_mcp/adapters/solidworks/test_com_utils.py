@@ -10,6 +10,7 @@ import pytest
 
 from solidworks_mcp.adapters.solidworks.com_utils import (
     as_list,
+    dispatch_array,
     double_array,
     string_array,
     strip_op_prefix,
@@ -81,3 +82,26 @@ class TestDoubleArray:
 
         monkeypatch.setattr(builtins, "__import__", no_pythoncom)
         assert double_array([1.0, 2.0]) == (1.0, 2.0)
+
+
+class TestDispatchArray:
+    def test_variant_on_windows(self, monkeypatch) -> None:
+        fake_w32 = SimpleNamespace(VARIANT=lambda vt, values: ("VARIANT", vt, values))
+        monkeypatch.setitem(
+            sys.modules, "pythoncom", SimpleNamespace(VT_ARRAY=0x2000, VT_DISPATCH=9)
+        )
+        monkeypatch.setitem(sys.modules, "win32com", SimpleNamespace(client=fake_w32))
+        monkeypatch.setitem(sys.modules, "win32com.client", fake_w32)
+        edge = object()
+        assert dispatch_array([edge]) == ("VARIANT", 0x2009, [edge])
+
+    def test_plain_tuple_without_pywin32(self, monkeypatch) -> None:
+        real_import = builtins.__import__
+
+        def no_pythoncom(name, *args, **kwargs):
+            if name == "pythoncom":
+                raise ImportError(name)
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_pythoncom)
+        assert dispatch_array(["edge"]) == ("edge",)

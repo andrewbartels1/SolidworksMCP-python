@@ -820,3 +820,28 @@ async def test_list_hole_sizes_without_a_library(
     result = await FakeAdapter([]).list_hole_sizes("iso", "simple")
 
     assert result.error == "Looked in: C:\nowhere."
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("summary", "before"), [(None, 0.0), (0.0, 0.0), (500.0, 500.0)]
+)
+async def test_a_first_feature_reads_the_volume_before_from_the_summary(
+    summary: float | None, before: float, picks: list[tuple[Any, ...]]
+) -> None:
+    """A base flange's part has no body: the summary reads 0, mass properties fail."""
+    adapter = FakeAdapter([12000.0])
+
+    async def geometry_summary() -> AdapterResult[Any]:
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS, data={"volume_mm3": summary}
+        )
+
+    adapter.get_model_geometry_summary = geometry_summary  # type: ignore[attr-defined]
+
+    result = await adapter._measured(
+        "create_base_flange", lambda: {"name": "Base-Flange1"}, first_feature=True
+    )
+
+    assert result.data["volume_before"] == before
+    assert result.data["volume_after"] == 12000.0

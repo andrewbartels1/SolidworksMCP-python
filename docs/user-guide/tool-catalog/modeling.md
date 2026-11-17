@@ -4,7 +4,7 @@ Create and manipulate SolidWorks parts, assemblies, and drawings. These are the 
 
 > **Prerequisite:** An active SolidWorks session. Most feature tools require an open Part document.
 
-**Total tools in this category: 38**
+**Total tools in this category: 42**
 
 ## Measured change
 
@@ -601,6 +601,106 @@ Draft faces of the active part by an angle, e.g. for a moulded part.
   "faces": [[20, 0, 10], [-20, 0, 10]],
   "neutral_face": [0, 0, 0]
 }
+```
+
+---
+
+### `create_base_flange`
+
+Start a sheet-metal part: a base flange from a sketch, with its thickness, bend radius and K-factor.
+
+A closed sketch (a rectangle) makes a flat plate; an open one (a line or an L) makes a bent profile extruded by `depth`. The thickness, radius and K-factor are read back from the feature.
+
+**Prerequisite:** Active part with the profile sketch closed.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `thickness` | `float` | ✅ | `` | Sheet thickness, mm |
+| `bend_radius` | `float` | ✅ | `` | Inside bend radius, mm |
+| `k_factor` | `float` | — | `0.5` | The bend allowance's K-factor |
+| `depth` | `float?` | — | `None` | How far an open profile is extruded, mm; required for one |
+| `sketch` | `str?` | — | `None` | The profile's sketch; the last closed one when omitted |
+| `reverse` | `bool` | — | `false` | Thicken to the other side of the sketch |
+
+**Sample call:**
+
+```json
+{"thickness": 2, "bend_radius": 2}
+```
+
+---
+
+### `add_edge_flange`
+
+Add a flange to one edge of a sheet-metal part, at a length and angle.
+
+Pick the edge with a point on it in mm. `length` is measured from that edge: on a 2 mm sheet a 20 mm flange stands 22 mm above the bottom face. The reply's `edge_length_mm` shows which edge was picked.
+
+**Prerequisite:** A sheet-metal part (`create_base_flange` first).
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `edge_point` | `list[float]` | ✅ | `` | `[x, y, z]` mm on the sheet's edge |
+| `length` | `float` | ✅ | `` | The flange's length from the edge, mm |
+| `angle` | `float` | — | `90` | The flange's angle, degrees |
+| `bend_radius` | `float?` | — | `None` | Inside bend radius, mm; the sheet's when omitted |
+| `flip` | `bool` | — | `false` | Put the flange on the other side |
+
+**Sample call:**
+
+```json
+{"edge_point": [0, 0, 30], "length": 20}
+```
+
+---
+
+### `create_sketched_bend`
+
+Bend a sheet-metal part along a line sketched on one of its faces.
+
+Sketch a line across a face (`create_sketch` with `face_point`, then `add_line`), close the sketch, then call this. SolidWorks chooses which side of the line stays put; the reply's `bounding_box_mm` shows which side moved, and `reverse` bends the other way.
+
+**Prerequisite:** A sheet-metal part and the bend-line sketch, closed.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `angle` | `float` | — | `90` | The bend angle, degrees |
+| `bend_radius` | `float?` | — | `None` | Inside bend radius, mm; the sheet's when omitted |
+| `sketch` | `str?` | — | `None` | The bend line's sketch; the last closed one when omitted |
+| `reverse` | `bool` | — | `false` | Bend the other way |
+
+**Sample call:**
+
+```json
+{"angle": 90}
+```
+
+---
+
+### `set_flat_pattern`
+
+Flatten a sheet-metal part to its blank, or fold it back, and measure it.
+
+Flattened, `bounding_box_mm` is the blank to cut: a 100 x 60 x 2 mm plate with a 20 mm flange (2 mm radius, K 0.5) flattens to 100 x 78.71 mm. Then `export_flat_pattern` writes the DXF. Fold it back before adding more features.
+
+**Prerequisite:** A sheet-metal part.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `flat` | `bool` | — | `true` | `true` flattens, `false` folds back |
+
+**Sample call:**
+
+```json
+{"flat": true}
 ```
 
 ---

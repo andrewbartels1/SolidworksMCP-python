@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 import defusedxml.ElementTree as ET
 from defusedxml import DefusedXmlException
 
+from ...exceptions import InputRefused
 from ..base import AdapterResult, AdapterResultStatus
 from . import dimension_layout as _layout
 from .feature_walk import walk_feature_tree
@@ -1026,6 +1027,12 @@ class SolidWorksDocumentationMixin:
             model_path = str(
                 self._attempt(lambda: model.GetPathName(), default="") or ""
             )
+            if not model_path:
+                # ExportToDWG2 reads the part from its file (seen live).
+                raise InputRefused(
+                    "The part has never been saved; save it with save_file, "
+                    "then export its flat pattern."
+                )
             ok = part.ExportToDWG2(
                 out,
                 model_path,

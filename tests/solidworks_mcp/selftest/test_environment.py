@@ -24,7 +24,10 @@ async def test_reads_solidworks_and_versions() -> None:
     assert env["solidworks"]["templates"]["part"]["file_name"] == "part.prtdot"
     assert env["solidworks_mcp"] == __version__
     assert env["python"]
-    assert env["tools"] == {"toolsets": "all", "mode": "list", "listed": 135}
+    from solidworks_mcp.progress.tool_list_size import listed_tools
+
+    every = len(await listed_tools(("all",), "list"))
+    assert env["tools"] == {"toolsets": "all", "mode": "list", "listed": every}
 
 
 @pytest.mark.asyncio
