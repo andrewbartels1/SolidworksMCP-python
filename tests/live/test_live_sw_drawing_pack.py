@@ -8,7 +8,7 @@ One demo, on the drawing ``generate_drawing_package`` makes of a 60 x 40 x
 3. ``update_sheet_format``: A3 to A2, the views kept (the room on the right
    takes the new views);
 4. ``create_section_view`` through the hole, in the plan view;
-5. ``create_detail_view`` of a corner of the front view, at 3:1;
+5. ``create_detail_view`` of the bore in that section, at 3:1;
 6. ``add_dimension``: the plate's 60 mm width, and the hole's Ø6;
 7. ``auto_dimension_view`` on the section;
 8. on purpose: a section line that misses the view is refused;
@@ -61,7 +61,7 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
     note(
         "Prompt",
         "Finish the plate's drawing: revision B on A2, a section through the "
-        "hole, a 3:1 detail of a corner, the width and the hole dimensioned, "
+        "hole, a 3:1 detail of the bore, the width and the hole dimensioned, "
         "then check it.",
         seconds=4.0,
     )
@@ -119,19 +119,20 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
             "position": [500, 300],
         },
     )
-    fx, fy = _centre(views[front]["outline_mm"])
-    left, right = fx - 30 * scale, fx + 30 * scale
+    sx, sy = _centre(section["view"]["outline_mm"])
     detail = await call(
-        "5. a 3:1 detail of the front view's corner",
+        "5. a 3:1 detail of the bore, in the section",
         "create_detail_view",
         {
-            "view": front,
-            "center": [left, fy - 5 * scale],
-            "radius": 10,
+            "view": section["view"]["name"],
+            "center": [sx, sy],
+            "radius": 12,
             "position": [500, 120],
             "scale": "3:1",
         },
     )
+    fx, fy = _centre(views[front]["outline_mm"])
+    left, right = fx - 30 * scale, fx + 30 * scale
     width = await call(
         "6. the width, edge to edge",
         "add_dimension",
