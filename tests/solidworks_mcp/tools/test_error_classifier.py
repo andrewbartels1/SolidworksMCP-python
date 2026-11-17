@@ -98,6 +98,11 @@ def classifier() -> ErrorClassifier:
             "wrong_document_type",
         ),
         (
+            "Failed to run the macro: The macro waited for the user: after 30 s "
+            "a dialog was still open, 'SOLIDWORKS': 'Done' (answered 'OK').",
+            "macro_waited_for_user",
+        ),
+        (
             "list_model_dimensions needs an active part or assembly document",
             "wrong_document_type",
         ),

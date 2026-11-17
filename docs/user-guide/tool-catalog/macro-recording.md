@@ -24,6 +24,7 @@ Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, 
 | `proc_name` | `str` | — | `"main"` | The macro procedure to call; main by default |
 | `repeat_count` | `int` | — | `1` | How many times to run the macro (1-100); it stops at the first failure |
 | `pause_between_runs` | `float` | — | `0.0` | Seconds to wait between runs |
+| `dialog_timeout` | `float` | — | `30.0` | Seconds a dialog the macro opens (MsgBox, form, prompt) may wait before it is answered with Cancel (or its only button) and the run fails as `macro_waited_for_user` |
 
 **Sample call:**
 

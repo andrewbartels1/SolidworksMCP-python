@@ -994,11 +994,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 251,
+   "covered": 252,
    "total": 2838
   },
   "api": {
-   "covered": 276,
+   "covered": 277,
    "total": 5985
   },
   "interfaces": [
@@ -1016,6 +1016,7 @@
      "GetMassProperties",
      "GetMathUtility",
      "GetOpenDocumentByName",
+     "GetProcessID",
      "GetUserPreferenceStringValue",
      "GetUserPreferenceToggle",
      "NewAssembly",

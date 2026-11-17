@@ -34,6 +34,8 @@ class MacroPlaybackInput(CompatInput):
         proc_name (str): The procedure to call.
         pause_between_runs (float): The pause between runs value.
         repeat_count (int): The repeat count value.
+        dialog_timeout (float): Seconds a dialog the macro opens may wait
+            before it is answered and the run fails.
     """
 
     macro_path: str | None = Field(
@@ -57,6 +59,16 @@ class MacroPlaybackInput(CompatInput):
     )
     pause_between_runs: float = Field(
         default=0.0, ge=0.0, description="Seconds to wait between runs"
+    )
+    dialog_timeout: float = Field(
+        default=30.0,
+        ge=1.0,
+        le=600.0,
+        description=(
+            "Seconds a dialog the macro opens (MsgBox, form, prompt) may wait "
+            "before it is answered with Cancel (or its only button) and the "
+            "run fails as macro_waited_for_user"
+        ),
     )
 
     def model_post_init(self, __context: Any) -> None:
@@ -106,8 +118,10 @@ async def register_macro_recording_tools(
 
         Use it to run an existing macro file. VBA source (.bas, .vb, plain text, or what
         the `generate_vba_*` tools return) is refused as invalid input before SolidWorks
-        sees it. The macro must not wait for the user (no MsgBox or forms), or the call
-        hangs. It runs `repeat_count` times, `pause_between_runs` seconds apart, and
+        sees it. The macro must not wait for the user (no MsgBox or forms): a dialog
+        still open after `dialog_timeout` seconds (30) is answered with Cancel, or its
+        only button, and the run fails as `macro_waited_for_user`; a Yes/No prompt is
+        left for the user. It runs `repeat_count` times, `pause_between_runs` seconds apart, and
         stops at the first run that fails. Needs: SolidWorks running and the macro file
         on disk. Changes: whatever the macro does; it can't be undone from here.
         Returns: `runs_completed` and `data` from the last run, with `macro_path`,
@@ -115,8 +129,8 @@ async def register_macro_recording_tools(
 
         Args:
             input_data: The macro to run. Give `macro_path` (or `macro_file`);
-                `proc_name` (main), `repeat_count` (1) and `pause_between_runs` (0 s)
-                have defaults.
+                `proc_name` (main), `repeat_count` (1), `pause_between_runs` (0 s)
+                and `dialog_timeout` (30 s) have defaults.
 
         Returns:
             dict[str, Any]: The run's result.
