@@ -10,7 +10,8 @@ One demo, on the drawing ``generate_drawing_package`` makes of a 60 x 40 x
 4. ``create_section_view`` through the hole, in the plan view;
 5. ``create_detail_view`` of the bore in that section, at 3:1;
 6. ``add_dimension``: the plate's 60 mm width, and the hole's Ø6;
-7. ``auto_dimension_view`` on the section;
+7. ``auto_dimension_view`` on the section, then ``arrange_dimensions`` to
+   space what it added;
 8. on purpose: a section line that misses the view is refused;
 9. ``check_drawing`` again.
 
@@ -156,6 +157,11 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
     auto = await call(
         "7. auto-dimension the section", "auto_dimension_view", {"view": section_name}
     )
+    arranged = await call(
+        "7. ... and space its dimensions out",
+        "arrange_dimensions",
+        {"view_name": section_name},
+    )
     note(
         "Next, on purpose: a section line that misses the view",
         "The line runs along the bottom of the sheet, far from the plan view. "
@@ -195,6 +201,7 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
     assert width["dimension"]["value"] == pytest.approx(60, abs=0.01), width
     assert bore["dimension"]["value"] == pytest.approx(6, abs=0.01), bore
     assert auto["status"] == "success", auto
+    assert arranged["status"] == "success", arranged
     assert (missed["status"], missed["error_type"]) == ("error", "invalid_input")
     assert final["passed"] is True, final
     assert final["report"]["title_block"]["revision"] == "B"

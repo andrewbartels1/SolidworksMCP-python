@@ -24,7 +24,10 @@ step. Values are examples; sizes are millimetres.
    `solid_body_count: 1`, `feature_count: 3`, and a `volume_mm3` with a
    `relative_tolerance` wide enough for the fillets.
 10. `set_material` (find the exact name with `list_available_materials`),
-    then `save_file` with a `file_path` ending in `.sldprt`.
+    then `save_file` with a `file_path` ending in `.sldprt`. To choose the
+    material by strength or stiffness, compare candidates first with
+    `get_material` and `material`: it reads the yield strength and the
+    elastic modulus, in Pa, without assigning anything.
 
 ## Sketching somewhere other than the three planes
 
@@ -111,6 +114,16 @@ To turn a feature off without deleting it, `suppress_feature`. After
    active configuration changes.
 3. `activate_configuration` to look at a variant; `get_dimension` reads the
    active one.
+
+## Starting every part the same way (a template)
+
+1. `create_part`, then set it up: `set_units`, `set_material`,
+   `set_custom_property` (company, drawn by). Add no features if only the
+   settings should carry over.
+2. `save_as_template` with a `name` (it goes in SolidWorks' template folder
+   and shows in File > New) or a `file_path` ending in `.prtdot`.
+3. `create_part` with `template` set to the reply's `file_path`: the new part
+   starts with those units, material and properties.
 
 ## An assembly
 

@@ -535,6 +535,29 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "save_file", lambda adapter: adapter.save_file(file_path)
         )
 
+    async def get_template_folders(self) -> AdapterResult[dict[str, Any]]:
+        """Read the template folders using pool.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The folders and the template extension.
+        """
+        return await self._execute_with_pool(
+            "get_template_folders", lambda adapter: adapter.get_template_folders()
+        )
+
+    async def save_as_template(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Save the active document as a template using pool.
+
+        Args:
+            file_path: The template's full path.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The template written.
+        """
+        return await self._execute_with_pool(
+            "save_as_template", lambda adapter: adapter.save_as_template(file_path)
+        )
+
     async def create_part(
         self,
         name: str | None = None,
@@ -1901,11 +1924,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
     async def get_material(
         self,
         configuration: str | None = None,
+        material: str | None = None,
+        database: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Read the material assigned to the active part using pool."""
+        """Read a part's or a library material using pool."""
         return await self._execute_with_pool(
             "get_material",
-            lambda adapter: adapter.get_material(configuration),
+            lambda adapter: adapter.get_material(configuration, material, database),
         )
 
     async def set_material(

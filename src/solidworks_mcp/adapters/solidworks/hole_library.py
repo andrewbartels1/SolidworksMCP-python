@@ -33,6 +33,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
 from sqlmodel import create_engine, select
 
+from ...exceptions import InputRefused
+
 #: Our standard names -> the library's table prefix.
 STANDARD_PREFIXES: dict[str, str] = {
     "iso": "ISO",
@@ -94,7 +96,7 @@ class HoleLibraryError(Exception):
     """The library can't be found or read; the message says where it looked."""
 
 
-class HoleSizeError(ValueError):
+class HoleSizeError(InputRefused):
     """A hole type or size the library doesn't have; names the nearest ones."""
 
 

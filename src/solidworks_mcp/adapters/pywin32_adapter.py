@@ -15,7 +15,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, TypeVar
 
-from ..exceptions import SolidWorksMCPError
+from ..exceptions import InputRefused, SolidWorksMCPError
 from . import sw_type_info
 from .base import (
     AdapterHealth,
@@ -33,6 +33,7 @@ from .solidworks import (
     SolidWorksPartFeaturesMixin,
     SolidWorksSelectionMixin,
     SolidWorksSketchMixin,
+    SolidWorksTemplatesMixin,
     bitmap,
 )
 from .solidworks.feature_walk import walk_feature_tree
@@ -1711,6 +1712,7 @@ class _FeatureSelectionService:
 
 
 class PyWin32Adapter(
+    SolidWorksTemplatesMixin,
     SolidWorksDrawingPackMixin,
     SolidWorksDrawingStandardMixin,
     SolidWorksDocumentationMixin,
@@ -2039,6 +2041,8 @@ class PyWin32Adapter(
                 # An expected answer ("no feature named X"), not a fault:
                 # one line, no traceback.
                 logger.warning("Operation {} found nothing: {}", operation_name, e)
+            elif isinstance(e, InputRefused):
+                logger.warning("Operation {} refused its input: {}", operation_name, e)
             else:
                 logger.exception("Operation {} failed", operation_name)
             return AdapterResult(

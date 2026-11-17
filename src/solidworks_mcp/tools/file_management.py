@@ -56,6 +56,52 @@ class SaveFileInput(CompatInput):
 #: The file extension each document type saves to.
 _DOC_EXTENSIONS = {"Part": ".sldprt", "Assembly": ".sldasm", "Drawing": ".slddrw"}
 
+#: Characters Windows doesn't allow in a file name.
+_RESERVED_NAME_CHARACTERS = frozenset('\\/:*?"<>|')
+
+
+class SaveAsTemplateInput(CompatInput):
+    """Input schema for saving the active document as a template.
+
+    Attributes:
+        file_path (str | None): The template's full path.
+        name (str | None): A file name for SolidWorks' template folder.
+        overwrite (bool): Whether an existing template may be replaced.
+    """
+
+    file_path: str | None = Field(
+        default=None,
+        description="The template's full path, ending in .prtdot (part), .asmdot "
+        "(assembly) or .drwdot (drawing). Give this or `name`",
+    )
+    name: str | None = Field(
+        default=None,
+        description="A name, e.g. 'Bracket MMGS': saved with the right extension "
+        "in SolidWorks' first template folder, so it shows in File > New. Give "
+        "this or `file_path`",
+    )
+    overwrite: bool = Field(
+        default=False, description="Replace a template already there. Off by default."
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Exactly one of ``file_path`` and ``name``; a name is a plain file name.
+
+        Raises:
+            ValueError: When both or neither are given, or the name has a path
+                separator or a character Windows doesn't allow.
+        """
+        if (self.file_path is None) == (self.name is None):
+            raise ValueError("give either file_path or name, not both or neither")
+        if self.name is not None:
+            self.name = self.name.strip()
+            bad = sorted(set(self.name) & _RESERVED_NAME_CHARACTERS)
+            if not self.name or bad:
+                raise ValueError(
+                    "name is a file name with no folder and none of "
+                    f"{' '.join(sorted(_RESERVED_NAME_CHARACTERS))} (got {self.name!r})"
+                )
+
 
 def file_details(raw_path: str) -> dict[str, Any]:
     """The size and times of the file at ``raw_path``, read from the disk.
@@ -709,6 +755,88 @@ async def register_file_management_tools(
             "format": input_data.format_type,
             "execution_time": result.execution_time,
         }
+
+    @mcp.tool()
+    async def save_as_template(input_data: SaveAsTemplateInput) -> dict[str, Any]:
+        """Save the active part, assembly or drawing as a template, so new documents start from it.
+
+        Use it after setting up a document once (units with `set_units`, a material,
+        custom properties) to start the next one the same way: pass the template to
+        `create_part`, `create_assembly` or `create_drawing` as `template`. A part
+        saves as .prtdot, an assembly as .asmdot, a drawing as .drwdot. Give
+        `file_path`, or `name` to save in SolidWorks' first template folder so it also
+        shows in File > New. Afterwards SolidWorks has the template open in place of
+        the document, as File > Save As does (a saved document's file is left as last
+        saved); the reply's `warning` says so. Save from a part with no features when only its settings should carry
+        over. The path is checked before SolidWorks is asked: the extension must
+        match, the folder must exist, and a file already there is kept unless
+        `overwrite` is on. Needs: an open, active document. Changes: writes the
+        template. Returns: `data` with `file_path`, `document_type`,
+        `in_template_folder`, `template_folders` and `document_became_template`.
+
+        Args:
+            input_data: `file_path` or `name` (one is required); `overwrite` is off.
+
+        Returns:
+            dict[str, Any]: The template written.
+        """
+        input_data = _coerce_input(SaveAsTemplateInput, input_data)
+        require_capability(
+            adapter,
+            "save_as_template",
+            "Active adapter does not support save_as_template; nothing was saved.",
+        )
+        found = await adapter.get_template_folders()
+        require_success(found, "Failed to read SolidWorks' template folders")
+        extension = (found.data or {}).get("extension")
+        if extension is None:
+            raise ToolOperationError(
+                "No active model: open or create the document to save as a template."
+            )
+        raw = input_data.file_path
+        if input_data.name is not None:
+            folders = (found.data or {}).get("folders") or []
+            if not folders:
+                raise InvalidInputError(
+                    "SolidWorks lists no document template folder (Options > File "
+                    "Locations > Document Templates); give file_path instead."
+                )
+            stem = input_data.name
+            if stem.lower().endswith(extension):
+                stem = stem[: -len(extension)]
+            raw = os.path.join(folders[0], stem + extension)
+        target = _prepare_save_target(
+            str(raw),
+            required_extension=extension,
+            overwrite=input_data.overwrite,
+            refuse_wrong_extension=True,
+        )
+        result = await adapter.save_as_template(target)
+        require_success(result, "Failed to save the template")
+        data = result.data or {}
+        reply: dict[str, Any] = {
+            "status": "success",
+            "message": f"Saved the {data.get('document_type', 'document')} template "
+            f"{target}; start a new one from it with template: {target!r}",
+            "file_path": target,
+            "data": data,
+            "execution_time": result.execution_time,
+        }
+        if data.get("document_became_template"):
+            original = data.get("document_path")
+            kept = (
+                f"{original} is unchanged on disk, as last saved."
+                if original
+                else "The document had never been saved, so it now exists only "
+                "as this template."
+            )
+            reply["warning"] = (
+                f"SolidWorks now has the template {target} open in place of the "
+                f"document, as File > Save As does, so save_file would change the "
+                f"template. {kept} Start the next part with create_part and this "
+                "template."
+            )
+        return reply
 
     @mcp.tool()
     async def get_file_properties() -> dict[str, Any]:
@@ -1426,5 +1554,5 @@ async def register_file_management_tools(
             "execution_time": result.execution_time,
         }
 
-    tool_count = 19  # Total number of registered tools in this module
+    tool_count = 20  # Total number of registered tools in this module
     return tool_count

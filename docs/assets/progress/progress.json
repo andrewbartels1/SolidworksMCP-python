@@ -1,8 +1,8 @@
 {
  "tools": {
-  "total": 134,
+  "total": 135,
   "by_level": {
-   "stable": 126,
+   "stable": 127,
    "beta": 0,
    "experimental": 0,
    "planned": 0,
@@ -588,7 +588,7 @@
     "family": "engineering_data",
     "level": "stable",
     "reason": "",
-    "summary": "Report the material assigned to the active part."
+    "summary": "Report the active part's material with its strength and stiffness, or any library material's."
    },
    {
     "name": "get_model_info",
@@ -778,6 +778,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Save the active document under a new path, as a SolidWorks file or in an exchange format such as STEP or IGES."
+   },
+   {
+    "name": "save_as_template",
+    "family": "file_management",
+    "level": "stable",
+    "reason": "",
+    "summary": "Save the active part, assembly or drawing as a template, so new documents start from it."
    },
    {
     "name": "save_assembly",

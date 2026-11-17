@@ -993,6 +993,22 @@ class TestOperationFailureLogging:
         log.warning.assert_called_once()
         log.exception.assert_not_called()
 
+    def test_a_refused_input_is_a_one_line_warning(self, logged) -> None:
+        """A deliberate refusal (a section line off its view) isn't a fault."""
+        from solidworks_mcp.exceptions import InputRefused
+
+        adapter, log = logged
+
+        def refused():
+            raise InputRefused("The section line doesn't cross view 'Front'.")
+
+        result = adapter._handle_com_operation("create_section_view", refused)
+
+        assert result.error.endswith("doesn't cross view 'Front'.")
+        log.warning.assert_called_once()
+        assert "refused its input" in log.warning.call_args.args[0]
+        log.exception.assert_not_called()
+
     def test_other_failures_log_the_traceback(self, logged) -> None:
         adapter, log = logged
 

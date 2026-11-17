@@ -1,6 +1,6 @@
-# Tool Catalog — All 134 Tools
+# Tool Catalog — All 135 Tools
 
-This reference documents all **134 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **135 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -17,7 +17,7 @@ Each section covers one functional category with parameter tables and copy-paste
 | [Engineering Data Tools](engineering-data.md) | 8 | Read and edit the data drawings and BOMs are built from: model dimensions by name, measurements, materials, custom properties and sheet-metal flat patterns. |
 | [Analysis Tools](analysis.md) | 4 | Check a finished part or assembly against expected values; mass, volume, centre of mass, inertia and interference. |
 | [Export Tools](export.md) | 6 | STEP, IGES, STL, DWG, PDF and images. |
-| [File Management Tools](file-management.md) | 19 | Open, save, switch and inspect documents; the feature tree, the live selection; create, activate and delete configurations; Pack and Go. |
+| [File Management Tools](file-management.md) | 20 | Open, save, switch and inspect documents; the feature tree, the live selection; create, activate and delete configurations; Pack and Go. |
 | [Automation Tools](automation.md) | 1 | A VBA macro skeleton for a described task. |
 | [VBA Generation Tools](vba-generation.md) | 10 | VBA macro text for steps the tools don't cover. |
 | [Template Management Tools](template-management.md) | 1 | Compare two template files. |

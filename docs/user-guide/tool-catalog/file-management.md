@@ -1,14 +1,14 @@
 # File Management Tools
 
-Open, save, switch and inspect SolidWorks documents: `open_model`, `save_file`
-and `save_as`, the open documents, the feature tree, configurations, the current
+Open, save, switch and inspect SolidWorks documents: `open_model`, `save_file`,
+`save_as` and `save_as_template`, the open documents, the feature tree, configurations, the current
 selection and Pack and Go. `load_part`, `load_assembly`, `save_part`,
 `save_assembly` and `get_file_properties` are deprecated; each section names its
 replacement.
 
 > **Prerequisite:** SolidWorks running. File-write operations need writable output paths.
 
-**Total tools in this category: 19**
+**Total tools in this category: 20**
 
 ---
 
@@ -30,6 +30,43 @@ Save the active document, to its own path or to a new path in its own format.
 ```json
 {}
 ```
+
+---
+
+### `save_as_template`
+
+Save the active part, assembly or drawing as a template, so new documents start from it.
+
+Set a document up once (units with `set_units`, a material, custom properties), save it as a template, and pass the template to `create_part`, `create_assembly` or `create_drawing` as `template`. A part saves as `.prtdot`, an assembly as `.asmdot`, a drawing as `.drwdot`. Give `file_path`, or `name` to save in SolidWorks' first template folder (Options > File Locations > Document Templates) so it also shows in File > New. Afterwards SolidWorks has the template open in place of the document, as its own File > Save As does: `save_file` would then change the template, and the reply's `warning` says so. A document saved before is left on disk as last saved. Save from a part with no features when only its settings should carry over. A wrong extension, a missing folder, or a file already there without `overwrite` is refused (`invalid_input`) before SolidWorks is asked.
+
+**Prerequisite:** An active document
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `file_path` | `str?` | — | `None` | The template's full path, ending in .prtdot (part), .asmdot (assembly) or .drwdot (drawing). Give this or `name` |
+| `name` | `str?` | — | `None` | A name, e.g. 'Bracket MMGS': saved with the right extension in SolidWorks' first template folder, so it shows in File > New. Give this or `file_path` |
+| `overwrite` | `bool` | — | `False` | Replace a template already there. Off by default. |
+
+**Sample call:**
+
+```json
+{
+  "name": "Bracket MMGS"
+}
+```
+
+Then:
+
+```json
+{
+  "name": "Bracket",
+  "template": "C:/ProgramData/SOLIDWORKS/SOLIDWORKS 2026/templates/Bracket MMGS.prtdot"
+}
+```
+
+to `create_part`.
 
 ---
 

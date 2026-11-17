@@ -167,7 +167,7 @@ OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"
 _DEPRECATED_IN = "2.1.0"
 
 _STABLE = Support(SupportLevel.STABLE)
-#: New in queue item 12 (drawing-pack); stable once its live bundle passes.
+
 
 def _deprecated(replacement: str | None) -> Support:
     """A tool deprecated in 2.1.0 in favour of ``replacement`` (or none).
@@ -255,6 +255,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "save_assembly": _deprecated("save_file"),
     "save_body_as_part": _STABLE,
     "save_file": _STABLE,
+    "save_as_template": _STABLE,
     "save_part": _deprecated("save_file"),
     # macro_recording
     "execute_macro": _STABLE,

@@ -32,6 +32,7 @@ import os
 import re
 from typing import Any, cast
 
+from ...exceptions import InputRefused
 from .. import sw_type_info
 from ..base import AdapterResult
 from .com_utils import as_list
@@ -157,7 +158,7 @@ def paper_for(sheet_format: str, paper_size: str | None) -> str:
         stem = ntpath.basename(sheet_format).lower()  # a Windows path, on any OS
         size = next((s for s in PAPER_SIZES if stem.startswith(s)), "")
     if size not in PAPER_SIZES:
-        raise ValueError(
+        raise InputRefused(
             f"paper_size must be one of {', '.join(PAPER_SIZES)}; it can't be "
             f"read from the format name '{sheet_format}'."
         )
@@ -227,7 +228,7 @@ class SolidWorksDrawingPackMixin:
         """
         sheet = self._pack_sheet_mm(drawing)
         if sheet is not None and not inside(position, sheet):
-            raise ValueError(
+            raise InputRefused(
                 f"position {list(position)} mm is off the sheet "
                 f"({sheet[2]:g} x {sheet[3]:g} mm)."
             )
@@ -312,7 +313,7 @@ class SolidWorksDrawingPackMixin:
             if outline is not None and not segment_crosses_box(
                 line_start, line_end, outline
             ):
-                raise ValueError(
+                raise InputRefused(
                     f"The section line {list(line_start)} - {list(line_end)} mm "
                     f"doesn't cross view '{view}' (its outline is {list(outline)} mm)."
                 )
@@ -373,7 +374,7 @@ class SolidWorksDrawingPackMixin:
             parent = self._pack_view(drawing, view)
             outline = self._pack_outline(parent)
             if outline is not None and not inside(center, outline):
-                raise ValueError(
+                raise InputRefused(
                     f"The detail centre {list(center)} mm isn't inside view "
                     f"'{view}' (its outline is {list(outline)} mm)."
                 )
@@ -445,7 +446,7 @@ class SolidWorksDrawingPackMixin:
                 if point is None:
                     continue
                 if not self._pack_pick(point, append=index > 0):
-                    raise ValueError(
+                    raise InputRefused(
                         f"Nothing to dimension at {list(point)} mm on the sheet; "
                         "give a point on a view's edge or vertex."
                     )

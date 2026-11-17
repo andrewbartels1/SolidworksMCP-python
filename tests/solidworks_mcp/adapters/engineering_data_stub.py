@@ -14,7 +14,7 @@ class EngineeringDataStub:
     EXPECTED_CALLS = [
         ("list_model_dimensions", ("Sketch1",)),
         ("measure_entities", (["Edge<1>"],)),
-        ("get_material", ("Default",)),
+        ("get_material", ("Default", "ABS", "custom")),
         ("set_material", ("AISI 1020", "SOLIDWORKS Materials", "Default")),
         ("list_available_materials", ("steel",)),
         ("get_custom_properties", ("Default",)),
@@ -44,8 +44,8 @@ class EngineeringDataStub:
     async def measure_entities(self, entities):
         return self._record("measure_entities", entities)
 
-    async def get_material(self, configuration=None):
-        return self._record("get_material", configuration)
+    async def get_material(self, configuration=None, material=None, database=None):
+        return self._record("get_material", configuration, material, database)
 
     async def set_material(self, material_name, database=None, configuration=None):
         return self._record("set_material", material_name, database, configuration)
@@ -68,7 +68,7 @@ async def exercise_engineering_data(wrapped: Any) -> None:
     results = [
         await wrapped.list_model_dimensions("Sketch1"),
         await wrapped.measure_entities(["Edge<1>"]),
-        await wrapped.get_material("Default"),
+        await wrapped.get_material("Default", "ABS", "custom"),
         await wrapped.set_material("AISI 1020", "SOLIDWORKS Materials", "Default"),
         await wrapped.list_available_materials("steel"),
         await wrapped.get_custom_properties("Default"),

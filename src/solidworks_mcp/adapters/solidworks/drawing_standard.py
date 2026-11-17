@@ -530,7 +530,10 @@ class SolidWorksDrawingStandardMixin:
         async def open_model(self, file_path: str) -> AdapterResult[Any]: ...
 
         async def get_material(
-            self, configuration: str | None = None
+            self,
+            configuration: str | None = None,
+            material: str | None = None,
+            database: str | None = None,
         ) -> AdapterResult[Any]: ...
 
         async def set_custom_property(
