@@ -295,3 +295,13 @@ async def test_execute_macro_refuses_removed_inputs_and_bad_counts(
     assert "open_model" in removed["message"]
     assert too_many["error_type"] == "invalid_input"
     mock_adapter.execute_macro.assert_not_awaited()
+
+
+def test_dialog_timeout_defaults_to_30_s_and_is_bounded() -> None:
+    from pydantic import ValidationError
+
+    assert MacroPlaybackInput(macro_file="m.swp").dialog_timeout == 30.0
+    assert MacroPlaybackInput(macro_file="m.swp", dialog_timeout=5).dialog_timeout == 5
+    for bad in (0.5, 601):
+        with pytest.raises(ValidationError):
+            MacroPlaybackInput(macro_file="m.swp", dialog_timeout=bad)

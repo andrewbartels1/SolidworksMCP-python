@@ -128,6 +128,14 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
     ),
     ErrorRule(
+        error_type="macro_waited_for_user",
+        hint=(
+            "The macro opened a dialog and waited for an answer. Remove the "
+            "MsgBox, form or prompt from the macro, then run it again."
+        ),
+        patterns=(r"the macro waited for the user",),
+    ),
+    ErrorRule(
         error_type="wrong_document_type",
         hint=(
             "The active document is the wrong kind for this tool. Create or "

@@ -313,6 +313,8 @@ module = [
     "pywintypes",
     "win32api",
     "win32con",
+    "win32gui",
+    "win32process",
     # Optional extras, not installed by every environment that type-checks.
     "PIL",
     "PIL.*",
