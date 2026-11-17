@@ -142,7 +142,10 @@ lint: ## Run code linting
 
 typecheck: ## Type-check the package with mypy (CI fails on any error)
 	@echo "$(BLUE)Type-checking...$(NC)"
-	@if [ -z "$(CONDA_CMD)" ]; then \n		echo "$(RED)Error: No conda/mamba/micromamba found$(NC)"; \n		exit 1; \n	fi
+	@if [ -z "$(CONDA_CMD)" ]; then \
+		echo "$(RED)Error: No conda/mamba/micromamba found$(NC)"; \
+		exit 1; \
+	fi
 	$(CONDA_CMD) run -n solidworks_mcp python -m mypy src/solidworks_mcp
 
 format: ## Format code
