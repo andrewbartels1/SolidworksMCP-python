@@ -24,7 +24,7 @@ set. Fields not given SHALL keep their values.
 - **THEN** the call fails with `invalid_input` listing the fields
 
 ### Requirement: A different sheet format, keeping the views
-`update_sheet_format` SHALL take `format` (a format name found by
+`update_sheet_format` SHALL take `sheet_format` (a format name found by
 `find_sheet_format`, or a path to a `.slddrt` file) and optionally
 `paper_size`. It SHALL change the active sheet's format, keep every view,
 and reply with the format's path and the sheet's size.
@@ -36,6 +36,6 @@ and reply with the format's path and the sheet's size.
   the title block's fields still show their values
 
 #### Scenario: A format that doesn't exist
-- **WHEN** `format` names no format SolidWorks can find
-- **THEN** the call fails with `invalid_input` naming the folders searched,
+- **WHEN** `sheet_format` names no format SolidWorks can find
+- **THEN** the call fails with `invalid_input` naming where it looked,
   and the sheet is unchanged

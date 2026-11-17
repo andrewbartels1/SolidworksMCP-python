@@ -1,8 +1,9 @@
 # Drawing Tools
 
-Create and edit 2-D technical drawings: views, notes and centre marks. Section and
-detail views, drawing dimensions, the title block, the sheet format and a drawing
-check are planned in the drawing pack; until then they return `not_supported`.
+Create and edit 2-D technical drawings: views, section and detail views, notes,
+centre marks, dimensions by hand or automatically, the title block and sheet
+format, and a check that the drawing is complete before it is exported. Every
+position is in sheet millimetres from the sheet's lower-left corner.
 
 > **Prerequisite:** An active SolidWorks Drawing (.slddrw) document.
 
@@ -40,29 +41,29 @@ Place one named view of a part or assembly on the active drawing sheet.
 
 ### `add_dimension`
 
-Add one dimension between drawing entities at a position on the sheet.
+Add one dimension to a drawing view, between edges picked by points on the sheet.
 
-**Prerequisite:** SolidWorks running
+Points are `[x, y]` in sheet millimetres on a view's edges or vertices; read the views' outlines with `check_drawing`. Two parallel edges give their distance, one edge its length, a circle's edge its radius or diameter, two lines their angle. The reply gives the measured value. For the model's own dimensions use `insert_model_dimensions`.
+
+**Prerequisite:** An active drawing. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `dimension_type` | `str` | ✅ | `` | Type of dimension (linear, radial, angular, diameter) |
-| `entity1` | `str` | ✅ | `` | First entity to dimension (edge, face, point) |
-| `entity2` | `str?` | — | `None` | Second entity for linear/angular dimensions |
-| `position_x` | `float` | ✅ | `` | X position for dimension text |
-| `position_y` | `float` | ✅ | `` | Y position for dimension text |
-| `precision` | `int` | — | `2` | Number of decimal places |
+| `dimension_type` | `str` | ✅ | `` | `horizontal`, `vertical`, `aligned`, `radial`, `diameter` or `angular` |
+| `entity1_point` | `list[float]` | ✅ | `` | `[x, y]` sheet mm on the first edge or vertex |
+| `entity2_point` | `list[float]?` | — | `None` | The second entity: required for `angular`, not allowed for `radial` and `diameter` |
+| `position` | `list[float]` | ✅ | `` | `[x, y]` sheet mm for the dimension text |
 
 **Sample call:**
 
 ```json
 {
-  "dimension_type": "linear",
-  "entity1": "Line1",
-  "position_x": 10.0,
-  "position_y": 10.0
+  "dimension_type": "horizontal",
+  "entity1_point": [40, 160],
+  "entity2_point": [100, 160],
+  "position": [70, 240]
 }
 ```
 
@@ -98,29 +99,30 @@ Place a text note on the active drawing sheet at a position in millimetres.
 
 ### `create_section_view`
 
-Cut a section view along a line across a drawing view.
+Cut a section view along a line across a drawing view, and place it on the sheet.
 
-**Prerequisite:** SolidWorks running
+The line's ends are sheet millimetres and must cross the view, for example through a hole's centre. A line that misses the view, or a position off the sheet, is refused (`invalid_input`) before anything changes.
+
+**Prerequisite:** An active drawing with the parent view. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `section_line_start` | `List[float]` | ✅ | `` | Start point of section line as [x, y] |
-| `section_line_end` | `List[float]` | ✅ | `` | End point of section line as [x, y] |
-| `view_position_x` | `float` | ✅ | `` | X position for section view |
-| `view_position_y` | `float` | ✅ | `` | Y position for section view |
-| `scale` | `float` | — | `1.0` | Section view scale |
-| `label` | `str` | — | `A` | Section view label |
+| `view` | `str` | ✅ | `` | The parent view's name (`list_drawing_views`) |
+| `line_start` | `list[float]` | ✅ | `` | `[x, y]` sheet mm where the section line starts |
+| `line_end` | `list[float]` | ✅ | `` | `[x, y]` sheet mm where it ends |
+| `position` | `list[float]` | ✅ | `` | `[x, y]` sheet mm for the new view |
+| `label` | `str?` | — | `None` | The section letter; the next free one when omitted |
 
 **Sample call:**
 
 ```json
 {
-  "section_line_start": [],
-  "section_line_end": [],
-  "view_position_x": 10.0,
-  "view_position_y": 10.0
+  "view": "Drawing View2",
+  "line_start": [20, 120],
+  "line_end": [140, 120],
+  "position": [500, 300]
 }
 ```
 
@@ -128,31 +130,32 @@ Cut a section view along a line across a drawing view.
 
 ### `create_detail_view`
 
-Magnify a circular area of a drawing view as a detail view.
+Magnify a circular area of a drawing view as a detail view, at a scale.
 
-**Prerequisite:** SolidWorks running
+The circle's centre is sheet millimetres inside the view. A centre outside the view, or a position off the sheet, is refused before anything changes.
+
+**Prerequisite:** An active drawing with the parent view. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `center_x` | `float` | ✅ | `` | X center of detail circle |
-| `center_y` | `float` | ✅ | `` | Y center of detail circle |
-| `radius` | `float` | ✅ | `` | Radius of detail circle |
-| `view_position_x` | `float` | ✅ | `` | X position for detail view |
-| `view_position_y` | `float` | ✅ | `` | Y position for detail view |
-| `scale` | `float` | — | `2.0` | Detail view scale |
-| `label` | `str` | — | `A` | Detail view label |
+| `view` | `str` | ✅ | `` | The parent view's name |
+| `center` | `list[float]` | ✅ | `` | `[x, y]` sheet mm, inside the view |
+| `radius` | `float` | ✅ | `` | The detail circle's radius on the sheet, mm |
+| `position` | `list[float]` | ✅ | `` | `[x, y]` sheet mm for the new view |
+| `scale` | `str` | — | `2:1` | The detail's scale, e.g. `3:1` |
+| `label` | `str?` | — | `None` | The detail letter; the next free one when omitted |
 
 **Sample call:**
 
 ```json
 {
-  "center_x": 0.0,
-  "center_y": 0.0,
-  "radius": 15.0,
-  "view_position_x": 10.0,
-  "view_position_y": 10.0
+  "view": "Drawing View1",
+  "center": [40, 155],
+  "radius": 6,
+  "position": [500, 120],
+  "scale": "3:1"
 }
 ```
 
@@ -160,27 +163,24 @@ Magnify a circular area of a drawing view as a detail view.
 
 ### `update_sheet_format`
 
-Change the active drawing's sheet format file and title-block fields.
+Change the active drawing sheet's format and paper size, keeping every view.
 
-**Prerequisite:** SolidWorks running
+Give a format name SolidWorks has (`a2 - iso`) or a `.slddrt` path. The paper size comes from the name unless given. The views are checked to be the same afterwards; the title block keeps its values, which are properties.
+
+**Prerequisite:** An active drawing. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `format_file` | `str` | ✅ | `` | Path to sheet format template (.slddrt) |
-| `sheet_size` | `str` | — | `A3` | Sheet size (A4, A3, A2, A1, A0) |
-| `title` | `str` | — | `` | Drawing title |
-| `drawn_by` | `str` | — | `` | Drawn by field |
-| `checked_by` | `str` | — | `` | Checked by field |
-| `approved_by` | `str` | — | `` | Approved by field |
-| `drawing_number` | `str` | — | `` | Drawing number |
+| `sheet_format` | `str` | ✅ | `` | A format name such as `a2 - iso`, or a `.slddrt` path |
+| `paper_size` | `str?` | — | `None` | `a4` to `a0`; read from the format name when omitted |
 
 **Sample call:**
 
 ```json
 {
-  "format_file": "example"
+  "sheet_format": "a2 - iso"
 }
 ```
 
@@ -188,29 +188,40 @@ Change the active drawing's sheet format file and title-block fields.
 
 ### `auto_dimension_view`
 
-Dimension a drawing view automatically with SolidWorks' auto-dimension scheme.
+Dimension one drawing view with SolidWorks' auto-dimension (baseline or chain).
 
-**Prerequisite:** SolidWorks running
+It adds reference dimensions measured from the view's edges. Prefer `insert_model_dimensions`, which shows the model's own dimensions; use this for a view that has none to bring in, then `arrange_dimensions`. It fails when nothing is added.
+
+**Prerequisite:** An active drawing with that view. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `view` | `str` | ✅ | `` | The view's name |
+| `scheme` | `str` | — | `baseline` | `baseline` or `chain`, both directions |
 
 **Sample call:**
 
 ```json
-{}
+{
+  "view": "Section View A-A"
+}
 ```
 
 ---
 
-### `check_drawing_standards`
+### `check_drawing`
 
-Check the active drawing against a drafting standard and score it.
+Check the active drawing is complete before exporting it: views, dimensions, title block, BOM.
 
-**Prerequisite:** SolidWorks running
+Read-only. Errors fail the drawing: `view_off_sheet` and `dangling_annotation`. Warnings don't: `view_not_dimensioned` (isometric and detail views excepted), `title_block_field_empty` (title, drawn by, revision) and `bom_missing` (an assembly with no BOM). Each finding names the tool that fixes it. It checks completeness, not a drafting standard. This tool was `check_drawing_standards`, which never worked.
 
-**Sample call:**
+**Prerequisite:** An active drawing. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
 
-```json
-{}
-```
+**Parameters:** none.
+
+**Returns:** `passed`, `errors`, `warnings`, `findings` (each `rule`, `severity`, `message` and maybe `view`), `views` and `report` (the facts read: sheet size, view outlines and dimension counts, title block, BOM, dangling count).
 
 ---
 
@@ -273,14 +284,31 @@ Place one named view of a part or assembly on the active drawing sheet; the same
 
 ### `update_title_block`
 
-Fill in the active drawing's title-block fields (title, drawn by, drawing number and so on).
+Change the active drawing's title-block fields: title, drawing number, drawn by, date, revision, company.
 
-**Prerequisite:** SolidWorks running
+Each field is written to the property the sheet format shows, the same mapping `generate_drawing_package` uses: the title is the drawn model's `Description`, the others are the drawing's own properties (`DrawingNo`, `DrawnBy`, `DrawnDate`, `Revision`, `COMPANYNAME`). Fields not given keep their values. The ISO format's DWG NO. box shows the file name, not `DrawingNo`.
+
+**Prerequisite:** An active drawing of a model. Beta: not yet checked on SolidWorks (queue item 12's live bundle).
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `title` | `str?` | — | `None` | The title (the model's Description) |
+| `drawing_number` | `str?` | — | `None` | The drawing number |
+| `drawn_by` | `str?` | — | `None` | Drawn by |
+| `drawn_date` | `str?` | — | `None` | Date drawn |
+| `revision` | `str?` | — | `None` | Revision, e.g. `B` |
+| `company` | `str?` | — | `None` | Company name |
+
+At least one is required.
 
 **Sample call:**
 
 ```json
-{}
+{
+  "revision": "B"
+}
 ```
 
 ---

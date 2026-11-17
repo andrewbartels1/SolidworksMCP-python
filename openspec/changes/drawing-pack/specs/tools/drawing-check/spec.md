@@ -36,9 +36,9 @@ reply with `passed` and `findings`, each finding having `rule`, `severity`
 - **THEN** a `bom_missing` warning is listed, and `passed` stays true
 
 ### Requirement: Only on a drawing
-`check_drawing` SHALL fail with `invalid_input` when the active document is
-not a drawing.
+`check_drawing` SHALL fail with `wrong_document_type`, as every drawing
+tool does, when the active document is not a drawing.
 
 #### Scenario: A part is active
 - **WHEN** a part is the active document
-- **THEN** the call fails with `invalid_input` saying to activate a drawing
+- **THEN** the call fails with `wrong_document_type` saying a drawing is needed

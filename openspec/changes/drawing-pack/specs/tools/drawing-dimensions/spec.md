@@ -42,4 +42,5 @@ dimensions added.
 
 #### Scenario: A view that doesn't exist
 - **WHEN** `view` names no view on the sheet
-- **THEN** the call fails with `invalid_input` listing the views
+- **THEN** the call fails with `not_found` listing the views, as the other
+  drawing tools do for an unknown view

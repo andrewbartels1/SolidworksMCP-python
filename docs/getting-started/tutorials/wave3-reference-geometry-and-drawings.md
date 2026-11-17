@@ -264,7 +264,7 @@ work — the only files created are under your scratch folder.
 | `create_reference_point` — `along_curve`, `face_center` | ✅ |
 | `save_body_as_part` | ✅ (also opens a linked assembly) |
 | `auto_center_marks` — insertion | ✅ (count read-back unreliable on R2026x) |
-| `add_dimension` / `auto_dimension_view` — **drawing** dimensions | ❌ not wired to COM — sketch dimensions only |
+| `add_dimension` / `auto_dimension_view` — **drawing** dimensions | ✅ beta: points in sheet mm, value read back (see the drawing catalog) |
 | `create_cut` | ❌ not wired to COM on this build; use `create_cut_extrude` |
 
 ---
