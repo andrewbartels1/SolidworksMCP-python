@@ -127,7 +127,7 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
         {
             "view": front,
             "center": [left, fy - 5 * scale],
-            "radius": 6,
+            "radius": 10,
             "position": [500, 120],
             "scale": "3:1",
         },
