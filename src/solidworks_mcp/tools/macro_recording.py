@@ -136,7 +136,8 @@ async def register_macro_recording_tools(
         for run in range(total):
             if run and input_data.pause_between_runs:
                 await asyncio.sleep(input_data.pause_between_runs)
-            result = await adapter.execute_macro(payload)
+            # require_capability above checked the adapter has it.
+            result = await adapter.execute_macro(payload)  # type: ignore[attr-defined]
             if not result.is_success:
                 raise ToolOperationError(
                     f"Run {run + 1} of {total} failed after {run} completed: "

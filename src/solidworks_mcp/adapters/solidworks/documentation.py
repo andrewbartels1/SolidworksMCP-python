@@ -132,12 +132,12 @@ def _parse_material_library(path: str) -> list[dict[str, str]]:
         for each material; empty when the file cannot be parsed or is refused.
     """
     try:
-        root = ET.parse(path).getroot()
+        tree = ET.parse(path)
     except (ET.ParseError, OSError, DefusedXmlException):
         return []
     database = os.path.splitext(os.path.basename(path))[0]
     materials: list[dict[str, str]] = []
-    for classification in root.iter():
+    for classification in tree.iter():
         if classification.tag.rsplit("}", 1)[-1] != "classification":
             continue
         class_name = classification.get("name", "")
@@ -246,10 +246,10 @@ def _material_entry(
     )
     for path in ordered:
         try:
-            root = ET.parse(path).getroot()
+            tree = ET.parse(path)
         except (ET.ParseError, OSError, DefusedXmlException):
             continue
-        for element in root.iter():
+        for element in tree.iter():
             if element.tag.rsplit("}", 1)[-1] != "material":
                 continue
             if element.get("name") == name:
@@ -415,7 +415,7 @@ class SolidWorksDocumentationMixin:
         ) -> AdapterResult[Any]: ...
 
         def _attempt(
-            self, operation: Callable[[], Any], default: Any = None
+            self, operation: Callable[..., Any], default: Any = None
         ) -> Any: ...
 
         def _get_attr_or_call(self, obj: Any, name: str) -> Any: ...
@@ -1295,7 +1295,7 @@ class SolidWorksDocumentationMixin:
             self._attempt(lambda: model.ClearSelection2(True), default=None)
             self._attempt(lambda: model.EditRebuild3(), default=None)
 
-        per_view = []
+        per_view: list[dict[str, Any]] = []
         for name in names:
             after = self._view_dimension_count(views[name])
             per_view.append(
@@ -1512,7 +1512,8 @@ class SolidWorksDocumentationMixin:
                 continue
             outline = self._attempt(lambda v=view: v.GetOutline(), default=None)
             if isinstance(outline, (list, tuple)) and len(outline) >= 4:
-                outlines[name] = tuple(float(c) for c in outline[:4])
+                left, bottom, right, top = (float(c) for c in outline[:4])
+                outlines[name] = (left, bottom, right, top)
             for an, geometry in self._read_view_dimensions(view, name):
                 annotations[geometry.key] = an
                 geometries.append(geometry)
@@ -1557,7 +1558,9 @@ class SolidWorksDocumentationMixin:
         _layout.attach_boxes(geometries, attached or {})
         before = _layout.find_overlaps(geometries, outlines, sheet, obstacles)
         after = before
-        moved, unplaced, passes, trace = 0, [], 0, []
+        unplaced: list[str] = []
+        trace: list[Any] = []
+        moved, passes = 0, 0
         # The first pass plans every movable dimension from where it was
         # imported. SolidWorks does not always draw a dimension where the
         # plan put it, so later passes re-plan only the dimensions still in

@@ -26,9 +26,10 @@ from collections import Counter
 from dataclasses import dataclass
 from html import escape
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from fastmcp import FastMCP
+from fastmcp.tools.function_tool import FunctionTool
 from fastmcp.utilities.docstring_parsing import parse_docstring
 
 from ..adapters.mock_adapter import MockSolidWorksAdapter
@@ -78,7 +79,8 @@ async def tool_rows() -> list[ToolRow]:
     mcp = FastMCP("progress")
     await register_tools(mcp, MockSolidWorksAdapter({}), {})
     rows = []
-    for tool in await mcp.list_tools():
+    for listed in await mcp.list_tools():
+        tool = cast(FunctionTool, listed)  # every tool is a decorated function
         support = SUPPORT_LEVELS[tool.name]
         text = parse_docstring(tool.fn).description or ""
         rows.append(

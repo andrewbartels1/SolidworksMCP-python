@@ -239,7 +239,7 @@ def describe_edge(adapter: Any, edge: Any) -> dict[str, Any]:
         elif _attempt(adapter, lambda: curve.IsLine(), False):
             entry["curve"] = "linear"
 
-    points = []
+    points: list[Any] = []
     for getter in ("GetStartVertex", "GetEndVertex"):
         vertex = _attempt(adapter, lambda g=getter: getattr(edge, g)())
         if vertex is None:

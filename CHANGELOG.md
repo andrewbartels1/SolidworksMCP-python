@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **mypy gates CI** (queue item 17, #157): `make typecheck` runs mypy over
+  the package, and CI fails on any error. The 139 errors on `main` are
+  fixed with no change in behaviour, apart from one fault it found:
+  dimension layout raised `TypeError` for a leader with no lines when asked
+  to place it inside its view; it now goes outside. Every `# type: ignore`
+  names its error code (checked by a test).
 - **What each tool needs from SolidWorks** (queue item 16, #79): every tool
   has a `needs:` tag, `nothing`, `installed` or `running`, from one table
   (`tools/requirements.py`). The tools overview lists the 20 tools that

@@ -81,7 +81,7 @@ DEFAULT_UPLOADED_MODEL_DIR = _utils_service._DEFAULT_UPLOADED_MODEL_DIR
 
 # Keep this symbol available for tests that monkeypatch PDF ingestion behavior.
 try:
-    from pypdf import PdfReader  # type: ignore
+    from pypdf import PdfReader  # type: ignore[import-not-found]  # optional
 except Exception:
     PdfReader = None
 

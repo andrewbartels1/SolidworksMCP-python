@@ -12,8 +12,13 @@ from .results import AreaResult, Check, Outcome, ToolFailed
 class Area(Protocol):
     """One part of the selftest: what it needs, and how it runs."""
 
-    name: str
-    needs: tuple[str, ...]
+    @property
+    def name(self) -> str:
+        """The area's name in the report."""
+
+    @property
+    def needs(self) -> tuple[str, ...]:
+        """The areas whose saved files this one opens."""
 
     async def run(self, ctx: Context, checks: list[Check]) -> None:
         """Call tools and append a check per value read back.

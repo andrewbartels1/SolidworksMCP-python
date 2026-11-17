@@ -1392,7 +1392,7 @@ def _add_sketch_dimension_impl(
             if not adapter._select_sketch_entity(entity2_obj, append=True):
                 raise Exception(f"Failed to select secondary entity '{entity2}'")
             display_dim = _two_entity_linear_dimension(
-                adapter, (entity1, entity2), entity1_obj, entity2_obj, direction
+                adapter, (entity1, entity2 or ""), entity1_obj, entity2_obj, direction
             )
         else:
             adapter.currentModel.ClearSelection2(True)
