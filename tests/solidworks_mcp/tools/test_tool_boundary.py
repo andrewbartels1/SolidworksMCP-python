@@ -309,7 +309,7 @@ async def test_registrar_applies_the_title_hints_and_family_tag() -> None:
     assert tool.annotations.readOnlyHint is True
     assert tool.annotations.destructiveHint is False
     assert tool.annotations.idempotentHint is True
-    assert tool.tags == {"test_tool_boundary", "level:stable"}
+    assert tool.tags == {"test_tool_boundary", "level:stable", "needs:running"}
 
 
 @pytest.mark.asyncio
@@ -327,7 +327,12 @@ async def test_registrar_keeps_explicit_metadata_and_merges_tags() -> None:
     assert tool.title == "Mine"
     assert tool.annotations is not None
     assert tool.annotations.title == "Explicit"
-    assert tool.tags == {"extra", "test_tool_boundary", "level:stable"}
+    assert tool.tags == {
+        "extra",
+        "test_tool_boundary",
+        "level:stable",
+        "needs:running",
+    }
 
 
 @pytest.mark.asyncio
@@ -412,7 +417,7 @@ async def test_a_beta_tool_tags_its_level_and_warns_on_success_only() -> None:
     tags = {name: t.tags for name, t in listed.items()}
     ok = (await mcp.call_tool("body", {})).structured_content
     failed = (await mcp.call_tool("second", {})).structured_content
-    assert tags["body"] == {"test_tool_boundary", "level:beta"}
+    assert tags["body"] == {"test_tool_boundary", "level:beta", "needs:running"}
     assert ok == {
         "status": "success",
         "message": "done",

@@ -40,6 +40,7 @@ from .error_classifier import (
     ErrorClassifier,
 )
 from .input_compat import removed_inputs
+from .requirements import REQUIREMENTS, Requirement, requirement_of
 from .support_levels import SUPPORT_LEVELS, Support
 from .tool_hints import TOOL_HINTS, ToolHints
 
@@ -332,8 +333,9 @@ class ToolRegistrar:
     It also gives each tool its title and behaviour hints from the hints
     table, its family tag (see :func:`tool_family`), and its support level
     from the levels table: a ``level:<level>`` tag and, below stable, a
-    ``warning`` on success. Everything else is forwarded to the wrapped
-    server unchanged.
+    ``warning`` on success. A ``needs:<requirement>`` tag says what it needs
+    from SolidWorks (``tools/requirements.py``). Everything else is
+    forwarded to the wrapped server unchanged.
     """
 
     def __init__(
@@ -342,11 +344,13 @@ class ToolRegistrar:
         classifier: ErrorClassifier = _CLASSIFIER,
         hints: Mapping[str, ToolHints] = TOOL_HINTS,
         levels: Mapping[str, Support] = SUPPORT_LEVELS,
+        requirements: Mapping[str, Requirement] = REQUIREMENTS,
     ) -> None:
         self._mcp = mcp
         self._classifier = classifier
         self._hints = hints
         self._levels = levels
+        self._requirements = requirements
 
     def _support(self, name: str) -> Support:
         """The support entry of a tool being registered.
@@ -396,6 +400,7 @@ class ToolRegistrar:
         merged["tags"] = {
             tool_family(fn),
             f"level:{support.level.value}",
+            f"needs:{requirement_of(name, self._requirements).value}",
             *(kwargs.get("tags") or ()),
         }
         warning = support.warning()
