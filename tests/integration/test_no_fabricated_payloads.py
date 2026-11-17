@@ -42,6 +42,7 @@ ADAPTER_FREE_TOOLS = {
     # Same local-index reads as search_solidworks_api_help, narrower queries.
     "lookup_api_method",
     "lookup_api_interface",
+    "get_api_enum",
     "find_related_api_members",
     "generate_vba_part_modeling",
     "generate_vba_assembly_mates",

@@ -194,6 +194,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "discover_solidworks_docs": _STABLE,
     "find_related_api_members": _STABLE,
     "lookup_api_interface": _STABLE,
+    "get_api_enum": _STABLE,
     "lookup_api_method": _STABLE,
     "search_solidworks_api_help": _STABLE,
     # drawing

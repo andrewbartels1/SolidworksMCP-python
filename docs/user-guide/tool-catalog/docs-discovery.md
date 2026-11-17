@@ -1,6 +1,6 @@
 # Docs Discovery Tools
 
-Look up SolidWorks API interfaces, methods and properties, with each member's parameters, return type and description. Everything is read from the SolidWorks type library installed on this machine, so the answers match your SolidWorks version and nothing is hand-typed.
+Look up SolidWorks API interfaces, methods and properties, with each member's parameters, return type and description, and the integer values of its enums. Everything is read from the SolidWorks type library installed on this machine, so the answers match your SolidWorks version and nothing is hand-typed.
 
 > **Prerequisite:** SolidWorks installed (it need not be running), on Windows with pywin32.
 >
@@ -8,7 +8,7 @@ Look up SolidWorks API interfaces, methods and properties, with each member's pa
 >
 > The year comes from the server's `--year` start-up argument (setup writes it), else the newest installed SolidWorks. Every response reports the `year` and `type_library_version` that answered, and `index_status`: `ready` (saved index), `rebuilt` (built for this call) or `unavailable`.
 
-**Total tools in this category: 5**
+**Total tools in this category: 6**
 
 ---
 
@@ -97,6 +97,30 @@ Look up one SolidWorks API method or property: parameters, return type, descript
 ```json
 { "interface": "ISldWorks", "method": "OpenDoc6" }
 ```
+
+---
+
+### `get_api_enum`
+
+Look up a SolidWorks API enum's members and their integer values.
+
+Give the enum or one of its members; a member's name returns its whole enum with `matched_member` set. The values come from SolidWorks' constants type library (`swconst.tlb`), so a call that takes an enum value never needs a guessed number.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | `str` | ✅ | | An enum (`swUnitSystem_e`) or member (`swUnitSystem_IPS`); case does not matter |
+| `year` | `int?` | — | `null` | SolidWorks year to answer for; usually unset (the server's `--year`) |
+| `index_file` | `str?` | — | `null` | A saved index to answer from instead, e.g. copied from another machine |
+
+**Sample call:**
+
+```json
+{ "name": "swUnitSystem_e" }
+```
+
+Returns `result.members`: `[{"name": "swUnitSystem_CGS", "value": 1}, {"name": "swUnitSystem_MKS", "value": 2}, {"name": "swUnitSystem_IPS", "value": 3}, ...]`.
 
 ---
 

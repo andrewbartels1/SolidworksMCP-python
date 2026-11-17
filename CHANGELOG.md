@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`get_api_enum`** (queue item 23, #95): an enum's members and their
+  integer values, by the enum's name or a member's, read from SolidWorks'
+  constants type library (`swconst.tlb`), checked live (`swUnitSystem_IPS`
+  is 3). The API index now holds the enums too (format 2.1; a saved index
+  is rebuilt once). 140 tools.
 - **mypy gates CI** (queue item 17, #157): `make typecheck` runs mypy over
   the package, and CI fails on any error. The 139 errors on `main` are
   fixed with no change in behaviour, apart from one fault it found:
@@ -800,7 +805,7 @@ Minor release — new tools, all additive and backward compatible.
   against `ActiveDoc`.
 - **Granular API-lookup tools** (#64) — `lookup_api_method`,
   `lookup_api_interface`, `find_related_api_members` in the docs-discovery
-  layer (`lookup_api_enum` split to a follow-up).
+  layer (`get_api_enum` split to a follow-up).
 - **SoC `script_line` capture** (#28) — every `ToolCallRecord` now stores the
   rendered SolidWorks-as-Code line at write time; a startup `ALTER TABLE`
   check backfills the column on existing local databases.

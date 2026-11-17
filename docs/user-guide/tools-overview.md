@@ -1,6 +1,6 @@
 # Tools Overview
 
-The SolidWorks MCP Server provides 139 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
+The SolidWorks MCP Server provides 140 specialized tools for CAD automation. This page is a navigation map: each card links to the family's catalog page, which lists every tool with its inputs and a sample call.
 
 ## Read this first
 
@@ -23,7 +23,7 @@ add-in (Simulation, PDM, Routing, PhotoView) or a feature SolidWorks sells
 only with Professional or Premium. Every live check ran on SOLIDWORKS
 Professional for Makers 2026; Standard itself hasn't been run yet.
 
-Each tool's `needs:` tag says what it needs. All but the 20 below need
+Each tool's `needs:` tag says what it needs. All but the 21 below need
 SolidWorks running (`needs:running`).
 
 ### Needs nothing
@@ -41,7 +41,7 @@ These work with no SolidWorks on the machine (`needs:nothing`):
 These read SolidWorks' installed files and never start it
 (`needs:installed`): `discover_solidworks_docs`,
 `search_solidworks_api_help`, `lookup_api_method`, `lookup_api_interface`,
-`find_related_api_members`, `list_hole_sizes`.
+`get_api_enum`, `find_related_api_members`, `list_hole_sizes`.
 
 ## Tool Categories
 
@@ -157,7 +157,7 @@ These read SolidWorks' installed files and never start it
 
     Look up SolidWorks API interfaces and members in the installed type library.
 
-    [**5 tools available** :octicons-arrow-right-24:](tool-catalog/docs-discovery.md)
+    [**6 tools available** :octicons-arrow-right-24:](tool-catalog/docs-discovery.md)
 
 - :material-server:{ .lg .middle } **Server Admin**
 
@@ -169,7 +169,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 139 Tools**
+**Total: 140 Tools**
 
 ## Deprecated tools
 

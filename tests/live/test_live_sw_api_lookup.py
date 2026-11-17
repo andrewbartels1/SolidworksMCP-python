@@ -69,7 +69,7 @@ def _brief(response: dict[str, Any]) -> dict[str, Any]:
     result = shown.get("result")
     if isinstance(result, dict):
         result = dict(result)
-        for key in ("methods", "properties", "related"):
+        for key in ("methods", "properties", "related", "members"):
             if isinstance(result.get(key), list) and len(result[key]) > 6:
                 result[key] = [*result[key][:6], f"... {len(result[key]) - 6} more"]
         shown["result"] = result
@@ -188,6 +188,34 @@ async def test_real_signatures_come_from_the_type_library(agent: _Agent) -> None
         "WidthIn",
         "HeightIn",
     ]
+
+
+@pytest.mark.asyncio
+async def test_enum_values_come_from_the_constants_library(agent: _Agent) -> None:
+    """Enum values (#95): the unit systems, by enum and by member name."""
+    units = await agent.call(
+        "swUnitSystem_e: the values set_units needed (IPS is 3, not 4)",
+        "get_api_enum",
+        name="swUnitSystem_e",
+    )
+    member = await agent.call(
+        "A member's name, any case: its enum, with the member marked",
+        "get_api_enum",
+        name="swinches",
+    )
+    unknown = await agent.call(
+        "A made-up enum: no match, and why",
+        "get_api_enum",
+        name="swNoSuchThing_e",
+    )
+
+    values = {m["name"]: m["value"] for m in units["result"]["members"]}
+    assert values["swUnitSystem_IPS"] == 3
+    assert values["swUnitSystem_MMGS"] == 5
+    assert {m["name"]: m["value"] for m in member["result"]["members"]}["swMM"] == 0
+    assert member["result"]["enum"] == "swLengthUnit_e"
+    assert member["result"]["matched_member"] == "swINCHES"
+    assert unknown["result"]["found"] is False
 
 
 @pytest.mark.asyncio

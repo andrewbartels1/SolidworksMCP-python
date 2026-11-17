@@ -1,6 +1,6 @@
-# Tool Catalog — All 139 Tools
+# Tool Catalog — All 140 Tools
 
-This reference documents all **139 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **140 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -22,7 +22,7 @@ Each section covers one functional category with parameter tables and copy-paste
 | [VBA Generation Tools](vba-generation.md) | 10 | VBA macro text for steps the tools don't cover. |
 | [Template Management Tools](template-management.md) | 1 | Compare two template files. |
 | [Macro Recording Tools](macro-recording.md) | 1 | Run a binary SolidWorks macro (`.swp`). |
-| [Docs Discovery Tools](docs-discovery.md) | 5 | Look up SolidWorks API interfaces and member signatures, read from the installed SolidWorks type library. |
+| [Docs Discovery Tools](docs-discovery.md) | 6 | Look up SolidWorks API interfaces, member signatures and enum values, read from the installed SolidWorks type libraries. |
 
 `reset_circuit_breaker` (server admin) has no page of its own; see the
 [progress page](../../progress.md). Eight tools are deprecated: each one's

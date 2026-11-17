@@ -21,7 +21,7 @@
   <clipPath id="track-com"><rect x="28" y="156" width="784" height="24" rx="12.0"/></clipPath>
 </defs>
 <rect x=".5" y=".5" width="839" height="235" rx="14" fill="url(#panel)" stroke="#30363d"/>
-<text x="28" y="40" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="16" fill="#e6edf3" font-weight="600" text-anchor="start">MCP tools: 131</text>
+<text x="28" y="40" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="16" fill="#e6edf3" font-weight="600" text-anchor="start">MCP tools: 132</text>
 <text x="812" y="40" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="13" fill="#8b949e" font-weight="400" text-anchor="end">100% work on SolidWorks today</text>
 <rect x="28" y="54" width="784" height="24" rx="12.0" fill="#21262d" stroke="#30363d"/>
 <g clip-path="url(#track-tools)">
@@ -33,7 +33,7 @@
 </g>
 <rect x="28.5" y="54.5" width="783" height="23" rx="12.0" fill="none" stroke="#fff" stroke-opacity=".08"/>
 <rect x="28" y="92" width="10" height="10" rx="2" fill="#2ea043"/>
-<text x="44" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">stable 131</text>
+<text x="44" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">stable 132</text>
 <rect x="124" y="92" width="10" height="10" rx="2" fill="#d29922"/>
 <text x="140" y="101" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="12" fill="#c9d1d9" font-weight="400" text-anchor="start">beta 0</text>
 <rect x="191.2" y="92" width="10" height="10" rx="2" fill="#db6d28"/>
