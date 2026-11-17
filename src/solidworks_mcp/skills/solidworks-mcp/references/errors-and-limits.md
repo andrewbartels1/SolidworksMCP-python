@@ -33,16 +33,6 @@ it will again.
   reply's `warning` names what else went.
 - `get_model_info` and `list_features` show where the model stands now.
 
-## Tools that can't run yet
-
-Seven tools are registered but nothing implements them yet (support level
-`planned`). Their description says "Not available yet"; every call returns
-`not_supported`. All seven are drawing tools coming in the drawing pack:
-`add_dimension`, `auto_dimension_view`, `create_section_view`,
-`create_detail_view`, `update_title_block`, `update_sheet_format` and
-`check_drawing_standards`. Each
-description names what to use today.
-
 ## Deprecated tools
 
 Eight tools still work but are replaced; use the replacement. A deprecated

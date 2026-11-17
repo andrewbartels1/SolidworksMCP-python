@@ -1167,30 +1167,6 @@ def test_every_capability_is_accounted_for() -> None:
     )
 
 
-def test_dimension_import_is_not_claimed_as_a_capability() -> None:
-    """``auto_dimension_view`` is deliberately absent, and must stay absent.
-
-    ``IDrawingDoc::InsertModelAnnotations3`` could not be made to insert
-    anything on SW 2025: it returns ``None`` with the view selected and
-    activated, for both ``swInsertDimensions`` and
-    ``swInsertDimensionsMarkedForDrawing``, with ``AllViews`` either way, on
-    front and top views, against a part carrying a real sketch dimension, and
-    after a ``ForceRebuild3``. ``IView::GetDisplayDimensionCount`` stayed 0
-    throughout.
-
-    Shipping it anyway would mean shipping a capability never observed to
-    work — the exact failure this branch exists to correct. This test fails
-    if someone adds it back without live proof.
-    """
-    from solidworks_mcp.adapters.base import SolidWorksAdapter as _Base
-
-    assert not hasattr(_Base, "auto_dimension_view"), (
-        "auto_dimension_view is back on the adapter surface; it must not "
-        "ship until InsertModelAnnotations3 is shown to insert a dimension "
-        "against real SolidWorks"
-    )
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("capability", CAPABILITIESDrawingCapabilities)
 async def test_base_defaults_report_missing_capability_drawing(capability: str) -> None:

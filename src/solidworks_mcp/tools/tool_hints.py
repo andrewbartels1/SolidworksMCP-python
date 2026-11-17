@@ -119,7 +119,7 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "create_detail_view": _adds("Create Detail View"),
     "update_sheet_format": _sets("Update Sheet Format"),
     "auto_dimension_view": _adds("Auto-Dimension Drawing View"),
-    "check_drawing_standards": _reads("Check Drawing Standards"),
+    "check_drawing": _reads("Check Drawing Completeness"),
     "create_technical_drawing": _adds("Create Technical Drawing"),
     "add_drawing_view": _adds("Add Drawing View"),
     "update_title_block": _sets("Update Title Block"),

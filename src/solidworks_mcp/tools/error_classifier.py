@@ -181,6 +181,22 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         patterns=(r"No configuration named",),
     ),
     ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
+            "Positions are [x, y] in sheet mm. Read the views' outlines and the "
+            "sheet size with check_drawing, then pick points inside a view (on "
+            "its edges for a dimension) and on the sheet."
+        ),
+        patterns=(
+            r"mm is off the sheet",
+            r"doesn't cross view",
+            r"isn't inside view",
+            r"Nothing to dimension at",
+            r"No sheet format '",
+            r"paper_size must be one of",
+        ),
+    ),
+    ErrorRule(
         error_type="not_found",
         hint=(
             "Check the name or path - list what exists first (list_features, "

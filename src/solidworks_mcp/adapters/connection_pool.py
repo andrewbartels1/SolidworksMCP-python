@@ -1620,6 +1620,91 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "add_note", lambda adapter: adapter.add_note(payload)
         )
 
+    async def create_section_view(
+        self,
+        view: str,
+        line_start: list[float],
+        line_end: list[float],
+        position: list[float],
+        label: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a section view cut along a line across a drawing view using pool."""
+        return await self._execute_with_pool(
+            "create_section_view",
+            lambda adapter: adapter.create_section_view(
+                view, line_start, line_end, position, label
+            ),
+        )
+
+    async def create_detail_view(
+        self,
+        view: str,
+        center: list[float],
+        radius: float,
+        position: list[float],
+        scale: str = "2:1",
+        label: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a detail view of a circle in a drawing view using pool."""
+        return await self._execute_with_pool(
+            "create_detail_view",
+            lambda adapter: adapter.create_detail_view(
+                view, center, radius, position, scale, label
+            ),
+        )
+
+    async def add_dimension(
+        self,
+        dimension_type: str,
+        entity1_point: list[float],
+        position: list[float],
+        entity2_point: list[float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add one dimension between drawing entities picked at sheet points using pool."""
+        return await self._execute_with_pool(
+            "add_dimension",
+            lambda adapter: adapter.add_dimension(
+                dimension_type, entity1_point, position, entity2_point
+            ),
+        )
+
+    async def auto_dimension_view(
+        self,
+        view: str,
+        scheme: str = "baseline",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Auto-dimension one drawing view using pool."""
+        return await self._execute_with_pool(
+            "auto_dimension_view",
+            lambda adapter: adapter.auto_dimension_view(view, scheme),
+        )
+
+    async def update_sheet_format(
+        self,
+        sheet_format: str,
+        paper_size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Change the active sheet's format and paper size, keeping its views using pool."""
+        return await self._execute_with_pool(
+            "update_sheet_format",
+            lambda adapter: adapter.update_sheet_format(sheet_format, paper_size),
+        )
+
+    async def update_title_block(
+        self,
+        fields: dict[str, str],
+    ) -> AdapterResult[dict[str, Any]]:
+        """Write title-block fields on the active drawing using pool."""
+        return await self._execute_with_pool(
+            "update_title_block", lambda adapter: adapter.update_title_block(fields)
+        )
+
+    async def drawing_report(self) -> AdapterResult[dict[str, Any]]:
+        """Read what check_drawing judges on the active drawing using pool."""
+        return await self._execute_with_pool(
+            "drawing_report", lambda adapter: adapter.drawing_report()
+        )
+
     async def list_drawing_views(self) -> AdapterResult[list[str]]:
         """List drawing views using pool.
 

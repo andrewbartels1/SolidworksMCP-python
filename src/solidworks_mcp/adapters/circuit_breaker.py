@@ -1789,6 +1789,118 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict=payload if isinstance(payload, dict) else {},
         )
 
+    async def create_section_view(
+        self,
+        view: str,
+        line_start: list[float],
+        line_end: list[float],
+        position: list[float],
+        label: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a section view cut along a line across a drawing view through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_section_view",
+            lambda: self.adapter.create_section_view(
+                view, line_start, line_end, position, label
+            ),
+            input_dict={
+                "view": view,
+                "line_start": line_start,
+                "line_end": line_end,
+                "position": position,
+                "label": label,
+            },
+        )
+
+    async def create_detail_view(
+        self,
+        view: str,
+        center: list[float],
+        radius: float,
+        position: list[float],
+        scale: str = "2:1",
+        label: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a detail view of a circle in a drawing view through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_detail_view",
+            lambda: self.adapter.create_detail_view(
+                view, center, radius, position, scale, label
+            ),
+            input_dict={
+                "view": view,
+                "center": center,
+                "radius": radius,
+                "position": position,
+                "scale": scale,
+                "label": label,
+            },
+        )
+
+    async def add_dimension(
+        self,
+        dimension_type: str,
+        entity1_point: list[float],
+        position: list[float],
+        entity2_point: list[float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add one dimension between drawing entities picked at sheet points through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_dimension",
+            lambda: self.adapter.add_dimension(
+                dimension_type, entity1_point, position, entity2_point
+            ),
+            input_dict={
+                "dimension_type": dimension_type,
+                "entity1_point": entity1_point,
+                "position": position,
+                "entity2_point": entity2_point,
+            },
+        )
+
+    async def auto_dimension_view(
+        self,
+        view: str,
+        scheme: str = "baseline",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Auto-dimension one drawing view through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "auto_dimension_view",
+            lambda: self.adapter.auto_dimension_view(view, scheme),
+            input_dict={"view": view, "scheme": scheme},
+        )
+
+    async def update_sheet_format(
+        self,
+        sheet_format: str,
+        paper_size: str | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Change the active sheet's format and paper size, keeping its views through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "update_sheet_format",
+            lambda: self.adapter.update_sheet_format(sheet_format, paper_size),
+            input_dict={"sheet_format": sheet_format, "paper_size": paper_size},
+        )
+
+    async def update_title_block(
+        self,
+        fields: dict[str, str],
+    ) -> AdapterResult[dict[str, Any]]:
+        """Write title-block fields on the active drawing through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "update_title_block",
+            lambda: self.adapter.update_title_block(fields),
+            input_dict={"fields": fields},
+        )
+
+    async def drawing_report(self) -> AdapterResult[dict[str, Any]]:
+        """Read what check_drawing judges on the active drawing through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "drawing_report",
+            lambda: self.adapter.drawing_report(),
+            input_dict={},
+        )
+
     async def list_drawing_views(self) -> AdapterResult[list[str]]:
         """List drawing views through circuit breaker.
 

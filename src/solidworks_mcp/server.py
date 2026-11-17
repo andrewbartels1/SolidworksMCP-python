@@ -210,7 +210,7 @@ class SolidWorksMCPServer:
             "calculate_mass_properties",
             "check_interference",
             # Drawing analysis operations
-            "check_drawing_standards",
+            "check_drawing",
             "compare_drawing_versions",
             # Modeling operations that benefit from routing
             "create_assembly",

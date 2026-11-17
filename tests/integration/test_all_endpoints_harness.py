@@ -519,7 +519,7 @@ _SMOKE_PAYLOADS: dict[str, dict[str, Any]] = {
     },
     "update_sheet_format": {"sheet_format_path": "C:\\Temp\\format.slddrt"},
     "auto_dimension_view": {"view_name": "Drawing View1"},
-    "check_drawing_standards": {},
+    "check_drawing": {},
     "create_technical_drawing": {"model_path": "C:\\Temp\\part.sldprt"},
     "add_drawing_view": {"model_path": "C:\\Temp\\part.sldprt", "view_type": "front"},
     "add_annotation": {"annotation_type": "note", "text": "smoke", "x": 0.0, "y": 0.0},

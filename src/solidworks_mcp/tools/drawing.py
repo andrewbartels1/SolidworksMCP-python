@@ -10,10 +10,11 @@ from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
 from ..adapters.base import SolidWorksAdapter
+from ..adapters.solidworks.drawing_pack import TITLE_BLOCK_FIELDS, parse_scale
+from .drawing_check import check
 from .input_compat import CompatInput
 from .tool_boundary import (
     InvalidInputError,
-    UnsupportedOperationError,
     normalize_input,
     require_capability,
     require_success,
@@ -47,28 +48,48 @@ class CreateDrawingViewInput(BaseModel):
     )
 
 
-class AddDimensionInput(BaseModel):
-    """Input schema for adding dimensions.
+class AddDimensionInput(CompatInput):
+    """Input schema for one drawing dimension.
 
     Attributes:
-        dimension_type (str): The dimension type value.
-        entity1 (str): The entity1 value.
-        entity2 (str | None): The entity2 value.
-        position_x (float): The position x value.
-        position_y (float): The position y value.
-        precision (int): The precision value.
+        dimension_type (str): horizontal, vertical, aligned, radial, diameter or angular.
+        entity1_point (list[float]): [x, y] sheet mm on the first edge or vertex.
+        entity2_point (list[float] | None): The second entity, where the type uses two.
+        position (list[float]): [x, y] sheet mm for the dimension's text.
     """
 
-    dimension_type: str = Field(
-        description="Type of dimension (linear, radial, angular, diameter)"
+    dimension_type: Literal[
+        "horizontal", "vertical", "aligned", "radial", "diameter", "angular"
+    ] = Field(description="horizontal, vertical, aligned, radial, diameter or angular")
+    entity1_point: list[float] = Field(
+        description="[x, y] in sheet mm on the first edge or vertex",
+        min_length=2,
+        max_length=2,
+        json_schema_extra={"items": {"type": "number"}},
     )
-    entity1: str = Field(description="First entity to dimension (edge, face, point)")
-    entity2: str | None = Field(
-        default=None, description="Second entity for linear/angular dimensions"
+    entity2_point: list[float] | None = Field(
+        default=None,
+        description="[x, y] sheet mm on the second entity: required for angular, "
+        "optional for linear types (one edge measures its own length), not for "
+        "radial or diameter",
     )
-    position_x: float = Field(description="X position for dimension text")
-    position_y: float = Field(description="Y position for dimension text")
-    precision: int = Field(default=2, description="Number of decimal places")
+    position: list[float] = Field(
+        description="[x, y] in sheet mm for the dimension text",
+        min_length=2,
+        max_length=2,
+        json_schema_extra={"items": {"type": "number"}},
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.entity2_point is not None and len(self.entity2_point) != 2:
+            raise ValueError("entity2_point is [x, y] in sheet mm")
+        if self.dimension_type == "angular" and self.entity2_point is None:
+            raise ValueError("an angular dimension needs entity2_point (two lines)")
+        if self.dimension_type in ("radial", "diameter") and self.entity2_point:
+            raise ValueError(
+                f"a {self.dimension_type} dimension takes one circle or arc: "
+                "leave out entity2_point"
+            )
 
 
 class AddNoteInput(BaseModel):
@@ -91,78 +112,145 @@ class AddNoteInput(BaseModel):
     )
 
 
-class CreateSectionViewInput(BaseModel):
-    """Input schema for creating section views.
+class CreateSectionViewInput(CompatInput):
+    """Input schema for a section view.
 
     Attributes:
-        label (str): The label value.
-        scale (float): The scale value.
-        section_line_end (list[float]): The section line end value.
-        section_line_start (list[float]): The section line start value.
-        view_position_x (float): The view position x value.
-        view_position_y (float): The view position y value.
+        view (str): The parent view's name.
+        line_start (list[float]): [x, y] sheet mm where the section line starts.
+        line_end (list[float]): [x, y] sheet mm where it ends.
+        position (list[float]): [x, y] sheet mm for the new view.
+        label (str | None): The section letter; the next free one when omitted.
     """
 
-    section_line_start: list[float] = Field(
-        description="Start point of section line as [x, y]",
+    view: str = Field(description="Parent view's name, from list_drawing_views")
+    line_start: list[float] = Field(
+        description="[x, y] sheet mm where the section line starts",
         min_length=2,
         max_length=2,
         json_schema_extra={"items": {"type": "number"}},
     )
-    section_line_end: list[float] = Field(
-        description="End point of section line as [x, y]",
+    line_end: list[float] = Field(
+        description="[x, y] sheet mm where it ends; it must cross the view",
         min_length=2,
         max_length=2,
         json_schema_extra={"items": {"type": "number"}},
     )
-    view_position_x: float = Field(description="X position for section view")
-    view_position_y: float = Field(description="Y position for section view")
-    scale: float = Field(default=1.0, description="Section view scale")
-    label: str = Field(default="A", description="Section view label")
+    position: list[float] = Field(
+        description="[x, y] sheet mm for the new view's centre",
+        min_length=2,
+        max_length=2,
+        json_schema_extra={"items": {"type": "number"}},
+    )
+    label: str | None = Field(
+        default=None,
+        description="Section letter, e.g. 'A'; the next free one if omitted",
+    )
 
 
-class CreateDetailViewInput(BaseModel):
-    """Input schema for creating detail views.
-
-    Attributes:
-        center_x (float): The center x value.
-        center_y (float): The center y value.
-        label (str): The label value.
-        radius (float): The radius value.
-        scale (float): The scale value.
-        view_position_x (float): The view position x value.
-        view_position_y (float): The view position y value.
-    """
-
-    center_x: float = Field(description="X center of detail circle")
-    center_y: float = Field(description="Y center of detail circle")
-    radius: float = Field(description="Radius of detail circle")
-    view_position_x: float = Field(description="X position for detail view")
-    view_position_y: float = Field(description="Y position for detail view")
-    scale: float = Field(default=2.0, description="Detail view scale")
-    label: str = Field(default="A", description="Detail view label")
-
-
-class UpdateSheetFormatInput(BaseModel):
-    """Input schema for updating sheet format.
+class CreateDetailViewInput(CompatInput):
+    """Input schema for a detail view.
 
     Attributes:
-        approved_by (str): The approved by value.
-        checked_by (str): The checked by value.
-        drawing_number (str): The drawing number value.
-        drawn_by (str): The drawn by value.
-        format_file (str): The format file value.
-        sheet_size (str): The sheet size value.
-        title (str): The title value.
+        view (str): The parent view's name.
+        center (list[float]): [x, y] sheet mm, inside the view.
+        radius (float): The detail circle's radius on the sheet, mm.
+        position (list[float]): [x, y] sheet mm for the new view.
+        scale (str): The detail's scale, e.g. "3:1".
+        label (str | None): The detail letter; the next free one when omitted.
     """
 
-    format_file: str = Field(description="Path to sheet format template (.slddrt)")
-    sheet_size: str = Field(default="A3", description="Sheet size (A4, A3, A2, A1, A0)")
-    title: str = Field(default="", description="Drawing title")
-    drawn_by: str = Field(default="", description="Drawn by field")
-    checked_by: str = Field(default="", description="Checked by field")
-    approved_by: str = Field(default="", description="Approved by field")
-    drawing_number: str = Field(default="", description="Drawing number")
+    view: str = Field(description="Parent view's name, from list_drawing_views")
+    center: list[float] = Field(
+        description="[x, y] sheet mm of the detail circle, inside the view",
+        min_length=2,
+        max_length=2,
+        json_schema_extra={"items": {"type": "number"}},
+    )
+    radius: float = Field(gt=0, description="Detail circle radius on the sheet, mm")
+    position: list[float] = Field(
+        description="[x, y] sheet mm for the new view's centre",
+        min_length=2,
+        max_length=2,
+        json_schema_extra={"items": {"type": "number"}},
+    )
+    scale: str = Field(default="2:1", description="Detail scale, e.g. '2:1' or '3:1'")
+    label: str | None = Field(
+        default=None,
+        description="Detail letter, e.g. 'B'; the next free one if omitted",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        parse_scale(self.scale)
+
+
+class UpdateSheetFormatInput(CompatInput):
+    """Input schema for a new sheet format.
+
+    Attributes:
+        sheet_format (str): A format name such as "a2 - iso", or a .slddrt path.
+        paper_size (str | None): a4 to a0; read from the format name if omitted.
+    """
+
+    sheet_format: str = Field(
+        description="Sheet format name such as 'a2 - iso', or a .slddrt path"
+    )
+    paper_size: Literal["a4", "a3", "a2", "a1", "a0"] | None = Field(
+        default=None, description="Paper size; read from the format name if omitted"
+    )
+
+
+class UpdateTitleBlockInput(CompatInput):
+    """Input schema for title-block fields; give at least one.
+
+    Attributes:
+        title (str | None): The drawing's title (the model's Description).
+        drawing_number (str | None): The drawing number (DrawingNo).
+        drawn_by (str | None): Who drew it.
+        drawn_date (str | None): When.
+        revision (str | None): The revision, e.g. "B".
+        company (str | None): The company name.
+    """
+
+    title: str | None = Field(
+        default=None, description="Title (the model's Description)"
+    )
+    drawing_number: str | None = Field(
+        default=None, description="Drawing number (the drawing's DrawingNo property)"
+    )
+    drawn_by: str | None = Field(default=None, description="Drawn by")
+    drawn_date: str | None = Field(default=None, description="Date drawn")
+    revision: str | None = Field(default=None, description="Revision, e.g. 'B'")
+    company: str | None = Field(default=None, description="Company name")
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.fields():
+            raise ValueError(
+                "give at least one of title, drawing_number, drawn_by, drawn_date, "
+                "revision, company"
+            )
+
+    def fields(self) -> dict[str, str]:
+        """The fields given."""
+        return {
+            k: v
+            for k, v in self.model_dump(include=set(TITLE_BLOCK_FIELDS)).items()
+            if v is not None
+        }
+
+
+class AutoDimensionViewInput(CompatInput):
+    """Input schema for auto-dimensioning one view.
+
+    Attributes:
+        view (str): The view's name.
+        scheme (str): baseline or chain.
+    """
+
+    view: str = Field(description="View name, from list_drawing_views")
+    scheme: Literal["baseline", "chain"] = Field(
+        default="baseline", description="baseline or chain, both directions"
+    )
 
 
 class AutoCenterMarksInput(CompatInput):
@@ -357,37 +445,41 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def add_dimension(input_data: AddDimensionInput) -> dict[str, Any]:
-        """Add one dimension between drawing entities at a position on the sheet.
+        """Add one dimension to a drawing view, between edges picked by points on the sheet.
 
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. To bring the
-        model's own dimensions into a drawing today, use `insert_model_dimensions`.
-        Changes: once available, adds a dimension to the drawing. Returns: once
-        available, the dimension under `data`.
+        Give points in sheet mm on a view's edges or vertices (read view outlines with
+        `check_drawing`). Two parallel edges give their distance; one edge its length;
+        a circle's edge its radius or diameter; two lines their angle. For the model's
+        own dimensions use `insert_model_dimensions` instead. Needs: an open, active
+        drawing. Changes: adds a reference dimension. Returns: `dimension` with `name`,
+        `value` and `units` (mm, deg for angular).
 
         Args:
-            input_data: The dimension. `dimension_type`, `entity1`, `position_x`
-                and `position_y` are required; `entity2` and `precision` have
-                defaults.
+            input_data: The dimension. `dimension_type`, `entity1_point` and
+                `position` are required; `entity2_point` for two entities.
 
         Returns:
-            dict[str, Any]: The dimension, or a `not_supported` error.
+            dict[str, Any]: The dimension and its measured value.
         """
-        payload = input_data.model_dump()
-        dimension_type = payload["dimension_type"]
-
+        input_data = normalize_input(input_data, AddDimensionInput)
         require_capability(
             adapter,
             "add_dimension",
-            f"Active adapter does not support add_dimension; no "
-            f"{dimension_type} dimension was added.",
+            "Active adapter does not support add_dimension; no dimension was added.",
         )
-        result = await adapter.add_dimension(payload)
+        result = await adapter.add_dimension(
+            input_data.dimension_type,
+            input_data.entity1_point,
+            input_data.position,
+            input_data.entity2_point,
+        )
         require_success(result, "Failed to add dimension")
+        data = result.data or {}
         return {
             "status": "success",
-            "message": "Dimension added successfully",
-            "data": result.data,
+            "message": f"Added a {input_data.dimension_type} dimension: "
+            f"{float(data.get('value') or 0):g} {data.get('units', '')}".rstrip(),
+            "dimension": data,
             "execution_time": result.execution_time,
         }
 
@@ -424,137 +516,188 @@ async def register_drawing_tools(
 
     @mcp.tool()
     async def create_section_view(input_data: CreateSectionViewInput) -> dict[str, Any]:
-        """Cut a section view along a line across a drawing view.
+        """Cut a section view along a line across a drawing view, and place it on the sheet.
 
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. Use
-        SolidWorks directly (Insert > Drawing View > Section). Changes: once available,
-        adds a section view. Returns: once available, the view under `data`.
+        Give the line's ends in sheet mm so it crosses the view (e.g. through a hole's
+        centre), and where the new view goes. A line that misses the view, or a position
+        off the sheet, is refused before anything changes. Needs: an open, active drawing
+        with that view. Changes: adds a section view and its section line. Returns:
+        `view` with `name`, `label`, `parent` and `outline_mm`.
 
         Args:
-            input_data: The section. `section_line_start`, `section_line_end`,
-                `view_position_x` and `view_position_y` are required; `scale` and
-                `label` have defaults.
+            input_data: The section. `view`, `line_start`, `line_end` and `position`
+                are required; `label` defaults to the next free letter.
 
         Returns:
-            dict[str, Any]: The view, or a `not_supported` error.
+            dict[str, Any]: The new view.
         """
-        raise UnsupportedOperationError(
-            "No adapter capability exists for cutting a section view "
-            "along a section line; create_section_view cannot compute "
-            "the cut geometry, so no view was created. Use SolidWorks "
-            "directly (Insert > Drawing View > Section) instead."
+        input_data = normalize_input(input_data, CreateSectionViewInput)
+        require_capability(
+            adapter,
+            "create_section_view",
+            "Active adapter does not support create_section_view; no view was added.",
         )
+        result = await adapter.create_section_view(
+            input_data.view,
+            input_data.line_start,
+            input_data.line_end,
+            input_data.position,
+            input_data.label,
+        )
+        require_success(result, "Failed to create section view")
+        data = result.data or {}
+        return {
+            "status": "success",
+            "message": f"Added section view {data.get('label')} of {input_data.view}",
+            "view": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_detail_view(input_data: CreateDetailViewInput) -> dict[str, Any]:
-        """Magnify a circular area of a drawing view as a detail view.
+        """Magnify a circular area of a drawing view as a detail view, at a scale.
 
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. Use
-        SolidWorks directly (Insert > Drawing View > Detail). Changes: once available,
-        adds a detail view. Returns: once available, the view under `data`.
+        Give the circle's centre (sheet mm, inside the view) and radius, where the new
+        view goes, and its scale. A centre outside the view or a position off the sheet
+        is refused before anything changes. Needs: an open, active drawing with that
+        view. Changes: adds a detail view and its circle. Returns: `view` with `name`,
+        `label`, `scale`, `parent` and `outline_mm`.
 
         Args:
-            input_data: The detail. `center_x`, `center_y`, `radius`,
-                `view_position_x` and `view_position_y` are required; `scale` and
-                `label` have defaults.
+            input_data: The detail. `view`, `center`, `radius` and `position` are
+                required; `scale` is 2:1 and `label` the next free letter.
 
         Returns:
-            dict[str, Any]: The view, or a `not_supported` error.
+            dict[str, Any]: The new view.
         """
-        raise UnsupportedOperationError(
-            "No adapter capability exists for magnifying the "
-            "geometry inside a detail circle; create_detail_view "
-            "cannot compute the detail geometry, so no view was "
-            "created. Use SolidWorks directly (Insert > Drawing "
-            "View > Detail) instead."
+        input_data = normalize_input(input_data, CreateDetailViewInput)
+        require_capability(
+            adapter,
+            "create_detail_view",
+            "Active adapter does not support create_detail_view; no view was added.",
         )
+        result = await adapter.create_detail_view(
+            input_data.view,
+            input_data.center,
+            input_data.radius,
+            input_data.position,
+            input_data.scale,
+            input_data.label,
+        )
+        require_success(result, "Failed to create detail view")
+        data = result.data or {}
+        return {
+            "status": "success",
+            "message": f"Added detail view {data.get('label')} of {input_data.view} "
+            f"at {data.get('scale')}",
+            "view": data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def update_sheet_format(input_data: UpdateSheetFormatInput) -> dict[str, Any]:
-        """Change the active drawing's sheet format file and title-block fields.
+        """Change the active drawing sheet's format and paper size, keeping every view.
 
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release.
-        `generate_drawing_package` sets the sheet format and fills the title block when
-        it creates a drawing. Changes: once available, replaces the sheet format.
-        Returns: once available, the new format under `data`.
+        Give a format name SolidWorks has (e.g. "a2 - iso") or a .slddrt path; the paper
+        size comes from the name unless given. The views are checked to be the same
+        afterwards, and the title block keeps its values (they are properties). Needs:
+        an open, active drawing. Changes: the sheet's format and size. Returns: `sheet`
+        with `sheet_format` (the path), `paper_size`, `sheet_mm` and `views`.
 
         Args:
-            input_data: The format. `format_file` is required; `sheet_size` and
-                the title-block fields have defaults.
+            input_data: The format. `sheet_format` is required; `paper_size` optional.
 
         Returns:
-            dict[str, Any]: The format, or a `not_supported` error.
+            dict[str, Any]: The sheet afterwards.
         """
+        input_data = normalize_input(input_data, UpdateSheetFormatInput)
         require_capability(
             adapter,
             "update_sheet_format",
-            "Active adapter does not support update_sheet_format; the "
-            "sheet format and title block were not changed.",
+            "Active adapter does not support update_sheet_format; the sheet was "
+            "not changed.",
         )
-        result = await adapter.update_sheet_format(input_data.model_dump())
+        result = await adapter.update_sheet_format(
+            input_data.sheet_format, input_data.paper_size
+        )
         require_success(result, "Failed to update sheet format")
+        data = result.data or {}
         return {
             "status": "success",
-            "message": f"Updated sheet format to {input_data.sheet_size}",
-            "data": result.data,
+            "message": f"Sheet is now {str(data.get('paper_size', '')).upper()} "
+            f"({input_data.sheet_format})",
+            "sheet": data,
             "execution_time": result.execution_time,
         }
 
     @mcp.tool()
-    async def auto_dimension_view(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Dimension a drawing view automatically with SolidWorks' auto-dimension scheme.
+    async def auto_dimension_view(input_data: AutoDimensionViewInput) -> dict[str, Any]:
+        """Dimension one drawing view with SolidWorks' auto-dimension (baseline or chain).
 
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. Use
-        `insert_model_dimensions` and then `arrange_dimensions` today. Changes: once
-        available, adds dimensions to the view. Returns: once available, the dimensions
-        added under `data`.
+        It adds reference dimensions measured from the view's edges; prefer
+        `insert_model_dimensions`, which shows the model's own (driving) dimensions, and
+        use this for a view that has none to bring in. Dimensions may overlap: run
+        `arrange_dimensions` after. It fails when nothing is added. Needs: an open,
+        active drawing with that view. Changes: adds dimensions. Returns: `data` with
+        `added` and the counts before and after.
 
         Args:
-            input_data: A mapping with the `view_name` to dimension.
+            input_data: The view. `view` is required; `scheme` is baseline.
 
         Returns:
-            dict[str, Any]: The dimensions, or a `not_supported` error.
+            dict[str, Any]: The dimensions added.
         """
+        input_data = normalize_input(input_data, AutoDimensionViewInput)
         require_capability(
             adapter,
             "auto_dimension_view",
-            "Active adapter does not support auto_dimension_view; no "
-            "dimensions were added.",
+            "Active adapter does not support auto_dimension_view; no dimensions "
+            "were added.",
         )
-        result = await adapter.auto_dimension_view(input_data)
+        result = await adapter.auto_dimension_view(input_data.view, input_data.scheme)
         require_success(result, "Failed to auto-dimension view")
+        data = result.data or {}
         return {
             "status": "success",
-            "message": "Auto-dimensioned drawing view",
-            "data": result.data,
+            "message": f"Added {data.get('added')} dimension(s) to {input_data.view}",
+            "data": data,
             "execution_time": result.execution_time,
         }
 
     @mcp.tool()
-    async def check_drawing_standards(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Check the active drawing against a drafting standard and score it.
+    async def check_drawing() -> dict[str, Any]:
+        """Check the active drawing is complete before exporting it: views, dimensions, title block, BOM.
 
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release. SolidWorks
-        Design Checker does this today. Read-only. Returns: once available, the findings
-        under `data`.
-
-        Args:
-            input_data: A mapping with the `standard` to check against.
-
-        Returns:
-            dict[str, Any]: The findings, or a `not_supported` error.
+        Read-only. Findings: `view_off_sheet` (error), `view_not_dimensioned`
+        (warning; isometric and detail views excepted), `title_block_field_empty`
+        (warning: title, drawn by, revision), `dangling_annotation` (error) and
+        `bom_missing` (warning, an assembly with no BOM). Each names the tool that
+        fixes it. It checks completeness, not a drafting standard. Needs: an open,
+        active drawing. Returns: `passed` (no errors), `errors`, `warnings`,
+        `findings` (each `rule`, `severity`, `message`, maybe `view`), `views` and
+        `report` (the facts read).
         """
-        raise UnsupportedOperationError(
-            "No adapter capability exists for checking drafting "
-            "standards compliance; check_drawing_standards cannot "
-            "inspect the drawing, so no compliance score was "
-            "computed. Use SolidWorks Design Checker for this."
+        require_capability(
+            adapter,
+            "drawing_report",
+            "Active adapter can't read a drawing; nothing was checked.",
         )
+        result = await adapter.drawing_report()
+        require_success(result, "Failed to read the drawing")
+        report = result.data or {}
+        verdict = check(report)
+        return {
+            "status": "success",
+            "message": (
+                "The drawing passed"
+                if verdict["passed"]
+                else f"The drawing has {verdict['errors']} error(s)"
+            )
+            + f", {verdict['warnings']} warning(s)",
+            **verdict,
+            "report": report,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def create_technical_drawing(
@@ -628,34 +771,37 @@ async def register_drawing_tools(
         }
 
     @mcp.tool()
-    async def update_title_block(input_data: dict[str, Any]) -> dict[str, Any]:
-        """Fill in the active drawing's title-block fields (title, drawn by, drawing number and so on).
+    async def update_title_block(input_data: UpdateTitleBlockInput) -> dict[str, Any]:
+        """Change the active drawing's title-block fields: title, drawing number, drawn by, date, revision, company.
 
-        Not available yet: no adapter implements it, so every call returns an error with
-        `error_type: "not_supported"`. It is planned for a future release.
-        `generate_drawing_package` fills the title block when it creates a drawing, and
-        `set_custom_property` sets the properties a title block reads. Changes: once
-        available, rewrites the title-block fields. Returns: once available, the fields
-        set under `data`.
+        Each field is written to the property the sheet format shows (the same mapping
+        `generate_drawing_package` uses): the title is the drawn model's Description,
+        the others the drawing's own properties. Fields not given keep their values.
+        Needs: an open, active drawing of a model. Changes: those properties. Returns:
+        `fields`, each with the `property` written, `on` (drawing or model) and `value`.
 
         Args:
-            input_data: A mapping of title-block field names to values.
+            input_data: At least one of `title`, `drawing_number`, `drawn_by`,
+                `drawn_date`, `revision`, `company`.
 
         Returns:
-            dict[str, Any]: The fields, or a `not_supported` error.
+            dict[str, Any]: The fields written.
         """
+        input_data = normalize_input(input_data, UpdateTitleBlockInput)
         require_capability(
             adapter,
             "update_title_block",
-            "Active adapter does not support update_title_block; the "
-            "title block was not changed.",
+            "Active adapter does not support update_title_block; the title block "
+            "was not changed.",
         )
-        result = await adapter.update_title_block(input_data)
+        fields = input_data.fields()
+        result = await adapter.update_title_block(fields)
         require_success(result, "Failed to update title block")
         return {
             "status": "success",
-            "message": "Title block updated successfully",
-            "data": result.data,
+            "message": "Title block: "
+            + ", ".join(f"{k} = {v}" for k, v in fields.items()),
+            "fields": (result.data or {}).get("fields", {}),
             "execution_time": result.execution_time,
         }
 

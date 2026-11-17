@@ -54,10 +54,6 @@ ADAPTER_FREE_TOOLS = {
     "generate_vba_batch_export",
     "generate_vba_drawing_views",
     "generate_vba_code",  # emits a labelled skeleton and says so
-    # These refuse honestly instead of inventing a result.
-    "create_section_view",
-    "create_detail_view",
-    "check_drawing_standards",
     # File-level work that needs no SolidWorks session: comparisons read the
     # files, and the template tools copy a model to a template file.
     "compare_drawing_versions",
@@ -276,49 +272,53 @@ def test_no_simulation_markers_left_in_tools() -> None:
 
 
 @pytest.mark.asyncio
-async def test_standards_check_refuses_instead_of_scoring() -> None:
-    """check_drawing_standards must not invent a compliance score."""
+async def test_the_drawing_check_reports_findings_not_a_score() -> None:
+    """check_drawing judges what the drawing holds; it invents no score."""
     mcp = FastMCP("test")
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
+    await adapter.create_drawing()
     await register_drawing_tools(mcp, adapter, {})
 
     tools = {tool.name: tool.fn for tool in await mcp.list_tools()}
-    result = await tools["check_drawing_standards"](input_data={})
+    result = await tools["check_drawing"]()
 
-    assert result["status"] == "error"
+    assert result["status"] == "success"
     assert "compliance_score" not in str(result)
+    assert {f["rule"] for f in result["findings"]} == {"title_block_field_empty"}
 
 
 @pytest.mark.asyncio
 async def test_section_and_detail_views_refuse_clearly() -> None:
-    """The view tools that cannot work explain why rather than pretending."""
+    """A line that misses the view and a centre outside it are refused."""
     mcp = FastMCP("test")
     adapter = MockSolidWorksAdapter({})
     await adapter.connect()
+    await adapter.create_drawing()
+    adapter._drawing_views.append("Drawing View1")
     await register_drawing_tools(mcp, adapter, {})
 
     tools = {tool.name: tool.fn for tool in await mcp.list_tools()}
 
     section = await tools["create_section_view"](
         input_data=CreateSectionViewInput(
-            section_line_start=[0.0, 0.0],
-            section_line_end=[10.0, 0.0],
-            view_position_x=100.0,
-            view_position_y=100.0,
+            view="Drawing View1",
+            line_start=[300.0, 10.0],
+            line_end=[400.0, 10.0],
+            position=[200.0, 60.0],
         )
     )
     assert section["status"] == "error"
-    assert "section line" in section["message"].lower()
+    assert section["error_type"] == "invalid_input"
+    assert "doesn't cross view" in section["message"]
 
     detail = await tools["create_detail_view"](
         input_data=CreateDetailViewInput(
-            center_x=0.0,
-            center_y=0.0,
+            view="Drawing View1",
+            center=[300.0, 10.0],
             radius=10.0,
-            view_position_x=100.0,
-            view_position_y=100.0,
+            position=[200.0, 60.0],
         )
     )
     assert detail["status"] == "error"
-    assert "detail circle" in detail["message"].lower()
+    assert "isn't inside view" in detail["message"]
