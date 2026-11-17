@@ -547,6 +547,8 @@ async def test_get_material_reads_the_assignment(raw, material, database) -> Non
         "material": material,
         "database": database,
         "density_kg_m3": None,  # no SolidWorks app to find the library through
+        "properties": {},
+        "source": "part",
         "configuration": "Default",
     }
 
@@ -875,17 +877,24 @@ _DENSITIES = """<?xml version="1.0" encoding="UTF-16"?>
 <mstns:materials xmlns:mstns="http://www.solidworks.com/sldmaterials">
   <classification name="Steel">
     <material name="AISI 304">
-      <physicalproperties><DENS displayname="Mass density" value="8000"/></physicalproperties>
+      <physicalproperties>
+        <EX displayname="Elastic modulus" value="1.9E+11"/>
+        <NUXY displayname="Poisson's ratio" value="0.29"/>
+        <SIGYLD displayname="Yield strength" value="2.06807E+8"/>
+        <DENS displayname="Mass density" value="8000"/>
+        <C displayname="Specific heat" value="500"/>
+      </physicalproperties>
+      <cgshader name="Steel"/>
     </material>
-    <material name="Odd"><physicalproperties><DENS value="n/a"/></physicalproperties></material>
+    <material name="Odd"><physicalproperties><DENS value="n/a"/><KX value="47."/></physicalproperties></material>
     <material name="Bare"/>
   </classification>
 </mstns:materials>
 """
 
 
-def test_material_density_reads_the_dens_value(tmp_path) -> None:
-    """Libraries are UTF-16 XML; DENS holds kg/m³."""
+def test_material_entry_reads_each_property_in_si(tmp_path) -> None:
+    """Libraries are UTF-16 XML holding SI values; the named library comes first."""
     other = tmp_path / "custom.sldmat"
     other.write_text(_DENSITIES.replace("8000", "1"), encoding="utf-16")
     library = tmp_path / "solidworks materials.sldmat"
@@ -894,12 +903,30 @@ def test_material_density_reads_the_dens_value(tmp_path) -> None:
     broken.write_text("<not xml", encoding="utf-8")
     files = [str(broken), str(other), str(library)]
 
-    # The library the part names is searched first, whatever the order.
-    assert doc._material_density(files, "AISI 304", "SOLIDWORKS Materials") == 8000.0
-    assert doc._material_density(files, "AISI 304", "custom") == 1.0
-    assert doc._material_density(files, "Odd", "custom") is None
-    assert doc._material_density(files, "Bare", "custom") is None
-    assert doc._material_density(files, "Missing", "custom") is None
+    name, steel = doc._material_entry(files, "AISI 304", "SOLIDWORKS Materials")
+
+    assert name == "solidworks materials"
+    assert steel == {
+        "elastic_modulus": {"value": 1.9e11, "unit": "Pa", "label": "Elastic modulus"},
+        "poissons_ratio": {"value": 0.29, "unit": "", "label": "Poisson's ratio"},
+        "yield_strength": {"value": 2.06807e8, "unit": "Pa", "label": "Yield strength"},
+        "density": {"value": 8000.0, "unit": "kg/m^3", "label": "Mass density"},
+        "specific_heat": {"value": 500.0, "unit": "J/(kg*K)", "label": "Specific heat"},
+    }
+    assert doc._material_entry(files, "AISI 304", "custom")[1]["density"]["value"] == 1
+    # A value that isn't a number is left out, and a label defaults to the key.
+    assert doc._material_entry(files, "Odd", "custom") == (
+        "custom",
+        {
+            "thermal_conductivity": {
+                "value": 47.0,
+                "unit": "W/(m*K)",
+                "label": "thermal_conductivity",
+            }
+        },
+    )
+    assert doc._material_entry(files, "Bare", "")[1] == {}
+    assert doc._material_entry(files, "Missing", "custom") is None
 
 
 def test_library_files_lists_sldmat_files_in_each_folder(tmp_path) -> None:
@@ -923,3 +950,27 @@ async def test_get_material_reports_the_density_from_the_library(tmp_path) -> No
 
     assert result.data["material"] == "AISI 304"
     assert result.data["density_kg_m3"] == 8000.0
+    assert result.data["properties"]["elastic_modulus"]["value"] == 1.9e11
+    assert result.data["source"] == "part"
+
+
+@pytest.mark.asyncio
+async def test_a_library_material_is_read_with_no_document(tmp_path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    (folder / "solidworks materials.sldmat").write_text(_DENSITIES, encoding="utf-16")
+    harness = _Harness(None, _app(str(folder)))
+
+    steel = await harness.get_material(material="AISI 304")
+    missing = await harness.get_material(material="Unobtainium", database="custom")
+    unconnected = await _Harness().get_material(material="AISI 304")
+
+    assert (steel.data["source"], steel.data["database"]) == (
+        "library",
+        "solidworks materials",
+    )
+    assert steel.data["properties"]["yield_strength"]["value"] == 2.06807e8
+    assert steel.data["density_kg_m3"] == 8000.0
+    assert "'Unobtainium' not found" in missing.error
+    assert "list_available_materials" in missing.error
+    assert "not found" in unconnected.error

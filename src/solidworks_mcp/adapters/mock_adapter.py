@@ -31,6 +31,8 @@ from .base import (
     SweepParameters,
 )
 from .mock_drawing_pack import MockDrawingPackMixin
+from .mock_templates import MockTemplatesMixin
+from .solidworks.documentation import MATERIAL_PROPERTIES
 from .solidworks.drawing_standard import gtol_problem
 from .solidworks.features import _AXIS_PLANE_PAIRS
 from .solidworks.hole_library import HoleSizeError, describe, sample_library
@@ -139,7 +141,9 @@ class _BoolCallable:
         return bool(self._getter())
 
 
-class MockSolidWorksAdapter(MockDrawingPackMixin, SolidWorksAdapter):
+class MockSolidWorksAdapter(
+    MockTemplatesMixin, MockDrawingPackMixin, SolidWorksAdapter
+):
     """Mock adapter that simulates SolidWorks operations.
 
     Args:
@@ -1236,6 +1240,7 @@ class MockSolidWorksAdapter(MockDrawingPackMixin, SolidWorksAdapter):
                 "template": template,
             },
         )
+        self._mock_apply_template(model, template)
 
         self._current_model = model
         self._models[model.path] = model
@@ -4228,13 +4233,73 @@ class MockSolidWorksAdapter(MockDrawingPackMixin, SolidWorksAdapter):
         },
     )
     _MOCK_MATERIAL_FOLDER = "mock://sldmaterials"
-    #: Densities in kg/m³, as SolidWorks 2026's library holds them.
-    _MOCK_DENSITIES: dict[str, float] = {
-        "AISI 1020": 7900.0,
-        "AISI 304": 8000.0,
-        "6061-T6 (SS)": 2700.0,
-        "ABS": 1020.0,
+    #: Properties in SI units, as SolidWorks 2026's library holds them (ABS
+    #: has no yield strength there either).
+    _MOCK_PROPERTIES: dict[str, dict[str, float]] = {
+        "AISI 1020": {
+            "elastic_modulus": 2.0e11,
+            "poissons_ratio": 0.29,
+            "shear_modulus": 7.7e10,
+            "tensile_strength": 4.20507e8,
+            "yield_strength": 3.51571e8,
+            "density": 7900.0,
+            "thermal_expansion": 1.5e-5,
+            "thermal_conductivity": 47.0,
+            "specific_heat": 420.0,
+        },
+        "AISI 304": {
+            "elastic_modulus": 1.9e11,
+            "poissons_ratio": 0.29,
+            "tensile_strength": 5.17017e8,
+            "yield_strength": 2.06807e8,
+            "density": 8000.0,
+        },
+        "6061-T6 (SS)": {
+            "elastic_modulus": 6.9e10,
+            "poissons_ratio": 0.33,
+            "shear_modulus": 2.6e10,
+            "tensile_strength": 3.1e8,
+            "yield_strength": 2.75e8,
+            "density": 2700.0,
+        },
+        "ABS": {
+            "elastic_modulus": 2.0e9,
+            "poissons_ratio": 0.394,
+            "tensile_strength": 3.0e7,
+            "density": 1020.0,
+        },
     }
+
+    def _mock_material_reply(
+        self, name: str | None, database: str | None, source: str
+    ) -> dict[str, Any]:
+        """A ``get_material`` reply for a mock material (or none).
+
+        Args:
+            name: The material, or ``None`` when none is assigned.
+            database: Its library.
+            source: ``part`` or ``library``.
+
+        Returns:
+            dict[str, Any]: The reply's data, shaped like the real adapter's.
+        """
+        values = self._MOCK_PROPERTIES.get(name or "", {})
+        properties = {
+            key: {
+                "value": values[key],
+                "unit": unit,
+                "label": key.replace("_", " ").capitalize(),
+            }
+            for key, (_tag, unit) in MATERIAL_PROPERTIES.items()
+            if key in values
+        }
+        return {
+            "material": name,
+            "database": database,
+            "density_kg_m3": values.get("density"),
+            "properties": properties,
+            "source": source,
+        }
 
     def _mock_doc_error(
         self, allowed: set[str], operation: str
@@ -4309,9 +4374,31 @@ class MockSolidWorksAdapter(MockDrawingPackMixin, SolidWorksAdapter):
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)
 
     async def get_material(
-        self, configuration: str | None = None
+        self,
+        configuration: str | None = None,
+        material: str | None = None,
+        database: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Mock reading the active part material."""
+        """Mock reading the part's material, or a library material by name."""
+        if material is not None:
+            match = next(
+                (m for m in self._MOCK_MATERIALS if m["name"] == material), None
+            )
+            if match is None:
+                return AdapterResult(
+                    status=AdapterResultStatus.ERROR,
+                    error=(
+                        f"Material {material!r} not found in any material library; "
+                        "use list_available_materials for the exact name."
+                    ),
+                )
+            return AdapterResult(
+                status=AdapterResultStatus.SUCCESS,
+                data={
+                    **self._mock_material_reply(material, match["database"], "library"),
+                    "configuration": None,
+                },
+            )
         guard = self._mock_doc_error({"Part"}, "get_material")
         if guard is not None:
             return guard
@@ -4319,10 +4406,10 @@ class MockSolidWorksAdapter(MockDrawingPackMixin, SolidWorksAdapter):
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data={
-                "material": assigned["name"] if assigned else None,
-                "database": assigned["database"] if assigned else None,
-                "density_kg_m3": (
-                    self._MOCK_DENSITIES.get(assigned["name"]) if assigned else None
+                **self._mock_material_reply(
+                    assigned["name"] if assigned else None,
+                    assigned["database"] if assigned else None,
+                    "part",
                 ),
                 "configuration": configuration,
             },

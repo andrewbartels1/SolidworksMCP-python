@@ -153,6 +153,7 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "export_image": _overwrites("Export Image"),
     # file_management
     "save_file": _overwrites("Save File"),
+    "save_as_template": _overwrites("Save As Template"),
     "save_as": _overwrites("Save As"),
     "get_file_properties": _reads("Get File Properties"),
     "get_model_info": _reads("Get Model Info"),

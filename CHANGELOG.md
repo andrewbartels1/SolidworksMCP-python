@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`save_as_template`** (queue item 21), beta until its live check: saves
+  the active part, assembly or drawing as a `.prtdot`, `.asmdot` or
+  `.drwdot` copy, by path or by name into SolidWorks' template folder, so
+  `create_part` (and the others) can start the next document with the same
+  units, material and properties. 135 tools.
+- **Material properties** (queue item 20): `get_material` also returns the
+  material's elastic modulus, Poisson's ratio, shear modulus, tensile, yield
+  and compressive strength, density, thermal expansion, conductivity and
+  specific heat, in SI units with SolidWorks' labels, read from the
+  material's library entry. With `material` it reads any library material
+  without assigning it, and needs no open document.
+
 - **The drawing pack** (queue item 12, #102), stable, checked live
   on SolidWorks 2026: `create_section_view` (a line across a view), `create_detail_view`
   (a circle in a view, at a scale), `add_dimension` (edges picked by sheet

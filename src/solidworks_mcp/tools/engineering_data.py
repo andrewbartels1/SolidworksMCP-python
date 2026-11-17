@@ -60,14 +60,27 @@ class MeasureEntitiesInput(CompatInput):
 
 
 class GetMaterialInput(CompatInput):
-    """Input schema for reading a part's material.
+    """Input schema for reading a part's material, or a library material.
 
     Attributes:
         configuration (str | None): Configuration name.
+        material (str | None): A library material to read instead of the part's.
+        database (str | None): The library to look in first for ``material``.
     """
 
     configuration: str | None = Field(
         default=None, description="Configuration; the active one when omitted"
+    )
+    material: str | None = Field(
+        default=None,
+        min_length=1,
+        description="A library material to read without assigning it, e.g. "
+        "'6061-T6 (SS)'; omit for the active part's material",
+    )
+    database: str | None = Field(
+        default=None,
+        description="The library to look in first for `material`; all of them "
+        "when omitted",
     )
 
 
@@ -265,30 +278,41 @@ async def register_engineering_data_tools(
     async def get_material(
         input_data: GetMaterialInput | None = None,
     ) -> dict[str, Any]:
-        """Report the material assigned to the active part.
+        """Report the active part's material with its strength and stiffness, or any library material's.
 
-        Use it before `get_mass_properties` or `verify_model` with a mass: without
-        a material SolidWorks uses a default density. Needs: an open, active part (any
-        other document is `wrong_document_type`). Read-only. Returns: `data` with
-        `material` (null when none is assigned), `database` and `density_kg_m3` (from
-        the material's library entry; null when unknown). For the other properties
-        (modulus, strength), open the material in SolidWorks.
+        Use it to size a part (the elastic modulus and yield strength) or to compare
+        materials before `set_material`, and before `get_mass_properties` (without a
+        material SolidWorks uses a default density). Give `material` to read a library
+        material without assigning it: no document is needed and none changes.
+        Needs: an open, active part unless `material` is given (any other document is
+        `wrong_document_type`). Read-only. Returns: `data` with `material` (null when
+        none is assigned), `database`, `density_kg_m3`, `source` (part or library) and
+        `properties`: `elastic_modulus`, `poissons_ratio`, `shear_modulus`,
+        `tensile_strength`, `yield_strength`, `compressive_strength`, `density`,
+        `thermal_expansion`, `thermal_conductivity`, `specific_heat`, each with
+        `value` in SI units (Pa; divide by 1e6 for MPa), `unit` and `label`. A
+        property the library doesn't hold for that material is left out.
 
         Args:
             input_data: Nothing is required: `configuration` defaults to the active
-                one.
+                one; `material` (and `database`) read a library material instead.
 
         Returns:
-            dict[str, Any]: The material.
+            dict[str, Any]: The material and its properties.
         """
         input_data = normalize_input(input_data, GetMaterialInput)
         _supports("get_material")
-        result = await adapter.get_material(input_data.configuration)
-        require_success(result, context="Failed to read the material")
-        material = (result.data or {}).get("material")
-        return _success(
-            result, f"Material: {material}" if material else "No material assigned"
+        result = await adapter.get_material(
+            input_data.configuration, input_data.material, input_data.database
         )
+        require_success(result, context="Failed to read the material")
+        data = result.data or {}
+        material = data.get("material")
+        if not material:
+            return _success(result, "No material assigned")
+        modulus = data.get("properties", {}).get("elastic_modulus")
+        stiffness = f", E = {modulus['value'] / 1e9:g} GPa" if modulus else ""
+        return _success(result, f"Material: {material}{stiffness}")
 
     @mcp.tool()
     async def set_material(input_data: SetMaterialInput) -> dict[str, Any]:

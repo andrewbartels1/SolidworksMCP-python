@@ -434,6 +434,32 @@ class SolidWorksAdapter(ABC):
             error="save_file is not implemented by this adapter",
         )
 
+    async def get_template_folders(self) -> AdapterResult[dict[str, Any]]:
+        """SolidWorks' document template folders and the active document's template extension.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_template_folders is not implemented by this adapter",
+        )
+
+    async def save_as_template(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Save a copy of the active document as a template.
+
+        Args:
+            file_path: The template's full path, with the document's template
+                extension (.prtdot, .asmdot or .drwdot).
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="save_as_template is not implemented by this adapter",
+        )
+
     @abstractmethod
     async def get_model_info(self) -> AdapterResult[dict[str, Any]]:
         """Get metadata for the active model.
@@ -2071,8 +2097,15 @@ class SolidWorksAdapter(ABC):
     async def get_material(
         self,
         configuration: str | None = None,
+        material: str | None = None,
+        database: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Read the material assigned to the active part.
+        """Read the active part's material and its properties, or a library material's.
+
+        Args:
+            configuration: Configuration name; the active one when omitted.
+            material: A library material to read instead of the part's.
+            database: The library to look in first for ``material``.
 
         Returns:
             AdapterResult[dict[str, Any]]: Error unless the adapter implements it.

@@ -46,14 +46,42 @@ Measure faces, edges or vertices of the active model with SolidWorks' Measure to
 
 ### `get_material`
 
-Report the material assigned to the active part.
+Report the active part's material with its strength and stiffness, or any library material's.
 
-**Prerequisite:** SolidWorks running
+Each property comes from the material's entry in its SolidWorks library, in SI units: `elastic_modulus`, `poissons_ratio`, `shear_modulus`, `tensile_strength`, `yield_strength`, `compressive_strength`, `density`, `thermal_expansion`, `thermal_conductivity` and `specific_heat`, each with `value`, `unit` and `label`. Strengths and moduli are in Pa: divide by 1e6 for MPa. A property the library doesn't hold for that material (ABS has no yield strength) is left out. Give `material` to read a library material without assigning it, for example to compare two before `set_material`; that needs no open document.
+
+**Prerequisite:** An active part, unless `material` is given
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `configuration` | `str?` | — | `None` | Configuration; the active one when omitted |
+| `material` | `str?` | — | `None` | A library material to read without assigning it, e.g. '6061-T6 (SS)'; omit for the active part's material |
+| `database` | `str?` | — | `None` | The library to look in first for `material`; all of them when omitted |
 
 **Sample call:**
 
 ```json
-{}
+{
+  "material": "6061-T6 (SS)"
+}
+```
+
+**Returns (abridged):**
+
+```json
+{
+  "message": "Material: 6061-T6 (SS), E = 69 GPa",
+  "data": {
+    "material": "6061-T6 (SS)",
+    "source": "library",
+    "properties": {
+      "elastic_modulus": {"value": 69000000666.1, "unit": "Pa", "label": "Elastic modulus"},
+      "yield_strength": {"value": 275000000.9, "unit": "Pa", "label": "Yield strength"}
+    }
+  }
+}
 ```
 
 ---

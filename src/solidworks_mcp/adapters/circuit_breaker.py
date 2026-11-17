@@ -513,6 +513,33 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"file_path": file_path},
         )
 
+    async def get_template_folders(self) -> AdapterResult[dict[str, Any]]:
+        """Read the template folders through circuit breaker.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The folders and the template extension.
+        """
+        return await self._execute_with_circuit_breaker(
+            "get_template_folders",
+            lambda: self.adapter.get_template_folders(),
+            error_results_are_failures=False,
+        )
+
+    async def save_as_template(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Save the active document as a template through circuit breaker.
+
+        Args:
+            file_path: The template's full path.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The template written.
+        """
+        return await self._execute_with_circuit_breaker(
+            "save_as_template",
+            lambda: self.adapter.save_as_template(file_path),
+            input_dict={"file_path": file_path},
+        )
+
     async def execute_macro(
         self, params: dict[str, Any]
     ) -> AdapterResult[dict[str, Any]]:
@@ -2203,12 +2230,18 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
     async def get_material(
         self,
         configuration: str | None = None,
+        material: str | None = None,
+        database: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Read the material assigned to the active part through circuit breaker."""
+        """Read a part's or a library material through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "get_material",
-            lambda: self.adapter.get_material(configuration),
-            input_dict={"configuration": configuration},
+            lambda: self.adapter.get_material(configuration, material, database),
+            input_dict={
+                "configuration": configuration,
+                "material": material,
+                "database": database,
+            },
             error_results_are_failures=False,
         )
 

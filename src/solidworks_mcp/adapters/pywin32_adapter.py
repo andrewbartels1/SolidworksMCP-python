@@ -33,6 +33,7 @@ from .solidworks import (
     SolidWorksPartFeaturesMixin,
     SolidWorksSelectionMixin,
     SolidWorksSketchMixin,
+    SolidWorksTemplatesMixin,
     bitmap,
 )
 from .solidworks.feature_walk import walk_feature_tree
@@ -1711,6 +1712,7 @@ class _FeatureSelectionService:
 
 
 class PyWin32Adapter(
+    SolidWorksTemplatesMixin,
     SolidWorksDrawingPackMixin,
     SolidWorksDrawingStandardMixin,
     SolidWorksDocumentationMixin,

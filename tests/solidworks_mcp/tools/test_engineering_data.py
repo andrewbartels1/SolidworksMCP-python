@@ -67,7 +67,44 @@ class TestEngineeringDataTools:
             input_data=GetMaterialInput()
         )
         assert got["data"]["material"] == "AISI 1020"
-        assert got["message"] == "Material: AISI 1020"
+        assert got["message"] == "Material: AISI 1020, E = 200 GPa"
+        assert got["data"]["properties"]["yield_strength"] == {
+            "value": 3.51571e8,
+            "unit": "Pa",
+            "label": "Yield strength",
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_library_material_without_assigning_it(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        await register_engineering_data_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part()
+        tool = await _tool(mcp_server, "get_material")
+
+        aluminium = await tool(input_data=GetMaterialInput(material="6061-T6 (SS)"))
+        plastic = await tool({"material": "ABS"})
+        unknown = await tool({"material": "Unobtainium"})
+        own = await tool({})
+
+        assert aluminium["message"] == "Material: 6061-T6 (SS), E = 69 GPa"
+        assert aluminium["data"]["source"] == "library"
+        assert "yield_strength" not in plastic["data"]["properties"]
+        assert unknown["error_type"] == "not_found"
+        assert "list_available_materials" in unknown["message"]
+        assert own["data"]["material"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_material_with_no_modulus_says_so_plainly(
+        self, mcp_server, mock_adapter, mock_config
+    ) -> None:
+        await register_engineering_data_tools(mcp_server, mock_adapter, mock_config)
+        mock_adapter._MOCK_PROPERTIES = {"ABS": {"density": 1020.0}}
+
+        got = await (await _tool(mcp_server, "get_material"))({"material": "ABS"})
+
+        assert got["message"] == "Material: ABS"
+        assert got["data"]["properties"]["density"]["value"] == 1020.0
 
     @pytest.mark.asyncio
     async def test_no_material_assigned(

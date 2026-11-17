@@ -172,20 +172,71 @@ def _library_files(folders: list[str]) -> list[str]:
     return files
 
 
-def _material_density(files: list[str], name: str, database: str) -> float | None:
-    """A material's mass density in kg/m³, from its ``.sldmat`` entry.
+#: The ``.sldmat`` property elements reported, by their key in the reply,
+#: with the SI unit the libraries store them in.
+MATERIAL_PROPERTIES: dict[str, tuple[str, str]] = {
+    "elastic_modulus": ("EX", "Pa"),
+    "poissons_ratio": ("NUXY", ""),
+    "shear_modulus": ("GXY", "Pa"),
+    "tensile_strength": ("SIGXT", "Pa"),
+    "yield_strength": ("SIGYLD", "Pa"),
+    "compressive_strength": ("SIGXC", "Pa"),
+    "density": ("DENS", "kg/m^3"),
+    "thermal_expansion": ("ALPX", "1/K"),
+    "thermal_conductivity": ("KX", "W/(m*K)"),
+    "specific_heat": ("C", "J/(kg*K)"),
+}
+
+
+def _entry_properties(material: Any) -> dict[str, dict[str, Any]]:
+    """The known properties of one ``<material>`` element.
+
+    Args:
+        material: The parsed ``<material>`` element.
+
+    Returns:
+        dict[str, dict[str, Any]]: Key to ``value`` (SI float), ``unit`` and
+        ``label`` (the library's ``displayname``); properties that are missing
+        or not a number are left out.
+    """
+    by_tag: dict[str, Any] = {}
+    for element in material.iter():
+        by_tag.setdefault(element.tag.rsplit("}", 1)[-1].upper(), element)
+    found: dict[str, dict[str, Any]] = {}
+    for key, (tag, unit) in MATERIAL_PROPERTIES.items():
+        element = by_tag.get(tag)
+        if element is None:
+            continue
+        try:
+            value = float(element.get("value", ""))
+        except ValueError:
+            continue
+        found[key] = {
+            "value": value,
+            "unit": unit,
+            "label": element.get("displayname", key),
+        }
+    return found
+
+
+def _material_entry(
+    files: list[str], name: str, database: str
+) -> tuple[str, dict[str, dict[str, Any]]] | None:
+    """A material's library and properties, from its ``.sldmat`` entry.
 
     The library whose file name matches ``database`` is searched first, then
-    the others. The value is the ``DENS`` element's ``value``, which the
-    libraries store in kg/m³.
+    the others. Values are as the libraries store them, in SI units.
 
     Args:
         files: ``.sldmat`` paths to search.
         name: The material's name, as ``GetMaterialPropertyName2`` gives it.
-        database: Its library's name, the file name without extension.
+        database: Its library's name, the file name without extension; ``""``
+            to search every library in order.
 
     Returns:
-        float | None: The density, or ``None`` when no entry has one.
+        tuple[str, dict[str, dict[str, Any]]] | None: The library the entry
+        was found in and its properties (see :func:`_entry_properties`), or
+        ``None`` when no library holds the name.
     """
     wanted = database.lower()
     ordered = sorted(
@@ -200,14 +251,9 @@ def _material_density(files: list[str], name: str, database: str) -> float | Non
         for element in root.iter():
             if element.tag.rsplit("}", 1)[-1] != "material":
                 continue
-            if element.get("name") != name:
-                continue
-            for prop in element.iter():
-                if prop.tag.rsplit("}", 1)[-1].upper() == "DENS":
-                    try:
-                        return float(prop.get("value", ""))
-                    except ValueError:
-                        return None
+            if element.get("name") == name:
+                library = os.path.splitext(os.path.basename(path))[0]
+                return library, _entry_properties(element)
     return None
 
 
@@ -603,40 +649,60 @@ class SolidWorksDocumentationMixin:
         )
 
     async def get_material(
-        self, configuration: str | None = None
+        self,
+        configuration: str | None = None,
+        material: str | None = None,
+        database: str | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        """Read the material assigned to the active part.
+        """Read the active part's material, or a library material by name.
 
-        Wraps ``IPartDoc::GetMaterialPropertyName2``; see
-        :func:`_read_material` for its ``Database`` out-parameter.
+        The part's material comes from ``IPartDoc::GetMaterialPropertyName2``
+        (see :func:`_read_material`); its properties from its entry in the
+        ``.sldmat`` library, which SolidWorks reads too (no COM call returns
+        a part material's modulus or strengths outside Simulation).
 
         Args:
             configuration: Configuration name; the active one when omitted.
+            material: A library material to read instead of the part's; no
+                document is needed and none is changed.
+            database: The library to look in first for ``material``.
 
         Returns:
             AdapterResult[dict[str, Any]]: ``material`` (``None`` when unset),
-            ``database`` and ``density_kg_m3``, read from the material's entry
-            in its ``.sldmat`` library (``None`` when unset or not found).
+            ``database``, ``density_kg_m3``, ``properties`` (see
+            :data:`MATERIAL_PROPERTIES`; empty when unknown), ``source``
+            (``part`` or ``library``) and ``configuration``.
         """
+        if material is not None:
+            return cast(
+                "AdapterResult[dict[str, Any]]",
+                self._handle_com_operation(
+                    "get_material",
+                    lambda: self._library_material(material, database or ""),
+                ),
+            )
         guard = self._require_doc_type({1}, "get_material")
         if guard is not None:
             return cast("AdapterResult[dict[str, Any]]", guard)
 
         def _get() -> dict[str, Any]:
             part = _sw_type_info.flagged(self.currentModel, "IPartDoc")
-            name, database = _read_material(part, configuration)
+            name, library = _read_material(part, configuration)
             app = getattr(self, "swApp", None)
-            density = (
-                _material_density(
-                    _library_files(self._material_folders(app)), name, database
+            entry = (
+                _material_entry(
+                    _library_files(self._material_folders(app)), name, library
                 )
                 if name and app is not None
                 else None
             )
+            properties = entry[1] if entry else {}
             return {
                 "material": name or None,
-                "database": database or None,
-                "density_kg_m3": density,
+                "database": library or None,
+                "density_kg_m3": properties.get("density", {}).get("value"),
+                "properties": properties,
+                "source": "part",
                 "configuration": configuration,
             }
 
@@ -644,6 +710,38 @@ class SolidWorksDocumentationMixin:
             "AdapterResult[dict[str, Any]]",
             self._handle_com_operation("get_material", _get),
         )
+
+    def _library_material(self, name: str, database: str) -> dict[str, Any]:
+        """A library material's properties, with no document involved.
+
+        Args:
+            name: The material's name exactly as the library has it.
+            database: The library to search first; ``""`` for none.
+
+        Returns:
+            dict[str, Any]: The same shape as ``get_material``'s, with
+            ``source`` ``library``.
+
+        Raises:
+            LookupError: When no library holds the name.
+        """
+        app = getattr(self, "swApp", None)
+        folders = self._material_folders(app) if app is not None else []
+        entry = _material_entry(_library_files(folders), name, database)
+        if entry is None:
+            raise LookupError(
+                f"Material {name!r} not found in any material library; use "
+                "list_available_materials for the exact name."
+            )
+        library, properties = entry
+        return {
+            "material": name,
+            "database": library,
+            "density_kg_m3": properties.get("density", {}).get("value"),
+            "properties": properties,
+            "source": "library",
+            "configuration": None,
+        }
 
     async def set_material(
         self,
