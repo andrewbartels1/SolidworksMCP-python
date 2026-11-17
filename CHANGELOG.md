@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Tool catalog check** (queue item 24, #156): a test reads every catalog
+  page and fails when a tool has no entry, an entry's parameter table
+  doesn't match the tool's inputs, or its sample call isn't one the tool
+  accepts. The 20 tools that had no entry have one, about 30 stale tables
+  and samples are fixed, and `reset_circuit_breaker` has a Server Admin
+  page. `src/utils/generate_tool_catalog.py`, which overwrote the
+  hand-written pages, is removed.
 - **`get_api_enum`** (queue item 23, #95): an enum's members and their
   integer values, by the enum's name or a member's, read from SolidWorks'
   constants type library (`swconst.tlb`), checked live (`swUnitSystem_IPS`

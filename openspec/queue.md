@@ -34,7 +34,7 @@ Last updated 2026-11-16.
 | 17 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | `mypy-gates-ci` (archived) | Done 2026-11-16: mypy gates CI with zero errors (139 fixed); `validate_coverage.py` had already been deleted |
 | 18 | Skills that improve the agent's results, measured on the U-joint prompt | #207 | not yet written | Tabled 2026-11-09: needs research first (what "better" means, a harness to run and score sessions). See `openspec/research/agent-skill-evaluation.md` |
 | 23 | Enum values: an enum's members and their integers, read from SolidWorks' constants type library, so an agent never guesses one (`swUnitSystem_IPS` is 3, not 4). Named `get_api_enum` under the tool-naming rule | #95 | `api-enum-lookup` (archived) | Done 2026-11-16: `get_api_enum`, checked live against this machine's swconst.tlb (983 enums) |
-| 24 | The tool catalog pages drift from the registered tools with no check: some tools are missing and some sample payloads are null. A check that every registered tool has a catalog entry with its inputs, and the gaps filled | #156 | not yet written | |
+| 24 | The tool catalog pages drift from the registered tools with no check: some tools are missing and some sample payloads are null. A check that every registered tool has a catalog entry with its inputs, and the gaps filled | #156 | `tool-catalog-check` (archived) | Done 2026-11-16: a check reads every catalog page against the registered tools; 20 missing entries written, about 30 stale tables and samples fixed; the generator removed |
 | 25 | `execute_macro` hangs with no timeout on a macro that waits for the user: a time limit, and a clear error when it's hit | #97 | not yet written | |
 ## Removed tools (item 10, release 2.1.0)
 

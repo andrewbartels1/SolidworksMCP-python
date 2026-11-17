@@ -51,6 +51,7 @@
 - [Template Management Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/template-management/): Compare two SolidWorks template files (.prtdot, .asmdot, .drwdot) on disk. To start a part from a template, give `template` to `create_part`.
 - [Macro Recording Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/macro-recording/): Run a binary SolidWorks macro (`.swp`). Record macros in SolidWorks itself (Tools > Macro > Record); to write one from a description, use `generate_vba_code`.
 - [Docs Discovery Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/docs-discovery/): Look up SolidWorks API interfaces, methods and properties, with each member's parameters, return type and description, and the integer values of its enums. Everything is read from the SolidWorks type library installed on this machine, so the answers match your SolidWorks version and nothing is hand-typed.
+- [Server Admin Tools](https://andrewbartels1.com/SolidworksMCP-python/user-guide/tool-catalog/server-admin/): The server's own state. These never touch SolidWorks.
 
 ## Agents and Skills
 

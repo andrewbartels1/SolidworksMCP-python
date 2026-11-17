@@ -22,8 +22,8 @@ Save the active document, to its own path or to a new path in its own format.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `force_save` | `bool` | — | `True` | Force save even if no changes |
-| `file_path` | `str?` | — | `None` | Optional output path. If omitted, saves the current active document. |
+| `file_path` | `str?` | — | `null` | Optional new path, ending in the active document's extension (.sldprt, .sldasm or .slddrw). If omitted, saves the active document to its own path. |
+| `overwrite` | `bool` | — | `false` | Replace a file already at file_path. Off by default. |
 
 **Sample call:**
 
@@ -134,7 +134,8 @@ List the feature tree of the active part or assembly, in order.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `include_suppressed` | `bool` | — | `False` | Include suppressed features in the returned list |
+| `include_suppressed` | `bool` | — | `false` | Include suppressed features in the returned list |
+| `max_assembly_depth` | `int` | — | `2` | For Assembly documents, how many levels of sub-assembly to recurse into when flattening component features. Ignored for Part documents. |
 
 **Sample call:**
 
@@ -210,7 +211,13 @@ Add a configuration to the active part or assembly, e.g. a long and a short vers
 
 Make a configuration of the active model the active one, and rebuild.
 
-**Prerequisite:** Active part or assembly with that configuration. Beta.
+**Prerequisite:** Active part or assembly with that configuration.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | `str` | ✅ |  | The configuration's name, e.g. 'Default' |
 
 **Sample call:**
 
@@ -224,7 +231,13 @@ Make a configuration of the active model the active one, and rebuild.
 
 Delete a configuration of the active model; not the active one or the only one.
 
-**Prerequisite:** Active part or assembly with that configuration. Beta.
+**Prerequisite:** Active part or assembly with that configuration.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `name` | `str` | ✅ |  | The configuration's name, e.g. 'Default' |
 
 **Sample call:**
 
@@ -290,6 +303,13 @@ Save the active part in place, or as a new .sldprt with the target path checked 
 
 **Prerequisite:** Active Part document
 
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `file_path` | `str?` | — | `null` | Optional output path. If omitted, saves the active part to its existing location. |
+| `overwrite` | `bool` | — | `false` | Overwrite existing file |
+
 **Sample call:**
 
 ```json
@@ -305,6 +325,14 @@ Save the active part in place, or as a new .sldprt with the target path checked 
 Save the active assembly in place, or as a new .sldasm, optionally copying the parts it uses alongside.
 
 **Prerequisite:** Active Assembly document
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `file_path` | `str?` | — | `null` | Optional output path. If omitted, saves the active assembly to its existing location. |
+| `overwrite` | `bool` | — | `false` | Overwrite existing file |
+| `include_references` | `bool` | — | `false` | When true and file_path is set, copy referenced assembly files into the target folder. |
 
 **Sample call:**
 
@@ -454,10 +482,7 @@ Save one solid body of the active multibody part as a new part file (Insert > Fe
 **Sample call:**
 
 ```json
-{
-  "body_name": "Boss-Extrude1",
-  "file_path": "C:\parts\bracket_body.sldprt"
-}
+{"body_name": "Boss-Extrude1", "file_path": "C:\\Temp\\mcp_demo\\body.SLDPRT"}
 ```
 
 ---

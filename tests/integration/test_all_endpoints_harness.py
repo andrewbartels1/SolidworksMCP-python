@@ -28,7 +28,6 @@ from solidworks_mcp.server import SolidWorksMCPServer
 
 REAL_SW_FLAG = "SOLIDWORKS_MCP_RUN_REAL_INTEGRATION"
 OUTPUT_DIR = Path("tests/.generated/solidworks_integration")
-CATALOG_PATH = Path("tests/.generated/tool_catalog.json")
 MAX_TOOL_RESPONSE_BYTES = 250_000
 MAX_SMOKE_TOTAL_RESPONSE_BYTES = 3_000_000
 SAMPLE_MODELS_ENV = "SOLIDWORKS_MCP_SAMPLE_MODELS_DIR"
@@ -97,14 +96,6 @@ async def output_dir() -> Path:
     """Test helper for output dir."""
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     return OUTPUT_DIR
-
-
-def _load_catalog() -> list[dict[str, Any]]:
-    """Test helper for load catalog."""
-    if not CATALOG_PATH.exists():
-        return []
-    with open(CATALOG_PATH, encoding="utf-8") as fh:
-        return json.load(fh)
 
 
 async def _find_tool(server: SolidWorksMCPServer, tool_name: str):
@@ -201,33 +192,6 @@ class TestLevelASchema:
         )
 
     @pytest.mark.asyncio
-    async def test_all_catalog_tools_registered(
-        self, mock_server: SolidWorksMCPServer
-    ) -> None:
-        """Every tool listed in the JSON catalog must be registered in the server."""
-        catalog = _load_catalog()
-        if not catalog:
-            pytest.skip(
-                "tool_catalog.json not found – run generate_tool_catalog.py first"
-            )
-
-        registered_names = {t.name for t in await mock_server.mcp.list_tools()}
-        missing: list[str] = []
-        for entry in catalog:
-            name = entry["tool_name"]
-            # Also check func_name as some tools use a name= override
-            if (
-                name not in registered_names
-                and entry["func_name"] not in registered_names
-            ):
-                missing.append(name)
-
-        assert not missing, (
-            f"{len(missing)} catalog tools NOT registered:\n"
-            + "\n".join(f"  - {m}" for m in sorted(missing))
-        )
-
-    @pytest.mark.asyncio
     async def test_no_duplicate_tool_names(
         self, mock_server: SolidWorksMCPServer
     ) -> None:
@@ -255,62 +219,6 @@ class TestLevelASchema:
         """Every registered tool must expose a callable func."""
         for tool in await mock_server.mcp.list_tools():
             assert callable(tool.fn), f"Tool '{tool.name}' func is not callable"
-
-    @pytest.mark.asyncio
-    async def test_catalog_json_structure(self) -> None:
-        """The generated catalog JSON must have the expected schema."""
-        catalog = _load_catalog()
-        if not catalog:
-            pytest.skip("tool_catalog.json not found")
-
-        required_keys = {
-            "tool_name",
-            "func_name",
-            "category",
-            "description",
-            "fields",
-            "sample_payload",
-        }
-        for entry in catalog:
-            missing_keys = required_keys - set(entry.keys())
-            assert not missing_keys, (
-                f"Catalog entry '{entry.get('tool_name', '?')}' missing keys: {missing_keys}"
-            )
-
-    @pytest.mark.asyncio
-    async def test_category_coverage(self, mock_server: SolidWorksMCPServer) -> None:
-        """All expected tool categories must be represented."""
-        catalog = _load_catalog()
-        if not catalog:
-            pytest.skip("tool_catalog.json not found")
-        categories = {e["category"] for e in catalog}
-        expected = {
-            "modeling",
-            "sketching",
-            "drawing",
-            "drawing_analysis",
-            "analysis",
-            "export",
-            "file_management",
-            "automation",
-            "vba_generation",
-            "template_management",
-            "macro_recording",
-            "docs_discovery",
-        }
-        missing_cats = expected - categories
-        assert not missing_cats, f"Missing tool categories in catalog: {missing_cats}"
-
-    @pytest.mark.asyncio
-    async def test_tool_catalog_snapshot_written(self, output_dir: Path) -> None:
-        """Snapshot file must exist and contain tool names for regression detection."""
-        snapshot_path = output_dir / "tool_catalog_snapshot.json"
-        catalog = _load_catalog()
-        if not catalog:
-            pytest.skip("tool_catalog.json not found")
-        names = [e["tool_name"] for e in catalog]
-        snapshot_path.write_text(json.dumps(names, indent=2), encoding="utf-8")
-        assert snapshot_path.exists()
 
     def test_sample_path_candidates_include_supported_versions(self) -> None:
         """Candidate sample roots should include current and fallback SolidWorks years."""
