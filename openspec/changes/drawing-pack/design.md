@@ -102,10 +102,16 @@ never worked, so no deprecation is needed.
 
 ### 7. What changed while building it (2026-11-16)
 
-- **Sheet to view space** uses `IView.GetXform` (elements 9-10 are the view
-  origin on the sheet, 12 its scale): a view's sketch is drawn at model size
-  around that origin. Rotated views aren't handled; the live bundle checks
-  the section goes through the hole's centre.
+- **Sheet to view space** uses the view's sketch:
+  `IView.GetSketch().ModelToSketchTransform` maps the drawing's document
+  space (the sheet) into the view's sketch, scale and offset included, the
+  mapping the hole positions use. The first live run (2026-11-16) used
+  `IView.GetXform` (elements 9-10 and 12) and put the detail circle in empty
+  space and the section line off the hole.
+- **Auto-dimension** selects the view (`SelectByID2` as `DRAWINGVIEW`)
+  after activating it, as `insert_model_dimensions`' fallback does; the
+  first live run only activated it, and `AutoDimension` returned success
+  with nothing added.
 - **Dimensions** use `AddHorizontalDimension2`, `AddVerticalDimension2`,
   `AddRadialDimension2`, `AddDiameterDimension2` and `AddDimension2`
   (aligned and angular) after the picks, rather than

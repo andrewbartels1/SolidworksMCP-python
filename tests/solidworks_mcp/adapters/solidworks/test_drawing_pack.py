@@ -139,7 +139,7 @@ def views() -> dict[str, Any]:
         "Front": FakeView(
             name="Front",
             GetOutline=lambda: (0.02, 0.15, 0.12, 0.23),
-            GetXform=lambda: (1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07, 0.19, 0, 0.5),
+            GetSketch=lambda: "front sketch",
             Type=6,
             GetFirstAnnotation3=lambda: None,
             ReferencedDocument=None,
@@ -154,6 +154,12 @@ def adapter(monkeypatch: pytest.MonkeyPatch, views: dict[str, Any]) -> FakeAdapt
     monkeypatch.setattr(dp, "_resolve_drawing_view", lambda a, d, n: a.views.get(n))
     monkeypatch.setattr(dp, "_as_com", lambda a, obj, i: obj)
     monkeypatch.setattr(dp.sw_type_info, "flagged", lambda obj, *i: obj)
+    # The front view's sketch: drawn at 1:2 about (70, 190) mm on the sheet.
+    monkeypatch.setattr(
+        dp,
+        "_to_sketch",
+        lambda a, sketch, p: [(p[0] - 0.07) / 0.5, (p[1] - 0.19) / 0.5, 0.0],
+    )
     return made
 
 
@@ -292,21 +298,13 @@ async def test_detail_refusals(adapter: FakeAdapter) -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_view_with_no_transform_is_drawn_at_sheet_size(
-    adapter: FakeAdapter,
-) -> None:
-    adapter.views["Front"].GetXform = lambda: None
-    adapter.currentModel.SketchManager.CreateCircleByRadius.return_value = "circle"
-    adapter.currentModel.CreateDetailViewAt4.return_value = FakeView(
-        GetName2=lambda: None, GetOutline=lambda: None
-    )
+async def test_a_view_without_a_sketch_is_an_error(adapter: FakeAdapter) -> None:
+    adapter.views["Front"].GetSketch = lambda: None
 
     result = await adapter.create_detail_view("Front", [30, 160], 5, [300, 80])
 
-    adapter.currentModel.SketchManager.CreateCircleByRadius.assert_called_once_with(
-        0.03, 0.16, 0.0, 0.005
-    )
-    assert result.data["name"] is None
+    assert result.error == "The view's sketch couldn't be read to place the entity."
+    adapter.currentModel.SketchManager.CreateCircleByRadius.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -404,6 +402,8 @@ async def test_auto_dimension_counts_what_it_added(adapter: FakeAdapter) -> None
     result = await adapter.auto_dimension_view("Front", "chain")
 
     adapter.currentModel.AutoDimension.assert_called_once_with(1, 3, 1, 3, 1)
+    picked = adapter.currentModel.Extension.SelectByID2.call_args.args
+    assert picked[:2] == ("Front", "DRAWINGVIEW")
     assert result.data == {
         "view": "Front",
         "scheme": "chain",

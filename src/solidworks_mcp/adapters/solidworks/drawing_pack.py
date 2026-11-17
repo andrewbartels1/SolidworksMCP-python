@@ -17,7 +17,8 @@ calls (argument lists from the installed type library):
   VPlacement)`` on the active view;
 - ``IDrawingDoc.SetupSheet5`` for a new format and paper size (the call
   ``generate_drawing_package`` already makes);
-- ``IView.GetOutline``, ``GetXform``, ``GetDisplayDimensionCount``,
+- ``IView.GetSketch().ModelToSketchTransform`` (sheet to view sketch space);
+- ``IView.GetOutline``, ``GetDisplayDimensionCount``,
   ``IAnnotation.IsDangling`` for the drawing report.
 
 Enum values were read from ``swconst.tlb`` (SolidWorks 2026).
@@ -25,6 +26,8 @@ Enum values were read from ``swconst.tlb`` (SolidWorks 2026).
 
 from __future__ import annotations
 
+import math
+import ntpath
 import os
 import re
 from typing import Any, cast
@@ -36,6 +39,7 @@ from .documentation import _read_custom_property
 from .drawing_standard import find_sheet_format
 from .features import _null_callout
 from .io import _as_com, _resolve_drawing_view, _view_names
+from .part_features import _to_sketch
 
 #: ``swAutodimEntities_e``, ``swAutodimScheme_e`` and placements.
 AUTODIM_ENTITIES_ALL = 1
@@ -150,7 +154,7 @@ def paper_for(sheet_format: str, paper_size: str | None) -> str:
     if paper_size:
         size = paper_size.strip().lower()
     else:
-        stem = os.path.basename(sheet_format).lower()
+        stem = ntpath.basename(sheet_format).lower()  # a Windows path, on any OS
         size = next((s for s in PAPER_SIZES if stem.startswith(s)), "")
     if size not in PAPER_SIZES:
         raise ValueError(
@@ -231,22 +235,32 @@ class SolidWorksDrawingPackMixin:
     def _pack_to_view(self, view: Any, point: list[float]) -> tuple[float, float]:
         """A sheet point (mm) in the view's sketch space (m).
 
-        ``IView.GetXform``: elements 9-10 are the view origin on the sheet
-        and 12 the view's scale; a view's sketch is drawn at model size.
+        A drawing's document space is the sheet, and the view's sketch maps it
+        into its own space (``ISketch.ModelToSketchTransform``), scale and
+        offset included: the same mapping the hole positions use. (The first
+        live run used ``IView.GetXform`` instead and put the detail circle in
+        empty space, 2026-11-16.)
+
+        Raises:
+            RuntimeError: When the view's sketch can't be read.
         """
         adapter: Any = self
-        xform = as_list(adapter._attempt(lambda: view.GetXform(), default=None))
-        x, y = point[0] / 1000.0, point[1] / 1000.0
-        if len(xform) >= 13 and xform[12]:
-            scale = float(xform[12])
-            return (x - float(xform[9])) / scale, (y - float(xform[10])) / scale
+        sketch = adapter._attempt(lambda: view.GetSketch(), default=None)
+        if sketch is None:
+            raise RuntimeError(
+                "The view's sketch couldn't be read to place the entity."
+            )
+        sketch = sw_type_info.flagged(sketch, "ISketch")
+        x, y, _ = _to_sketch(
+            adapter, sketch, [point[0] / 1000.0, point[1] / 1000.0, 0.0]
+        )
         return x, y
 
-    def _pack_view_scale(self, view: Any) -> float:
-        """The view's scale (``GetXform`` element 12); 1 when unreadable."""
-        adapter: Any = self
-        xform = as_list(adapter._attempt(lambda: view.GetXform(), default=None))
-        return float(xform[12]) if len(xform) >= 13 and xform[12] else 1.0
+    def _pack_radius(self, view: Any, center: list[float], radius: float) -> float:
+        """A radius on the sheet (mm) as a length in the view's sketch (m)."""
+        cx, cy = self._pack_to_view(view, center)
+        ex, ey = self._pack_to_view(view, [center[0] + radius, center[1]])
+        return math.hypot(ex - cx, ey - cy)
 
     def _pack_new_view(self, created: Any, before: list[str]) -> dict[str, Any]:
         """The created view's name and outline."""
@@ -368,7 +382,7 @@ class SolidWorksDrawingPackMixin:
             letter = label or next_label(before)
             drawing.ActivateView(view)
             cx, cy = self._pack_to_view(parent, center)
-            r = radius / 1000.0 / self._pack_view_scale(parent)
+            r = self._pack_radius(parent, center, radius)
             circle = adapter.currentModel.SketchManager.CreateCircleByRadius(
                 cx, cy, 0.0, r
             )
@@ -455,7 +469,7 @@ class SolidWorksDrawingPackMixin:
             dimension = sw_type_info.flagged(disp.GetDimension2(0), "IDimension")
             raw = float(dimension.SystemValue)
             angular = dimension_type == "angular"
-            value = raw * 180.0 / 3.141592653589793 if angular else raw * 1000.0
+            value = raw * 180.0 / math.pi if angular else raw * 1000.0
             return {
                 "name": adapter._attempt(lambda: dimension.FullName, default=None),
                 "dimension_type": dimension_type,
@@ -500,6 +514,14 @@ class SolidWorksDrawingPackMixin:
             target = self._pack_view(drawing, view)
             before = adapter._view_dimension_count(target)
             drawing.ActivateView(view)
+            model = adapter.currentModel
+            adapter._attempt(lambda: model.ClearSelection2(True), None)
+            adapter._attempt(
+                lambda: model.Extension.SelectByID2(
+                    view, "DRAWINGVIEW", 0.0, 0.0, 0.0, False, 0, _null_callout(), 0
+                ),
+                None,
+            )
             code = AUTODIM_SCHEMES[scheme]
             status = drawing.AutoDimension(
                 AUTODIM_ENTITIES_ALL, code, AUTODIM_ABOVE, code, AUTODIM_RIGHT
