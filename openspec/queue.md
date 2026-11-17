@@ -33,6 +33,9 @@ Last updated 2026-11-16.
 | 16 | README: licence-tier tags | #79 (other half) | `tool-requirements` (archived) | Done 2026-11-16: no tool needs more than the licence that runs SolidWorks, so each tool is tagged with what it needs instead: `needs:nothing` (14), `needs:installed` (6) or `needs:running` |
 | 17 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | `mypy-gates-ci` (archived) | Done 2026-11-16: mypy gates CI with zero errors (139 fixed); `validate_coverage.py` had already been deleted |
 | 18 | Skills that improve the agent's results, measured on the U-joint prompt | #207 | not yet written | Tabled 2026-11-09: needs research first (what "better" means, a harness to run and score sessions). See `openspec/research/agent-skill-evaluation.md` |
+| 23 | Enum values: an enum's members and their integers, read from SolidWorks' constants type library, so an agent never guesses one (`swUnitSystem_IPS` is 3, not 4). Named `get_api_enum` under the tool-naming rule | #95 | `api-enum-lookup` (archived) | Done 2026-11-16: `get_api_enum`, checked live against this machine's swconst.tlb (983 enums) |
+| 24 | The tool catalog pages drift from the registered tools with no check: some tools are missing and some sample payloads are null. A check that every registered tool has a catalog entry with its inputs, and the gaps filled | #156 | not yet written | |
+| 25 | `execute_macro` hangs with no timeout on a macro that waits for the user: a time limit, and a clear error when it's hit | #97 | not yet written | |
 ## Removed tools (item 10, release 2.1.0)
 
 33 tools were registered but never implemented: every call returned

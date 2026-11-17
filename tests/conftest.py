@@ -167,6 +167,7 @@ def _no_real_type_library(
 
     monkeypatch.setattr(docs_discovery, "load_type_library", _no_library)
     monkeypatch.setattr(docs_discovery, "target_version", _no_library)
+    monkeypatch.setattr(docs_discovery, "load_constants_library", _no_library)
 
 
 @pytest.fixture(scope="session")

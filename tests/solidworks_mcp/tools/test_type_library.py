@@ -14,11 +14,14 @@ import pytest
 
 from solidworks_mcp.tools.tool_boundary import ToolOperationError
 from solidworks_mcp.tools.type_library import (
+    CONSTANTS_TYPELIB_GUID,
     SOLIDWORKS_TYPELIB_GUID,
     ApiInterface,
     TypeLibraryUnavailable,
     choose_version,
+    index_enums,
     index_type_library,
+    load_constants_library,
     load_type_library,
     registered_versions,
     target_version,
@@ -383,3 +386,83 @@ def test_imports_without_pywin32_or_winreg(import_without) -> None:
     )
 
     assert attrs == {"pythoncom": None, "winreg": None}
+
+
+class FakeEnumInfo:
+    """An enum's ITypeInfo: ``members`` are ``(name, value)`` pairs."""
+
+    def __init__(self, members: list[tuple[str, int]]) -> None:
+        self.members = members
+
+    def GetTypeAttr(self) -> SimpleNamespace:
+        return SimpleNamespace(cFuncs=0, cVars=len(self.members))
+
+    def GetVarDesc(self, position: int) -> SimpleNamespace:
+        return SimpleNamespace(memid=100 + position, value=self.members[position][1])
+
+    def GetDocumentation(self, memid: int) -> tuple[Any, ...]:
+        return (self.members[memid - 100][0], None, 0, None)
+
+
+class FakeConstantsLib(FakeTypeLib):
+    """A constants library: entries are ``(name, typekind, info, help string)``."""
+
+    def __init__(self, entries: list[tuple[str, int, Any, str | None]]) -> None:
+        super().__init__([(n, k, i) for n, k, i, _ in entries])
+        self.help = [h for *_, h in entries]
+
+    def GetDocumentation(self, position: int) -> tuple[Any, ...]:
+        return (self.entries[position][0], self.help[position], 0, None)
+
+
+def test_index_enums_reads_each_member_and_value() -> None:
+    lib = FakeConstantsLib(
+        [
+            (
+                "swUnitSystem_e",
+                0,
+                FakeEnumInfo([("swUnitSystem_CGS", 1), ("swUnitSystem_IPS", 3)]),
+                None,
+            ),
+            ("swLengthUnit_e", 0, FakeEnumInfo([("swMM", 0)]), "Length units"),
+            ("IThing", 4, FakeTypeInfo("IThing"), None),
+        ]
+    )
+
+    enums = index_enums(lib)
+
+    assert list(enums) == ["swUnitSystem_e", "swLengthUnit_e"]
+    assert [(m.name, m.value) for m in enums["swUnitSystem_e"].members] == [
+        ("swUnitSystem_CGS", 1),
+        ("swUnitSystem_IPS", 3),
+    ]
+    assert enums["swUnitSystem_e"].description is None
+    assert enums["swLengthUnit_e"].description == "Length units"
+
+
+def test_load_constants_library_reads_its_own_guid_at_that_version() -> None:
+    com = FakeCom()
+
+    assert load_constants_library(34, 0, com=com) == "the library"
+    assert com.loaded == [(CONSTANTS_TYPELIB_GUID, 34, 0)]
+
+
+def test_a_constants_library_that_wont_load_says_so() -> None:
+    with pytest.raises(TypeLibraryUnavailable) as raised:
+        load_constants_library(34, 0, com=FakeCom(missing_file=True))
+
+    assert str(raised.value) == (
+        "SolidWorks 2026's constants type library (swconst.tlb) couldn't be "
+        "loaded (Error loading type library/DLL.), so the index has no enum values."
+    )
+
+
+def test_load_constants_library_without_pywin32(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import solidworks_mcp.tools.type_library as module
+
+    monkeypatch.setattr(module, "pythoncom", None)
+
+    with pytest.raises(TypeLibraryUnavailable, match="needs Windows with pywin32"):
+        load_constants_library(34, 0)

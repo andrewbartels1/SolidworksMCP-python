@@ -27,4 +27,5 @@ After the user runs a macro, read the model back (`get_model_info`,
 macro did.
 
 To look up a SolidWorks API call while writing VBA, use
-`lookup_api_method`, `lookup_api_interface` or `search_solidworks_api_help`.
+`lookup_api_method`, `lookup_api_interface` or `search_solidworks_api_help`;
+for the integer value of an enum argument, `get_api_enum`.
