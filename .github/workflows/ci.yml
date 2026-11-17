@@ -29,6 +29,10 @@ jobs:
         shell: bash -el {0}
         run: conda run -n solidworks_mcp pip install -e ".[dev,docs,ui]"
 
+      - name: Type-check
+        shell: bash -el {0}
+        run: make typecheck
+
       - name: Run tests
         shell: bash -el {0}
         run: make test

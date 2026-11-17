@@ -23,13 +23,13 @@ from .tool_boundary import ToolOperationError
 
 try:
     import pythoncom
-except ImportError:
+except ImportError:  # pywin32 is Windows-only
     pythoncom = None
 
 try:
     import winreg
-except ImportError:
-    winreg = None
+except ImportError:  # winreg is Windows-only
+    winreg = None  # type: ignore[assignment]
 
 SOLIDWORKS_TYPELIB_GUID = "{83A33D31-27C5-11CE-BFD4-00400513BB57}"
 # Type library major version 34 is SolidWorks 2026.

@@ -31,7 +31,7 @@ Last updated 2026-11-16.
 | 14 | Optional toolsets and a discovery mode, to cut the tool list's size | #176 | `tool-discovery-mode` (archived) | Done 2026-11-16: `SOLIDWORKS_MCP_TOOLSETS` and `SOLIDWORKS_MCP_TOOL_MODE=search` (4 tools, about 900 tokens a turn instead of about 55,000), checked live; the size table is in the installation guide |
 | 15 | Sheet metal: base flange, edge flange, sketched bend, flat pattern | #57 | `sheet-metal` (archived) | Done 2026-11-16: `create_base_flange`, `add_edge_flange`, `create_sketched_bend`, `set_flat_pattern`, checked live (the blank 78.7124 mm against 78.712 by hand). A sketched bend's fixed side can't be chosen through the API (#239) |
 | 16 | README: licence-tier tags | #79 (other half) | `tool-requirements` (archived) | Done 2026-11-16: no tool needs more than the licence that runs SolidWorks, so each tool is tagged with what it needs instead: `needs:nothing` (14), `needs:installed` (6) or `needs:running` |
-| 17 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | not yet written | |
+| 17 | Remove the stale `validate_coverage.py`; decide whether mypy gates CI | #157 | `mypy-gates-ci` (archived) | Done 2026-11-16: mypy gates CI with zero errors (139 fixed); `validate_coverage.py` had already been deleted |
 | 18 | Skills that improve the agent's results, measured on the U-joint prompt | #207 | not yet written | Tabled 2026-11-09: needs research first (what "better" means, a harness to run and score sessions). See `openspec/research/agent-skill-evaluation.md` |
 ## Removed tools (item 10, release 2.1.0)
 

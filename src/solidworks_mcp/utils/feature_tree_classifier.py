@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 _SHEET_METAL_TOKENS = (
@@ -314,7 +314,9 @@ def classify_feature_tree_snapshot(
     }
 
 
-def build_component_tree(features: list[Mapping[str, Any]] | None) -> dict[str, Any]:
+def build_component_tree(
+    features: Sequence[Mapping[str, Any]] | None,
+) -> dict[str, Any]:
     """Reconstruct a nested component/sub-component tree from a flat
     ``list_features`` result.
 

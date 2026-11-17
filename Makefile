@@ -1,6 +1,6 @@
 # SolidWorks MCP Server - Simplified Makefile
 
-.PHONY: help install test test-context-budget llms links test-full test-clean docs build run clean lint format
+.PHONY: help install test test-context-budget llms links test-full test-clean docs build run clean lint typecheck format
 
 # Default target
 .DEFAULT_GOAL := help
@@ -139,6 +139,11 @@ lint: ## Run code linting
 		exit 1; \
 	fi
 	$(CONDA_CMD) run -n solidworks_mcp ruff check src/ tests/
+
+typecheck: ## Type-check the package with mypy (CI fails on any error)
+	@echo "$(BLUE)Type-checking...$(NC)"
+	@if [ -z "$(CONDA_CMD)" ]; then \n		echo "$(RED)Error: No conda/mamba/micromamba found$(NC)"; \n		exit 1; \n	fi
+	$(CONDA_CMD) run -n solidworks_mcp python -m mypy src/solidworks_mcp
 
 format: ## Format code
 	@echo "$(BLUE)Formatting code...$(NC)"

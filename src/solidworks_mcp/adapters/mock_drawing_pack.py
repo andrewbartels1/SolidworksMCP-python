@@ -52,12 +52,14 @@ class MockDrawingPackMixin:
 
     def _pack_guard(self, operation: str) -> AdapterResult[dict[str, Any]] | None:
         """An error unless a drawing is active."""
-        guard = self._mock_doc_error({"Drawing"}, operation)  # type: ignore[attr-defined]
+        guard: AdapterResult[dict[str, Any]] | None = self._mock_doc_error(  # type: ignore[attr-defined]
+            {"Drawing"}, operation
+        )
         return guard
 
     def _pack_outline(self, name: str) -> Box:
         """A view's outline: a 100 x 80 mm box per view, left to right."""
-        outlines = self._pack_state()["outlines"]
+        outlines: dict[str, Box] = self._pack_state()["outlines"]
         if name not in outlines:
             index = (
                 self._drawing_views.index(name) if name in self._drawing_views else 0

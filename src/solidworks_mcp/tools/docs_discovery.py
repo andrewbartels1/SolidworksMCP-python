@@ -56,7 +56,8 @@ IndexStatus = Literal["ready", "rebuilt", "unavailable"]
 MemberType = Literal["method", "property"]
 
 #: Validates one saved member record into its model.
-_MEMBER: TypeAdapter[ApiMethod | ApiProperty] = TypeAdapter(ApiMember)
+#: (pydantic takes the annotated union; its stubs expect a class.)
+_MEMBER: TypeAdapter[ApiMethod | ApiProperty] = TypeAdapter(ApiMember)  # type: ignore[arg-type]
 
 #: Each interface record's name lists, by member type.
 _MEMBER_LISTS: tuple[tuple[MemberType, str], ...] = (

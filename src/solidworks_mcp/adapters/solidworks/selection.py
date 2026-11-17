@@ -35,7 +35,7 @@ class SolidWorksSelectionMixin:
         ) -> AdapterResult[Any]: ...
 
         def _attempt(
-            self, operation: Callable[[], Any], *, default: Any = None
+            self, operation: Callable[..., Any], *, default: Any = None
         ) -> Any: ...
 
     async def list_features(
@@ -130,7 +130,9 @@ class SolidWorksSelectionMixin:
             )
 
         def _select() -> dict[str, Any]:
-            payload = self._feature_selector.select_feature(feature_name, append)
+            payload: dict[str, Any] = self._feature_selector.select_feature(
+                feature_name, append
+            )
             if not payload or not payload.get("selected"):
                 raise LookupError(
                     f"Feature not found or could not be selected: {feature_name}"
