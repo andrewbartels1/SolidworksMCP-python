@@ -108,6 +108,12 @@ Set them in the `env` of the client's `solidworks` entry. For Claude Desktop or 
 
 For Claude Code: `claude mcp add solidworks --scope user -e SOLIDWORKS_MCP_TOOL_MODE=search -- <command>`. A name that isn't a toolset, or a mode other than `list` or `search`, stops the server at start with a message listing the valid values, rather than quietly hiding tools. `selftest` reports how many tools your settings list.
 
+## 5. Let `execute_macro` run VBA source (off by default)
+
+`execute_macro` runs macro files. With **`SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1`** it also runs VBA text, such as what the `generate_vba_*` tools write, so a model can write a macro and run it in one step. The text is saved as a `.swb` file under your temp folder, and the reply names the file and repeats the source that ran.
+
+VBA can do anything you can do on this computer, including deleting files and running programs. Turn this on only if you trust what your client sends, and look at the source in each reply. When it's off, the call is refused as `vba_source_off` and nothing is written or run. Set it in the `env` of the client's `solidworks` entry, as above.
+
 ## Install from source
 
 To work on the server itself, install it from a clone. You need [Python 3.13+](https://www.python.org/downloads/windows/), installed with **Add python.exe to PATH** ticked, and Git.

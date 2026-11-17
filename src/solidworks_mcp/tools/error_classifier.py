@@ -128,6 +128,14 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
     ),
     ErrorRule(
+        error_type="vba_source_off",
+        hint=(
+            "Ask the user whether to start the server with "
+            "SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1; don't set it yourself."
+        ),
+        patterns=(r"running vba source is turned off",),
+    ),
+    ErrorRule(
         error_type="macro_waited_for_user",
         hint=(
             "The macro opened a dialog and waited for an answer. Remove the "

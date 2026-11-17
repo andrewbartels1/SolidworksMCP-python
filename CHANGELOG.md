@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`execute_macro` runs VBA source** (queue item 26, #96), when the server
+  is started with `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1` (off by default: VBA
+  can do anything the user can). The source is written to a `.swb` file and
+  run like a macro file, with the dialog watchdog; the reply names the file
+  and repeats the source. Refused as `vba_source_off` otherwise.
 - **A macro that waits for the user no longer hangs the server** (queue
   item 25, #97): while `execute_macro` runs, a watchdog thread (Win32 only,
   no COM) looks for a dialog the SolidWorks process opened. One still open

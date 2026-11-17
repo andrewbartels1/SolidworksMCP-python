@@ -427,7 +427,7 @@
     "family": "macro_recording",
     "level": "stable",
     "reason": "",
-    "summary": "Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, calling its `main` procedure once."
+    "summary": "Run a SolidWorks macro (.swp, or legacy .swb), or VBA source text, in the running SolidWorks, calling its `main` procedure."
    },
    {
     "name": "exit_sketch",
