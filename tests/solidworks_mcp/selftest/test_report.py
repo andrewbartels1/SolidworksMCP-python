@@ -17,6 +17,7 @@ _ENV = {
             "drawing": {"file_name": "Drawing.drwdot", "exists": False},
         },
     },
+    "tools": {"toolsets": "core", "mode": "search", "listed": 4},
     "os": "Windows-11",
     "python": "3.13.13",
     "pywin32": "311",
@@ -53,6 +54,7 @@ def test_summary_shows_environment_checks_and_tools() -> None:
     summary = report.summary_markdown(_ENV, [_PART, _SKIPPED])
 
     assert summary.startswith("### Selftest: 1 of 2 areas passed")
+    assert "| Tools listed | 4 (toolsets core, search mode) |" in summary
     assert "| SolidWorks | 34.4.0 (year 2026), english |" in summary
     assert (
         "| Templates | part: Part.prtdot; assembly: not set (missing); "

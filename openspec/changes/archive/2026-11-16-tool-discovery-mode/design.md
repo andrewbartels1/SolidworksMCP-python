@@ -99,3 +99,25 @@ numbers can't go stale.
   toolset)" where it points across toolsets.
 - [FastMCP's transform API changes] → it is pinned at 3.4.9; the tests
   exercise both transforms through the real server object.
+
+## What changed while building it (2026-11-16)
+
+- **Settings** are the config fields `toolsets` and `tool_mode`, read from
+  `SOLIDWORKS_MCP_TOOLSETS` and `SOLIDWORKS_MCP_TOOL_MODE` like every other
+  setting. The table and `apply_tool_visibility` are in `tools/toolsets.py`.
+- **The instructions** had no drawing paragraph to leave out; they gain a
+  line naming the toolsets when some are off, and the search paragraph.
+- **The self-test** runs its checks with every tool listed, since its areas
+  call drawing and export tools directly; its report gains a "Tools listed"
+  row giving what the user's settings list.
+- **The numbers** (notes.md): 135 tools, about 55,000 tokens; `core` alone
+  is two thirds of that, search mode about 900 tokens. The table is
+  `docs/assets/progress/tool-list-size.md`, written with the progress files
+  and included in the installation guide.
+- **Live**, search mode with `core` built a filleted block through
+  `call_tool`, and each search ranked the wanted tool first or second. It
+  found a fault outside this change: `add_fillet` with no edge names (use
+  the current selection) read the volume first, and that read's rebuild
+  cleared the selection `select_face_edges` had made, so no fillet was
+  built. `add_fillet` now skips the volume read in that case; the feature
+  count still catches a fillet that builds nothing.

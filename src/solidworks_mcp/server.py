@@ -31,7 +31,8 @@ from .agents.history_db import insert_tool_event
 from .cache.response_cache import CachePolicy, ResponseCache
 from .config import DeploymentMode, SolidWorksMCPConfig, load_config
 from .exceptions import SolidWorksMCPError
-from .skills import SERVER_INSTRUCTIONS, SKILL_DIR
+from .skills import SKILL_DIR, server_instructions
+from .tools.toolsets import apply_tool_visibility
 from .version import __version__
 
 AGENT_SYSTEM_PROMPT = (
@@ -87,10 +88,12 @@ class SolidWorksMCPServer:
         """
         self.config = config
         self.state = MCPServerState(config=config)
+        self.toolsets = tuple(str(getattr(config, "toolsets", "all")).split(","))
+        self.tool_mode = str(getattr(config, "tool_mode", "list"))
         self.mcp = FastMCP(
             "SolidWorks MCP Server",
             version=__version__,
-            instructions=SERVER_INSTRUCTIONS,
+            instructions=server_instructions(self.toolsets, self.tool_mode),
         )
         # The usage skill, as skill:// resources; needs no SolidWorks connection.
         self.mcp.add_provider(SkillProvider(SKILL_DIR))
@@ -319,6 +322,14 @@ class SolidWorksMCPServer:
         # Register tools and derive canonical count from FastMCP runtime
         await tools.register_tools(self.mcp, self.adapter, self.config)
         self.state.tool_count = len(await self.mcp.list_tools())
+        # Every tool stays registered; the toolsets and mode change only what
+        # tools/list shows (queue item 14).
+        apply_tool_visibility(self.mcp, self.toolsets, self.tool_mode)
+        visible = len(await self.mcp.list_tools())
+        logger.info(
+            f"Listing {visible} tools: toolsets {', '.join(self.toolsets)}, "
+            f"{self.tool_mode} mode"
+        )
         self.server = self.mcp
 
         # Setup PydanticAI agent after tools are registered so the agent can bind

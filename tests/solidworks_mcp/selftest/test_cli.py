@@ -114,6 +114,22 @@ async def test_start_server_builds_and_connects_the_real_server() -> None:
         await server.adapter.disconnect()
 
 
+@pytest.mark.asyncio
+async def test_the_checks_see_every_tool_whatever_the_settings() -> None:
+    """The areas call drawing and export tools directly, so nothing is hidden."""
+    config = SolidWorksMCPConfig(
+        mock_solidworks=True, toolsets="core", tool_mode="search"
+    )
+
+    server = await cli._start_server(config)
+    try:
+        listed = {t.name for t in await server.mcp.list_tools()}
+    finally:
+        await server.adapter.disconnect()
+
+    assert {"create_drawing_view", "verify_model"} <= listed
+
+
 def test_command_exits_two_when_precheck_fails(monkeypatch) -> None:
     monkeypatch.setattr(cli, "precheck", lambda: cli.NOT_RUNNING)
 

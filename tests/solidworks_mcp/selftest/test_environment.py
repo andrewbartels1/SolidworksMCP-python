@@ -24,6 +24,17 @@ async def test_reads_solidworks_and_versions() -> None:
     assert env["solidworks"]["templates"]["part"]["file_name"] == "part.prtdot"
     assert env["solidworks_mcp"] == __version__
     assert env["python"]
+    assert env["tools"] == {"toolsets": "all", "mode": "list", "listed": 135}
+
+
+@pytest.mark.asyncio
+async def test_reports_what_the_users_settings_list() -> None:
+    adapter = MockSolidWorksAdapter({})
+    await adapter.connect()
+
+    env = await environment.read_environment(adapter, 2026, ("core",), "search")
+
+    assert env["tools"] == {"toolsets": "core", "mode": "search", "listed": 4}
 
 
 @pytest.mark.asyncio

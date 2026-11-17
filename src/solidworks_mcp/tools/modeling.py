@@ -1579,7 +1579,7 @@ async def register_modeling_tools(
 
         Uses `template` (a .drwdot) or the default drawing template. Then place views
         with `create_drawing_view`; for a whole drawing from a model in one call, use
-        `generate_drawing_package` instead. Needs: SolidWorks running. Changes: opens a
+        `generate_drawing_package` instead (both in the drawing toolset). Needs: SolidWorks running. Changes: opens a
         new drawing document. Returns: `drawing` with `name` and `template`.
 
         Args:

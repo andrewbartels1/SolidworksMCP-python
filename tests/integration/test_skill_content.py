@@ -89,7 +89,16 @@ def known_names(tools_by_name: dict[str, Any]) -> set[str]:
         NOT_SUPPORTED,
         OPERATION_FAILED,
     }
-    return set(tools_by_name) | fields | error_types | _RESPONSE_KEYS
+    return set(tools_by_name) | fields | error_types | _RESPONSE_KEYS | _search_names()
+
+
+def _search_names() -> set[str]:
+    """Search mode's own tools (``search_tools``, ``call_tool``): real too."""
+    import asyncio
+
+    from solidworks_mcp.progress.tool_list_size import listed_tools
+
+    return {t.name for t in asyncio.run(listed_tools(("all",), "search"))}
 
 
 def _unknown(text: str, known: set[str]) -> list[str]:

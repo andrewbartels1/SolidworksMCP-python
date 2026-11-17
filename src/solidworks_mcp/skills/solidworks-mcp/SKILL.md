@@ -18,6 +18,13 @@ checking the result, and what doesn't work yet.
 - Call tools one at a time and wait for each result. The server pauses
   after every SolidWorks call on purpose: driving SolidWorks back-to-back
   crashes it.
+- If the tool list has `search_tools` and `call_tool` instead of the tools
+  below, the server is in search mode: search in plain words for each kind
+  of step ("sketch a rectangle", "extrude"), then run the tool it returns
+  with `call_tool`. The names in this skill are the names to search for.
+- A tool this skill names that isn't listed may be in a toolset the user
+  turned off (drawing, automation, vba, docs); say which, rather than
+  working around it.
 
 ## The build order
 

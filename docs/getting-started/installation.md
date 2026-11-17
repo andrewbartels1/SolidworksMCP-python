@@ -58,7 +58,8 @@ Nothing in the install or setup signs in to anything. The only download is the P
 Open SolidWorks, restart your client as setup told you, and ask *"What model is open in SolidWorks?"*. The server's log (VS Code shows it under the server's output; Claude Desktop writes `%LOCALAPPDATA%\Claude\Logs\mcp-server-solidworks.log`) includes:
 
 - `SolidWorks COM interface is available`
-- `Registered 155 SolidWorks tools` (the count grows as tools are added)
+- `Registered 135 SolidWorks tools` (the count grows as tools are added)
+- `Listing 135 tools: toolsets all, list mode` (fewer with the settings below)
 - `Connected to SolidWorks`
 
 VS Code labels every line the server writes to stderr as `[warning]`. That is where its normal log goes, since stdout carries the MCP messages, so those labels aren't problems.
@@ -70,6 +71,42 @@ uvx solidworks-mcp-python selftest
 ```
 
 It builds a small part, an assembly, a drawing view and a STEP export through the same tools a client calls, checks each against a hand calculation, and prints PASS or FAIL per area. It opens and closes a few documents of its own and leaves yours alone. On a release other than 2026, please send the result with the [compatibility report form](https://github.com/andrewbartels1/SolidworksMCP-python/issues/new?template=compatibility.yml); see [Compatibility](../compatibility.md).
+
+## 4. Choose which tools a client sees
+
+Every tool's name, description and inputs are sent to the model on every turn, so a long list costs tokens all session, and some clients cap how many tools a server may list. Two settings shorten it. Neither changes what the tools do, and with neither set the server lists every tool, as before.
+
+**`SOLIDWORKS_MCP_TOOLSETS`** lists only some groups of tools, comma-separated:
+
+| Toolset | Tools |
+| --- | --- |
+| `core` | Parts and assemblies: modelling, sketching, files, measuring and checking, materials and properties, export, the circuit-breaker reset |
+| `drawing` | Drawings: views, dimensions, the title block and sheet, the drawing package and check |
+| `automation` | Macros, recording and batch automation |
+| `vba` | The VBA code generators |
+| `docs` | Lookups in the SolidWorks API help |
+| `all` | Everything (the default) |
+
+**`SOLIDWORKS_MCP_TOOL_MODE=search`** lists four tools in place of the rest: `get_model_info`, `reset_circuit_breaker`, `search_tools` (finds tools from a plain-language description, with their inputs) and `call_tool` (runs one). The model searches before each new kind of step; the server's instructions tell it how. The search covers only the chosen toolsets and leaves deprecated tools out, so it returns their replacements. `list` is the default.
+
+What each choice sends on every turn, measured on this release (tokens are bytes divided by 4, an estimate):
+
+--8<-- "docs/assets/progress/tool-list-size.md"
+
+Set them in the `env` of the client's `solidworks` entry. For Claude Desktop or Cursor:
+
+```json
+"solidworks": {
+  "command": "...",
+  "args": ["..."],
+  "env": {
+    "SOLIDWORKS_MCP_TOOLSETS": "core,drawing",
+    "SOLIDWORKS_MCP_TOOL_MODE": "search"
+  }
+}
+```
+
+For Claude Code: `claude mcp add solidworks --scope user -e SOLIDWORKS_MCP_TOOL_MODE=search -- <command>`. A name that isn't a toolset, or a mode other than `list` or `search`, stops the server at start with a message listing the valid values, rather than quietly hiding tools. `selftest` reports how many tools your settings list.
 
 ## Install from source
 

@@ -89,6 +89,14 @@ def _templates(templates: dict[str, Any]) -> str:
     return "; ".join(shown)
 
 
+def _listed(tools: dict[str, Any]) -> str:
+    """How many tools the user's settings list, and the settings."""
+    return (
+        f"{_value(tools.get('listed'))} (toolsets {_value(tools.get('toolsets'))}, "
+        f"{_value(tools.get('mode'))} mode)"
+    )
+
+
 def summary_markdown(environment: dict[str, Any], results: list[AreaResult]) -> str:
     """The summary to paste into a compatibility issue.
 
@@ -109,6 +117,7 @@ def summary_markdown(environment: dict[str, Any], results: list[AreaResult]) -> 
         f"| SolidWorks | {_value(sw.get('revision'))} "
         f"(year {_value(sw.get('year'))}), {_value(sw.get('language'))} |",
         f"| Templates | {_templates(sw.get('templates') or {})} |",
+        f"| Tools listed | {_listed(environment.get('tools') or {})} |",
         f"| OS | {_value(environment.get('os'))} |",
         f"| Python | {_value(environment.get('python'))}, "
         f"pywin32 {_value(environment.get('pywin32'))} |",
