@@ -7,5 +7,5 @@
 ## 2. Checks
 
 - [x] 2.1 Unit tests: each answer rule, pre-existing dialogs ignored, no dialog, the adapter error
-- [ ] 2.2 Live test written (run pending): a `MsgBox` answered OK and an OK/Cancel prompt answered Cancel after 3 s (`tests/live/test_live_sw_macro_dialog.py`)
+- [x] 2.2 Live test (passed 2026-11-17, run by the user): a `MsgBox` answered OK and an OK/Cancel prompt answered Cancel after 3 s (`tests/live/test_live_sw_macro_dialog.py`)
 - [x] 2.3 Catalog entry, CHANGELOG, full suite at 100%, ruff, mypy

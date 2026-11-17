@@ -19,8 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no COM) looks for a dialog the SolidWorks process opened. One still open
   after `dialog_timeout` seconds (30) is answered with Cancel, or its only
   button, and the run fails as `macro_waited_for_user`, naming the dialog.
-  A Yes/No prompt is left for the user. Live check left for the user's run
-  (`tests/live/test_live_sw_macro_dialog.py`).
+  A Yes/No prompt is left for the user. Checked live.
 - **Tool catalog check** (queue item 24, #156): a test reads every catalog
   page and fails when a tool has no entry, an entry's parameter table
   doesn't match the tool's inputs, or its sample call isn't one the tool
