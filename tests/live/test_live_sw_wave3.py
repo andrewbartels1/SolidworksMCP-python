@@ -52,10 +52,25 @@ async def test_save_body_as_part_writes_the_body_file(scratch, tmp_path):
     scratch.written_files.append(str(target))
 
     result = await adapter.save_body_as_part(body_name, str(target))
+    listed = await adapter.list_open_documents()
+    stray = [
+        d["title"]
+        for d in listed.data or []
+        if d["type"] == "Assembly" and not d["path"]
+    ]
+    evidence(
+        "save_body_as_part: the file, and no unsaved assembly left open (#101)",
+        {
+            "file_path": (result.data or {}).get("file_path"),
+            "closed_documents": (result.data or {}).get("closed_documents"),
+            "unsaved_assemblies_open": stray,
+        },
+    )
     assert result.is_success, result.error
     assert result.data["body"] == body_name
     assert body_name in result.data["solid_bodies"]
     assert os.path.exists(target)
+    assert stray == []
 
 
 @pytest.mark.asyncio

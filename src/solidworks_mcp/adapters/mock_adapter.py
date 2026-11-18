@@ -3162,6 +3162,7 @@ class MockSolidWorksAdapter(
                 "file_path": target,
                 "feature": f"Save Bodies{self._operation_count}",
                 "solid_bodies": [body_name],
+                "closed_documents": [],
             },
             execution_time=self._delays["model_operation"],
         )

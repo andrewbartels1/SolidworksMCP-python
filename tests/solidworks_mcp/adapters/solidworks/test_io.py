@@ -4234,8 +4234,68 @@ async def test_save_body_as_part_writes_the_file(tmp_path, monkeypatch) -> None:
         "file_path": str(target),
         "feature": None,
         "solid_bodies": ["Body1"],
+        "closed_documents": [],
     }
     assert target.read_bytes() == b"body"
+
+
+class _SaveBodiesApp:
+    """An application whose Save Bodies call opens a new unsaved assembly."""
+
+    def __init__(self, part) -> None:
+        self.docs = [
+            part,
+            SimpleNamespace(
+                GetTitle=lambda: "Assem1",
+                GetPathName=lambda: "C:/a.SLDASM",
+                GetType=lambda: 2,
+            ),
+            SimpleNamespace(
+                GetTitle=lambda: "Assem2", GetPathName=lambda: "", GetType=lambda: 2
+            ),
+        ]
+        self.closed: list[str] = []
+        self.activated: list[str] = []
+
+    def GetDocuments(self):
+        return list(self.docs)
+
+    def CloseDoc(self, title):
+        self.closed.append(title)
+        self.docs = [d for d in self.docs if d.GetTitle() != title]
+
+    def ActivateDoc3(self, title, *_a):
+        self.activated.append(title)
+
+
+@pytest.mark.asyncio
+async def test_save_body_as_part_closes_the_assembly_it_left_open(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        _io_module, "pythoncom", SimpleNamespace(VT_DISPATCH=9, VT_BSTR=8)
+    )
+    monkeypatch.setattr(_io_module, "_byref_int", lambda: 0)
+    target = tmp_path / "body.sldprt"
+    part = _part_with([SimpleNamespace(Name="Body1")], writes=target)
+    part.GetTitle = lambda: "Part1"
+    part.GetPathName = lambda: "C:/p.SLDPRT"
+    app = _SaveBodiesApp(part)
+    saved_assembly, stray = app.docs[1], app.docs[2]
+    app.docs = [part, saved_assembly]  # open before the call
+    original = part.FeatureManager.CreateSaveBodyFeature
+
+    def _save(*args):
+        app.docs.append(stray)  # Save Bodies opens a new, unsaved assembly
+        return original(*args)
+
+    part.FeatureManager.CreateSaveBodyFeature = _save
+
+    result = await _DocsHarness(part, app).save_body_as_part("Body1", str(target))
+
+    assert result.data["closed_documents"] == ["Assem2"]
+    assert app.closed == ["Assem2"]  # not Assem1, which was open and saved
+    assert app.activated == ["Part1"]
 
 
 # ---- export_image: SaveBMP at the requested size --------------------------------

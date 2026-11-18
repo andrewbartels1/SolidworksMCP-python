@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`save_body_as_part` leaves no extra assembly open** (queue item 27,
+  #101): a new, unsaved assembly SolidWorks opens alongside Save Bodies is
+  closed, the part is made active again, and the reply's
+  `closed_documents` names it.
 - **`execute_macro` runs VBA source** (queue item 26, #96), when the server
   is started with `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1` (off by default: VBA
   can do anything the user can). The source is written to a `.swb` file and
