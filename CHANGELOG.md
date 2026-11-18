@@ -19,10 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   closed, the part is made active again, and the reply's
   `closed_documents` names it.
 - **`execute_macro` runs VBA source** (queue item 26, #96), when the server
-  is started with `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1` (off by default: VBA
-  can do anything the user can). The source is written to a `.swb` file and
+  is started with `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE` set (off by default:
+  VBA can do anything the user can). The source is written to a `.swb` file and
   run like a macro file, with the dialog watchdog; the reply names the file
   and repeats the source. Refused as `vba_source_off` otherwise.
+- **Restricted VBA source** (queue item 28): `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE`
+  is `off` (default), `restricted` or `full`. `restricted` runs source only
+  when every name in it is a SolidWorks API member, a safe VBA function or
+  declared by the macro; `Shell`, `CreateObject`, file statements and about
+  100 SolidWorks members that save, open, run or change settings are refused
+  as `vba_source_refused`, naming each line. Every value, the blocked list
+  and the limits are in the installation guide.
 - **A macro that waits for the user no longer hangs the server** (queue
   item 25, #97): while `execute_macro` runs, a watchdog thread (Win32 only,
   no COM) looks for a dialog the SolidWorks process opened. One still open

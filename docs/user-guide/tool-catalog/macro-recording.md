@@ -13,7 +13,7 @@ Run a SolidWorks macro file (`.swp` or `.swb`), or VBA source when the server al
 
 Run a SolidWorks macro (.swp, or legacy .swb), or VBA source text, in the running SolidWorks, calling its `main` procedure.
 
-VBA source runs only when the server was started with `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1` ([why it's off by default](../../getting-started/installation.md#5-let-execute_macro-run-vba-source-off-by-default)); otherwise it is refused as `vba_source_off`. The source is saved as a `.swb` file, and the reply gives `source_file` and the `vba_source` that ran.
+VBA source runs only when the server was started with `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE` set to `restricted` (SolidWorks calls on the open documents only, checked before it runs) or `full` (unchecked); the default, `off`, refuses it as `vba_source_off`. [Every value, what each allows and refuses, and the limits](../../getting-started/installation.md#5-let-execute_macro-run-vba-source-off-by-default). The source is saved as a `.swb` file, and the reply gives `source_file` and the `vba_source` that ran.
 
 **Prerequisite:** SolidWorks running
 

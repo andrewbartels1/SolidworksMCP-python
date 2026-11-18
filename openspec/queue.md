@@ -38,6 +38,7 @@ Last updated 2026-11-16.
 | 25 | `execute_macro` hangs with no timeout on a macro that waits for the user: a time limit, and a clear error when it's hit | #97 | `macro-dialog-watchdog` (archived) | Done 2026-11-17: a dialog left waiting is answered (Cancel, or its only button) and the run fails as `macro_waited_for_user`; checked live (#244) |
 | 26 | `execute_macro` runs VBA source text (a `generate_vba_*` result, or the agent's own), saved as a `.swb` and run with the dialog watchdog. Opt-in (`SOLIDWORKS_MCP_ALLOW_VBA_SOURCE`), the user's choice 2026-11-17 | #96 | `macro-from-vba-source` | Built, unit-tested; live check pending (`tests/live/test_live_sw_macro_source.py`) |
 | 27 | `save_body_as_part` leaves an extra unsaved assembly open (the Save Bodies feature's create-assembly option) | #101 | `save-body-no-stray-assembly` | Built, unit-tested; live check pending (`test_live_sw_wave3.py::test_save_body_as_part_writes_the_body_file`) |
+| 28 | Restricted VBA source: `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE` = off / restricted / full; `restricted` checks the source against the SolidWorks type library and a blocklist before it runs, with every default and option disclosed in the docs (the user's choice 2026-11-17) | none | `vba-source-restricted` | Built, unit-tested; live check pending (`tests/live/test_live_sw_macro_source.py`) |
 ## Removed tools (item 10, release 2.1.0)
 
 33 tools were registered but never implemented: every call returned
