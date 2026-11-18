@@ -196,8 +196,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 bucket.half_open_calls = 0
                 return True
             return False
-        elif bucket.state == CircuitState.HALF_OPEN:
-            return bucket.half_open_calls < self.half_open_max_calls
+        # HALF_OPEN, the only state left.
+        return bool(bucket.half_open_calls < self.half_open_max_calls)
 
     def _record_success(self, bucket: Any = None) -> None:
         """Record successful operation.

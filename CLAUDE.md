@@ -48,8 +48,9 @@ python -m venv .venv
 # Run server
 .\.venv\Scripts\python.exe -m solidworks_mcp.server
 
-# Lint/tests/docs
+# Lint/types/tests/docs (CI runs mypy too and fails on any error)
 .\.venv\Scripts\python.exe -m ruff check src tests
+.\.venv\Scripts\python.exe -m mypy src/solidworks_mcp
 .\.venv\Scripts\python.exe -m pytest tests -m "not solidworks_only"
 .\.venv\Scripts\python.exe -m mkdocs build --clean
 ```

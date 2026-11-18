@@ -31,7 +31,7 @@ from typing import Any
 from sqlalchemy import Engine, MetaData, Table, inspect
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
-from sqlmodel import create_engine, select
+from sqlmodel import create_engine
 
 from ...exceptions import InputRefused
 
@@ -396,7 +396,8 @@ class SqliteHoleLibrary(HoleLibrary):
 
     Table names come from the library's own rows; each is checked against
     the file's own table list and reflected, never taken from a caller, and
-    rows are read with SQLModel's ``select()``: no SQL is built as text.
+    rows are read with the reflected table's ``select()``: no SQL is built as
+    text.
     Rows are read once per table, and the file is closed after each read, so
     SolidWorks (or Toolbox Settings) can always replace it.
 
@@ -428,7 +429,7 @@ class SqliteHoleLibrary(HoleLibrary):
 
         No SQL is written as text: the table is reflected from the file
         (named only if the file's own table list has it) and read with
-        ``select()``, so SQLAlchemy quotes every identifier.
+        its ``select()``, so SQLAlchemy quotes every identifier.
 
         Raises:
             HoleLibraryError: When the file can't be read or lacks the table.
@@ -451,7 +452,7 @@ class SqliteHoleLibrary(HoleLibrary):
                 reflected = Table(real, MetaData(), autoload_with=connection)
                 rows = [
                     {str(key).lower(): value for key, value in row.items()}
-                    for row in connection.execute(select(reflected)).mappings()
+                    for row in connection.execute(reflected.select()).mappings()
                 ]
         except SQLAlchemyError as exc:
             raise HoleLibraryError(
@@ -653,7 +654,7 @@ def _sizes(table: list[tuple[str, dict[str, float]]]) -> list[dict[str, Any]]:
 
 
 def _metric(
-    column: str, values: dict[str, float]
+    column: str, values: dict[float, float]
 ) -> list[tuple[str, dict[str, float]]]:
     """``M<n>`` rows with a diameter and one more column."""
     return [(f"M{n:g}", {"diameter": n, column: v}) for n, v in values.items()]

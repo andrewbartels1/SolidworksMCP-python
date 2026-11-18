@@ -14,7 +14,7 @@ import re
 import uuid
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from ..exceptions import SolidWorksOperationError
 from .base import (
@@ -194,7 +194,7 @@ class MockSolidWorksAdapter(
         # component name. See ``_flatten_assembly_components`` for shape.
         # Empty means "use the canned default fixture" (see list_features).
         self._assembly_components: dict[str, dict[str, Any]] = {}
-        self._sketches: dict[str, str] = {}
+        self._sketches: dict[str, str | None] = {}
         self._current_sketch: str | None = None
         self._configurations_made: dict[str, list[str]] = {}
         #: Per-configuration dimension values and suppressed features.
@@ -521,7 +521,7 @@ class MockSolidWorksAdapter(
         await asyncio.sleep(self._delays["feature_operation"] / 2)
         self._operation_count += 1
 
-        is_assembly = self._current_model.type == "Assembly"
+        is_assembly = self._model_in_use().type == "Assembly"
 
         # Seed realistic feature names for empty mock state.
         if not self._features:
@@ -911,7 +911,12 @@ class MockSolidWorksAdapter(
         """Mock angle-distance chamfer (see :meth:`_mock_edge_feature`)."""
         result = await self._mock_edge_feature("Chamfer", distance, edge_names)
         if result.is_success:
-            result.data.parameters.update({"angle": angle, "flip": flip})
+            feature = cast(SolidWorksFeature, result.data)
+            feature.parameters = {
+                **(feature.parameters or {}),
+                "angle": angle,
+                "flip": flip,
+            }
         return result
 
     async def _mock_edge_feature(
@@ -1005,9 +1010,13 @@ class MockSolidWorksAdapter(
                     return (normal[0], normal[1], normal[2])
         return None
 
+    def _model_in_use(self) -> SolidWorksModel:
+        """The open model, for code that has already checked one is open."""
+        return cast(SolidWorksModel, self._current_model)
+
     def _mock_configs(self) -> list[str]:
         """The active model's configurations: Default, any made, and the active one."""
-        model = self._current_model
+        model = self._model_in_use()
         made = self._configurations_made.setdefault(model.name, ["Default"])
         active = model.configuration or "Default"
         if active not in made:
@@ -1112,8 +1121,9 @@ class MockSolidWorksAdapter(
         refused = self._mock_unknown(name)
         if refused:
             return refused
-        previous = self._current_model.configuration or "Default"
-        self._current_model.configuration = name
+        model = self._model_in_use()
+        previous = model.configuration or "Default"
+        model.configuration = name
         self._dimensions.update(self._config_dimensions.get(name, {}))
         if name in self._config_suppressed or previous in self._config_suppressed:
             self._suppressed_features = set(self._config_suppressed.get(name, set()))
@@ -1141,7 +1151,7 @@ class MockSolidWorksAdapter(
                 status=AdapterResultStatus.ERROR,
                 error=f"'{name}' is the model's only configuration.",
             )
-        if (self._current_model.configuration or "Default") == name:
+        if (self._model_in_use().configuration or "Default") == name:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
                 error=f"'{name}' is the active configuration; activate another first.",
@@ -1212,7 +1222,7 @@ class MockSolidWorksAdapter(
                 status=AdapterResultStatus.ERROR, error="Not connected to SolidWorks"
             )
 
-        token = "mm"
+        token: str | None = "mm"
         if units is not None and str(units).strip():
             token = _normalise_mock_unit_system(str(units))
             if token is None:
@@ -2828,7 +2838,7 @@ class MockSolidWorksAdapter(
         await asyncio.sleep(self._delays["model_operation"] / 2)
         self._operation_count += 1
 
-        is_assembly = self._current_model.type == "Assembly"
+        is_assembly = self._model_in_use().type == "Assembly"
         summary: dict[str, Any] = {
             "document_type": "assembly" if is_assembly else "part",
             "volume_mm3": None,

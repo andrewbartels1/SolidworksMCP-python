@@ -19,7 +19,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypeVar, cast
 
 from fastmcp import FastMCP
 from loguru import logger
@@ -30,12 +30,16 @@ from .input_compat import CompatInput
 from .tool_boundary import ToolOperationError, normalize_input, with_tool_boundary
 from .type_library import (
     Access,
+    ApiEnum,
+    ApiEnumMember,
     ApiMember,
     ApiMethod,
     ApiParameter,
     ApiProperty,
     TypeLibraryUnavailable,
+    index_enums,
     index_type_library,
+    load_constants_library,
     load_type_library,
     target_version,
     year_of,
@@ -43,7 +47,8 @@ from .type_library import (
 
 # Index files written before the index came from the type library are "1.0";
 # their member lists were largely hand-typed and are never answered from.
-INDEX_FORMAT = "2.0"
+# "2.1" adds the enums, so a "2.0" index is rebuilt once.
+INDEX_FORMAT = "2.1"
 
 #: Where lookups look for a saved index, in order.
 _INDEX_DIRS = (
@@ -56,7 +61,8 @@ IndexStatus = Literal["ready", "rebuilt", "unavailable"]
 MemberType = Literal["method", "property"]
 
 #: Validates one saved member record into its model.
-_MEMBER: TypeAdapter[ApiMethod | ApiProperty] = TypeAdapter(ApiMember)
+#: (pydantic takes the annotated union; some versions' stubs expect a class.)
+_MEMBER: TypeAdapter[ApiMethod | ApiProperty] = TypeAdapter(cast(Any, ApiMember))
 
 #: Each interface record's name lists, by member type.
 _MEMBER_LISTS: tuple[tuple[MemberType, str], ...] = (
@@ -186,6 +192,8 @@ class SolidWorksDocsDiscovery:
             "type_library": None,
             "solidworks_version": None,
             "com_objects": {},
+            "enums": {},
+            "enums_note": None,
             "vba_references": {},
             "total_methods": 0,
             "total_properties": 0,
@@ -219,6 +227,28 @@ class SolidWorksDocsDiscovery:
         )
         return {name: record.model_dump() for name, record in interfaces.items()}
 
+    def discover_enums(self) -> dict[str, Any]:
+        """Index every enum in the constants library of the version just read.
+
+        Call after :meth:`discover_com_objects`. When the constants library
+        can't be loaded, the index has no enums and ``enums_note`` says why;
+        the other lookups are unaffected.
+
+        Returns:
+            dict[str, Any]: Enum name -> its description and members, as saved.
+        """
+        major, minor = (
+            int(p) for p in self.index["type_library"]["version"].split(".")
+        )
+        try:
+            enums = index_enums(load_constants_library(major, minor))
+        except TypeLibraryUnavailable as exc:
+            logger.warning("[docs_discovery] No enum values: {}", exc)
+            self.index["enums_note"] = str(exc)
+            return {}
+        logger.info("[docs_discovery] Constants library: {} enums", len(enums))
+        return {name: record.model_dump() for name, record in enums.items()}
+
     def discover_vba_references(self) -> dict[str, Any]:
         """Discover VBA/TypeLib references via the Windows Registry.
 
@@ -251,6 +281,7 @@ class SolidWorksDocsDiscovery:
         """
         logger.info("Discovering COM objects...")
         self.index["com_objects"] = self.discover_com_objects()
+        self.index["enums"] = self.discover_enums()
 
         if include_vba:
             logger.info("Discovering VBA references...")
@@ -428,6 +459,22 @@ class LookupApiInterfaceInput(ApiIndexInput):
     )
 
 
+class GetApiEnumInput(ApiIndexInput):
+    """Input schema for ``get_api_enum``.
+
+    Attributes:
+        name (str): An enum name, or one of its members' names.
+    """
+
+    name: str = Field(
+        description=(
+            "An enum name, e.g. 'swUnitSystem_e', or a member name, e.g. "
+            "'swUnitSystem_IPS'; case does not matter"
+        ),
+        min_length=2,
+    )
+
+
 class FindRelatedApiInput(ApiIndexInput):
     """Input schema for ``find_related_api_members``.
 
@@ -511,6 +558,33 @@ class InterfaceLookup(BaseModel):
     method_count: int | None = Field(default=None, description="Number of methods")
     property_count: int | None = Field(default=None, description="Number of properties")
     note: str | None = Field(default=None, description="Why no index could be built")
+
+
+class EnumLookup(BaseModel):
+    """``get_api_enum``'s result.
+
+    Attributes:
+        found (bool): Whether an enum or member of that name is indexed.
+        name (str): The name asked for.
+        enum (str | None): The enum, as SolidWorks spells it.
+        matched_member (str | None): The member asked for, when the name was
+            a member's.
+        description (str | None): The enum's help string, if any.
+        members (list[ApiEnumMember] | None): Its members and their values.
+        note (str | None): Why there's no match.
+    """
+
+    found: bool = Field(description="True when an enum or member of that name exists")
+    name: str = Field(description="The name asked for")
+    enum: str | None = Field(default=None, description="The enum's name")
+    matched_member: str | None = Field(
+        default=None, description="The member asked for, as SolidWorks spells it"
+    )
+    description: str | None = Field(default=None, description="Help string")
+    members: list[ApiEnumMember] | None = Field(
+        default=None, description="Members in declaration order, with their values"
+    )
+    note: str | None = Field(default=None, description="Why there is no match")
 
 
 class SearchMatch(BaseModel):
@@ -725,7 +799,9 @@ def _maybe_refresh_index(
     return discovery.index, fresh_file
 
 
-_LookupResultT = TypeVar("_LookupResultT", MemberLookup, InterfaceLookup, RelatedLookup)
+_LookupResultT = TypeVar(
+    "_LookupResultT", MemberLookup, InterfaceLookup, EnumLookup, RelatedLookup
+)
 
 
 @dataclass(frozen=True)
@@ -947,6 +1023,42 @@ def _lookup_interface(index: dict[str, Any], interface: str) -> InterfaceLookup:
         method_count=len(methods),
         property_count=len(properties),
     )
+
+
+def _lookup_enum(index: dict[str, Any], name: str) -> EnumLookup:
+    """An enum's members and values, found by its name or a member's.
+
+    Args:
+        index (dict[str, Any]): The index.
+        name (str): An enum or member name; case is ignored.
+
+    Returns:
+        EnumLookup: The enum, or a no-match saying why.
+    """
+    enums: dict[str, Any] = index.get("enums") or {}
+    lowered = name.lower()
+    for enum_name, record in enums.items():
+        enum = ApiEnum.model_validate(record)
+        matched = None
+        if enum_name.lower() != lowered:
+            matched = next(
+                (m.name for m in enum.members if m.name.lower() == lowered), None
+            )
+            if matched is None:
+                continue
+        return EnumLookup(
+            found=True,
+            name=name,
+            enum=enum_name,
+            matched_member=matched,
+            description=enum.description,
+            members=enum.members,
+        )
+    note = index.get("enums_note") or (
+        f"'{name}' is neither an enum nor an enum member in the indexed "
+        "constants type library."
+    )
+    return EnumLookup(found=False, name=name, note=note)
 
 
 def _lookup_method(index: dict[str, Any], interface: str, method: str) -> MemberLookup:
@@ -1429,6 +1541,57 @@ async def register_docs_discovery_tools(
         }
 
     @mcp.tool()
+    async def get_api_enum(
+        input_data: GetApiEnumInput | None = None,
+    ) -> dict[str, Any]:
+        """Look up a SolidWorks API enum's members and their integer values.
+
+        Use this when a call takes an enum value, such as a unit system or a
+        user preference, instead of guessing the number: the values aren't in
+        the API help pages. Give the enum (``swUnitSystem_e``) or one of its
+        members (``swUnitSystem_IPS``); a member's name returns its whole
+        enum with ``matched_member`` set. Names match regardless of case. The
+        values come from SolidWorks' constants type library installed on this
+        machine.
+
+        Setup: none. SolidWorks must be installed, not running; it is never
+        contacted. Read-only. The first lookup builds the index (about a
+        second) and later ones reuse it. ``index_status`` is ``ready``,
+        ``rebuilt`` or ``unavailable``.
+
+        Returns ``result`` with ``enum``, ``description`` and ``members``
+        (``name`` and ``value`` in declaration order). ``result.found`` false
+        means there's no such enum or member, or no index could be built;
+        ``result.note`` says which.
+
+        Example input: ``{"name": "swUnitSystem_e"}``
+
+        Args:
+            input_data (GetApiEnumInput | None): The enum. `name` (an
+                enum or member name) is required; `year` has a default.
+
+        Returns:
+            dict[str, Any]: ``result``, ``year``, ``type_library_version``,
+            ``index_status`` and ``source_index_file``, plus
+            ``status``/``message``/``execution_time``.
+        """
+        start_time = time.time()
+        normalized = normalize_input(input_data, GetApiEnumInput)
+        source = _index_for_lookup(normalized.year, normalized.index_file, config)
+        result = source.annotate(_lookup_enum(source.index, normalized.name))
+        return {
+            "status": "success",
+            "message": (
+                f"{result.enum}: {len(result.members or [])} members"
+                if result.found
+                else "No enum or enum member of that name"
+            ),
+            **source.payload(),
+            "result": result.model_dump(exclude_unset=True),
+            "execution_time": time.time() - start_time,
+        }
+
+    @mcp.tool()
     async def find_related_api_members(
         input_data: FindRelatedApiInput | None = None,
     ) -> dict[str, Any]:
@@ -1481,6 +1644,6 @@ async def register_docs_discovery_tools(
         }
 
     # discover_solidworks_docs, search_solidworks_api_help, lookup_api_method,
-    # lookup_api_interface, find_related_api_members
-    tool_count = 5
+    # lookup_api_interface, get_api_enum, find_related_api_members
+    tool_count = 6
     return tool_count

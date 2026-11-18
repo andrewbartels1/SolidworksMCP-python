@@ -5,6 +5,7 @@ SolidWorks automation capabilities on Windows platforms.
 """
 
 import asyncio
+import contextlib
 import os
 import platform
 import re
@@ -37,6 +38,7 @@ from .solidworks import (
     SolidWorksTemplatesMixin,
     bitmap,
 )
+from .solidworks.dialog_watch import DialogWatch, waited_message
 from .solidworks.feature_walk import walk_feature_tree
 from .solidworks.features import _null_callout, _select_feature_by_name
 from .solidworks.io import _byref_int
@@ -1298,7 +1300,7 @@ class _FeatureSelectionService:
         for candidate in candidate_names:
             component_name = candidate.split("@", 1)[0]
             component = self._adapter._attempt(
-                lambda name=component_name: get_component_by_name(name),  # type: ignore[misc]
+                lambda name=component_name: get_component_by_name(name),
                 default=None,
             )
             if component is None:
@@ -1369,13 +1371,13 @@ class _FeatureSelectionService:
             # Unflagged, GetNextFeature/Select2 resolve as properties and the
             # walk dies with "Member not found" (confirmed live 2026-10-13).
             self._adapter._attempt(
-                lambda f=feature_ref: sw_type_info.flag_members(  # type: ignore[misc]
+                lambda f=feature_ref: sw_type_info.flag_members(
                     f, "GetNextFeature", "Select2"
                 ),
                 default=0,
             )
             tree_name = self._adapter._attempt(
-                lambda current_feature=feature_ref: str(current_feature.Name or ""),  # type: ignore[misc]
+                lambda current_feature=feature_ref: str(current_feature.Name or ""),
                 default="",
             )
             if self._matches_candidate_name(
@@ -1392,7 +1394,7 @@ class _FeatureSelectionService:
                 except Exception:
                     pass
             next_feature = self._adapter._attempt(
-                lambda current_feature=feature_ref: current_feature.GetNextFeature()  # type: ignore[misc]
+                lambda current_feature=feature_ref: current_feature.GetNextFeature()
             )
             if next_feature is None:
                 break
@@ -1646,7 +1648,7 @@ class _FeatureSelectionService:
                 ),
                 default=0,
             )
-            sw_type_info.flag_doc(resolved_doc, resolved_doc_type)
+            sw_type_info.flag_doc(resolved_doc, resolved_doc_type or 0)
             component_path, _title = self._adapter._document_routing.document_identity(
                 resolved_doc
             )
@@ -2057,7 +2059,7 @@ class PyWin32Adapter(
             _settle_after(operation_name)
 
     def _attempt(
-        self, operation: Callable[[], T], default: T | None = None
+        self, operation: Callable[..., T], default: T | None = None
     ) -> T | None:
         """Build internal attempt.
 
@@ -2065,7 +2067,8 @@ class PyWin32Adapter(
         blocks throughout operation code.
 
         Args:
-            operation (Callable[[], T]): Callable object executed by the helper.
+            operation (Callable[..., T]): Called with no arguments (a lambda may
+                bind loop values as defaults).
             default (T | None): Fallback value returned when the operation fails. Defaults to
                                 None.
 
@@ -2261,13 +2264,13 @@ class PyWin32Adapter(
         ``ActiveView``; ``None`` when either is unreadable or not positive.
         """
         view = self._attempt(lambda: target_doc.ActiveView)
-        size = [
+        width, height = (
             self._attempt(lambda name=name: int(getattr(view, name)))
             for name in ("FrameWidth", "FrameHeight")
-        ]
-        if not all(isinstance(v, int) and v > 0 for v in size):
+        )
+        if not width or not height or width < 0 or height < 0:
             return None
-        return size[0] / size[1]
+        return width / height
 
     def _save_screenshot_with_saveas3(
         self, target_doc: Any, resolved_path: str
@@ -2649,20 +2652,30 @@ class PyWin32Adapter(
         return type_map.get(doc_type, "Unknown")
 
     def _invoke_run_macro2(
-        self, macro_path: str, module_name: str, proc_name: str
+        self,
+        macro_path: str,
+        module_name: str,
+        proc_name: str,
+        dialog_timeout: float = 30.0,
     ) -> dict[str, Any]:
         """Call swApp.RunMacro2 and parse the result into a result dict.
+
+        A :class:`DialogWatch` runs beside the call: a dialog the macro leaves
+        waiting longer than ``dialog_timeout`` is answered (Cancel, or its
+        only button), so the call returns, and the run is then an error.
 
         Args:
             macro_path: Absolute path to the VBA macro file.
             module_name: VB module name (parsed from the file or stem fallback).
             proc_name: Entry-point procedure name, typically "main".
+            dialog_timeout: Seconds a dialog may wait before it is answered.
 
         Returns:
             dict[str, Any]: {"macro_path", "module_name", "errors"} on success.
 
         Raises:
-            SolidWorksMCPError: If RunMacro2 reports failure.
+            SolidWorksMCPError: If RunMacro2 reports failure, or the macro
+                waited on a dialog.
         """
         # nRetval (5th arg) is ByRef Long. Passing a plain 0 raises
         # DISP_E_TYPEMISMATCH ('Type mismatch.', arg index 5) under pywin32
@@ -2674,9 +2687,14 @@ class PyWin32Adapter(
             proc_name,
         )
         retval = _byref_long(0)
-        result = self.swApp.RunMacro2(  # type: ignore[union-attr]
-            macro_path, module_name, proc_name, 0, retval
-        )
+        pid = self._attempt(lambda: int(self.swApp.GetProcessID()))  # type: ignore[union-attr]
+        watch = DialogWatch(pid, dialog_timeout) if pid else None
+        with watch or contextlib.nullcontext():
+            result = self.swApp.RunMacro2(  # type: ignore[union-attr]
+                macro_path, module_name, proc_name, 0, retval
+            )
+        if watch is not None and watch.seen:
+            raise SolidWorksMCPError(waited_message(watch.seen, dialog_timeout))
         if isinstance(result, (list, tuple)):
             success, errors = result[0], result[1]
         else:
@@ -2741,6 +2759,11 @@ class PyWin32Adapter(
             """
             module_name = _parse_vb_module_name(macro_path)
             proc_name = params.get("proc_name", "main")
-            return self._invoke_run_macro2(macro_path, module_name, proc_name)
+            return self._invoke_run_macro2(
+                macro_path,
+                module_name,
+                proc_name,
+                float(params.get("dialog_timeout") or 30.0),
+            )
 
         return self._handle_com_operation("execute_macro", _run)

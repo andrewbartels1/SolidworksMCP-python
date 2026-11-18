@@ -482,6 +482,16 @@ class TestInsideTheView:
         pos.lines = lay._projected_segments(pos, *moves["pos"], OUTLINE)
         assert lay.find_overlaps([pos, hole], {"View1": OUTLINE}) == []
 
+    def test_a_leader_with_no_lines_is_placed_outside(self) -> None:
+        pos, hole = self._plate()
+        hole.lines = []  # no leader to anchor the text inside
+        moves, unplaced = lay.plan_layout(
+            [pos, hole], {"View1": OUTLINE}, inside_first={"dia"}
+        )
+        assert not unplaced
+        box = lay.shift_box(hole.text_box, *moves["dia"])
+        assert not lay.box_overlap(box, OUTLINE)
+
     def test_no_room_inside_falls_back_to_outside(self) -> None:
         pos, hole = self._plate()
         hole.text_box = (0.0, 0.0, 0.2, 0.012)  # wider than the view

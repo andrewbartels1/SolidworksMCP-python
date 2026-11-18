@@ -25,6 +25,7 @@ from solidworks_mcp.config import (
 )
 from solidworks_mcp.server import SolidWorksMCPServer
 from solidworks_mcp.tools.docs_discovery import (
+    INDEX_FORMAT,
     SolidWorksDocsDiscovery,
     _discover_vba_references_via_registry,
     _extract_year,
@@ -32,6 +33,7 @@ from solidworks_mcp.tools.docs_discovery import (
     _find_index_file,
     _find_related_api_members,
     _load_index_file,
+    _lookup_enum,
     _lookup_interface,
     _lookup_method,
     _resolve_solidworks_year,
@@ -41,6 +43,7 @@ from solidworks_mcp.tools.docs_discovery import (
 from solidworks_mcp.tools.tool_boundary import ToolOperationError
 from solidworks_mcp.tools.type_library import (
     SOLIDWORKS_TYPELIB_GUID,
+    ApiEnum,
     ApiInterface,
     TypeLibraryInfo,
 )
@@ -111,6 +114,21 @@ _COM_OBJECTS = {
     ),
 }
 
+_ENUMS = {
+    "swUnitSystem_e": {
+        "description": None,
+        "members": [
+            {"name": "swUnitSystem_CGS", "value": 1},
+            {"name": "swUnitSystem_IPS", "value": 3},
+            {"name": "swUnitSystem_MMGS", "value": 5},
+        ],
+    },
+    "swLengthUnit_e": {
+        "description": "Length units",
+        "members": [{"name": "swMM", "value": 0}, {"name": "swINCHES", "value": 3}],
+    },
+}
+
 _LIBRARY = TypeLibraryInfo(
     guid=SOLIDWORKS_TYPELIB_GUID,
     version="34.0",
@@ -152,6 +170,14 @@ def fake_type_library(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
         lambda _lib: {
             name: ApiInterface.model_validate(record)
             for name, record in _COM_OBJECTS.items()
+        },
+    )
+    monkeypatch.setattr(docs_mod, "load_constants_library", lambda *_a: "constants")
+    monkeypatch.setattr(
+        docs_mod,
+        "index_enums",
+        lambda _lib: {
+            name: ApiEnum.model_validate(record) for name, record in _ENUMS.items()
         },
     )
     monkeypatch.setattr(docs_mod, "_discover_vba_references_via_registry", dict)
@@ -368,7 +394,7 @@ async def test_search_solidworks_api_help_with_index(
     index_path.write_text(
         json.dumps(
             {
-                "version": "2.0",
+                "version": INDEX_FORMAT,
                 "com_objects": {
                     "ISldWorks": {
                         "methods": ["OpenDoc6", "CloseDoc"],
@@ -689,7 +715,7 @@ async def test_discover_tool_top_level_exception_path(
 # #64 — granular API lookups (helpers are pure, no COM / no server)
 # ---------------------------------------------------------------------------
 
-_LOOKUP_INDEX = {"version": "2.0", "com_objects": _COM_OBJECTS}
+_LOOKUP_INDEX = {"version": INDEX_FORMAT, "com_objects": _COM_OBJECTS}
 
 
 def test_lookup_interface_known_returns_all_members():
@@ -801,6 +827,101 @@ async def test_granular_lookup_tools_registered_and_callable(
     assert isinstance(search["matches"], list)
 
 
+_ENUM_INDEX = {"version": INDEX_FORMAT, "com_objects": {}, "enums": _ENUMS}
+
+
+def test_an_enum_by_name_lists_its_members_and_values() -> None:
+    result = _dump(_lookup_enum(_ENUM_INDEX, "swUnitSystem_e"))
+
+    assert result["found"] is True
+    assert result["enum"] == "swUnitSystem_e"
+    assert result["matched_member"] is None
+    assert {m["name"]: m["value"] for m in result["members"]} == {
+        "swUnitSystem_CGS": 1,
+        "swUnitSystem_IPS": 3,
+        "swUnitSystem_MMGS": 5,
+    }
+
+
+def test_a_member_by_name_gives_its_enum_whatever_the_case() -> None:
+    result = _dump(_lookup_enum(_ENUM_INDEX, "swunitsystem_ips"))
+
+    assert (result["enum"], result["matched_member"]) == (
+        "swUnitSystem_e",
+        "swUnitSystem_IPS",
+    )
+    assert _dump(_lookup_enum(_ENUM_INDEX, "SWLENGTHUNIT_E"))["description"] == (
+        "Length units"
+    )
+
+
+def test_an_unknown_enum_name_says_so() -> None:
+    result = _dump(_lookup_enum(_ENUM_INDEX, "swNoSuch_e"))
+
+    assert result["found"] is False
+    assert result["note"] == (
+        "'swNoSuch_e' is neither an enum nor an enum member in the indexed "
+        "constants type library."
+    )
+
+
+def test_an_index_without_enums_says_why() -> None:
+    index = {"version": INDEX_FORMAT, "enums": {}, "enums_note": "swconst.tlb is gone."}
+
+    assert (
+        _dump(_lookup_enum(index, "swUnitSystem_e"))["note"] == "swconst.tlb is gone."
+    )
+
+
+def test_discovery_without_the_constants_library_keeps_the_rest(
+    fake_type_library: list[tuple], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import solidworks_mcp.tools.docs_discovery as docs_mod
+    from solidworks_mcp.tools.type_library import TypeLibraryUnavailable
+
+    def _missing(*_args: object) -> None:
+        raise TypeLibraryUnavailable("No swconst.tlb.")
+
+    monkeypatch.setattr(docs_mod, "load_constants_library", _missing)
+
+    index = SolidWorksDocsDiscovery().discover_all(include_vba=False)
+
+    assert index["enums"] == {}
+    assert index["enums_note"] == "No swconst.tlb."
+    assert "ISldWorks" in index["com_objects"]
+
+
+@pytest.mark.asyncio
+async def test_get_api_enum_answers_from_the_built_index(
+    fake_type_library: list[tuple], mcp_server, mock_config
+) -> None:
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+    tools = {t.name: t.fn for t in await mcp_server.list_tools()}
+
+    found = await tools["get_api_enum"]({"name": "swUnitSystem_IPS"})
+    missing = await tools["get_api_enum"]({"name": "swNoSuch_e"})
+
+    assert found["status"] == "success"
+    assert found["message"] == "swUnitSystem_e: 3 members"
+    assert found["index_status"] == "rebuilt"
+    assert found["result"]["matched_member"] == "swUnitSystem_IPS"
+    assert missing["message"] == "No enum or enum member of that name"
+    assert missing["index_status"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_get_api_enum_without_a_type_library_says_why(
+    mcp_server, mock_config
+) -> None:
+    await register_docs_discovery_tools(mcp_server, object(), mock_config)
+    tools = {t.name: t.fn for t in await mcp_server.list_tools()}
+
+    result = await tools["get_api_enum"]({"name": "swUnitSystem_e"})
+
+    assert result["result"]["found"] is False
+    assert result["result"]["note"] == "No SolidWorks type library in this test."
+
+
 # ---------------------------------------------------------------------------
 # Docs index auto-refresh on staleness (config-gated)
 # ---------------------------------------------------------------------------
@@ -868,7 +989,7 @@ def stale_index(tmp_path):
     index_file.write_text("{}")
     old = time.time() - 30 * 86400
     os.utime(index_file, (old, old))
-    return {"version": "2.0", "com_objects": {}}, index_file
+    return {"version": INDEX_FORMAT, "com_objects": {}}, index_file
 
 
 _REFRESH_ON = SimpleNamespace(docs_index_auto_refresh=True, docs_index_max_age_days=21)
@@ -1204,7 +1325,7 @@ def test_discovery_reads_the_type_library(fake_type_library, tmp_path) -> None:
     index = discovery.discover_all()
 
     assert fake_type_library == [(2025, True)]
-    assert index["version"] == "2.0"
+    assert index["version"] == INDEX_FORMAT
     assert index["type_library"] == _LIBRARY.model_dump()
     assert index["solidworks_version"] == "34.0"
     assert index["com_objects"] == _COM_OBJECTS
@@ -1310,7 +1431,7 @@ async def test_a_lookup_builds_a_missing_index(
     assert result["type_library_version"] == "34.0"
     saved = Path(result["source_index_file"])
     assert saved.name == "solidworks_docs_index_2026.json"
-    assert json.loads(saved.read_text(encoding="utf-8"))["version"] == "2.0"
+    assert json.loads(saved.read_text(encoding="utf-8"))["version"] == INDEX_FORMAT
     assert result["result"]["found"] is True
 
 

@@ -116,7 +116,7 @@ def _cap_thread_depth(
     if data is None:
         return None
     data = sw_type_info.flagged(data, "IWizardHoleFeatureData2")
-    thread = adapter._attempt(lambda: float(data.ThreadDepth), None)
+    thread: float | None = adapter._attempt(lambda: float(data.ThreadDepth), None)
     cap = depth_m * _THREAD_SHARE
     if thread is None or thread <= cap:
         return thread

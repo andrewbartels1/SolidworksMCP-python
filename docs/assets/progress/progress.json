@@ -1,8 +1,8 @@
 {
  "tools": {
-  "total": 139,
+  "total": 140,
   "by_level": {
-   "stable": 131,
+   "stable": 132,
    "beta": 0,
    "experimental": 0,
    "planned": 0,
@@ -577,6 +577,13 @@
     "summary": "Write a VBA macro that revolves the selected sketch, with both-direction and thin-wall options."
    },
    {
+    "name": "get_api_enum",
+    "family": "docs_discovery",
+    "level": "stable",
+    "reason": "",
+    "summary": "Look up a SolidWorks API enum's members and their integer values."
+   },
+   {
     "name": "get_custom_properties",
     "family": "engineering_data",
     "level": "stable",
@@ -987,11 +994,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 251,
+   "covered": 252,
    "total": 2838
   },
   "api": {
-   "covered": 276,
+   "covered": 277,
    "total": 5985
   },
   "interfaces": [
@@ -1009,6 +1016,7 @@
      "GetMassProperties",
      "GetMathUtility",
      "GetOpenDocumentByName",
+     "GetProcessID",
      "GetUserPreferenceStringValue",
      "GetUserPreferenceToggle",
      "NewAssembly",

@@ -39,6 +39,12 @@ fillet) fails with `error_type: "invalid_input"` and opens no sketch.
 }
 ```
 
+**Sample call:**
+
+```json
+{"plane": "Top"}
+```
+
 ---
 
 ### `add_line`
@@ -355,6 +361,12 @@ Add a geometric relation between sketch entities: horizontal, vertical, parallel
 }
 ```
 
+**Sample call:**
+
+```json
+{"entity1": "Line1", "relation_type": "horizontal"}
+```
+
 ---
 
 ### `add_sketch_dimension`
@@ -485,3 +497,20 @@ Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane 
 
 ---
 
+---
+
+### `check_sketch_fully_defined`
+
+Check whether a sketch is fully defined, under-defined or over-defined.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `sketch_name` | `str?` | — | `null` | Optional sketch name. If omitted, checks the active or last sketch. |
+
+**Sample call:**
+
+```json
+{}
+```

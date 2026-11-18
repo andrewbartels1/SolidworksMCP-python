@@ -19,16 +19,12 @@ Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, 
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `macro_path` | `str?` | — | `None` | Path to a binary macro (.swp or .swb) |
-| `macro_file` | `str?` | — | `None` | Alternative to macro_path (.swp or .swb) |
-| `parameters` | `Dict[str, Any]` | ✅ | `` | Macro parameters |
-| `target_file` | `str?` | — | `None` | Target file |
-| `execution_mode` | `str?` | — | `None` | Execution mode |
-| `pause_on_error` | `bool` | — | `False` | Pause on error |
-| `log_execution` | `bool` | — | `False` | Log execution |
-| `execution_parameters` | `Dict[str, Any]?` | — | `None` | Execution parameters |
-| `repeat_count` | `int` | — | `1` | Number of times to execute |
-| `pause_between_runs` | `float` | — | `0.0` | Pause between executions in seconds |
+| `macro_path` | `str?` | — | `null` | Path to a binary SolidWorks macro (.swp, or legacy .swb). VBA source (.vb, .bas, text) cannot be run directly. |
+| `macro_file` | `str?` | — | `null` | Alternative to macro_path (.swp or .swb) |
+| `proc_name` | `str` | — | `"main"` | The macro procedure to call; main by default |
+| `repeat_count` | `int` | — | `1` | How many times to run the macro (1-100); it stops at the first failure |
+| `pause_between_runs` | `float` | — | `0.0` | Seconds to wait between runs |
+| `dialog_timeout` | `float` | — | `30.0` | Seconds a dialog the macro opens (MsgBox, form, prompt) may wait before it is answered with Cancel (or its only button) and the run fails as `macro_waited_for_user` |
 
 **Sample call:**
 

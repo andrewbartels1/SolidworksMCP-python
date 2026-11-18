@@ -18,9 +18,8 @@ Export the active document to STEP, like File > Save As with the STEP type.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `file_path` | `str` | ✅ | `` | Full path for the exported file |
-| `format_type` | `str` | ✅ | `` | Export format (step, iges, stl, pdf, dwg, jpg, png) |
-| `options` | `Dict[str, Any]?` | — | `None` | Format-specific export options |
+| `file_path` | `str` | ✅ |  | Full path for the exported file |
+| `format_type` | `str?` | — | `null` | Not needed: the file extension sets the format; defaults to the tool's own format |
 
 **Sample call:**
 
@@ -43,9 +42,8 @@ Export the active document to IGES, like File > Save As with the IGES type.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `file_path` | `str` | ✅ | `` | Full path for the exported file |
-| `format_type` | `str` | ✅ | `` | Export format (step, iges, stl, pdf, dwg, jpg, png) |
-| `options` | `Dict[str, Any]?` | — | `None` | Format-specific export options |
+| `file_path` | `str` | ✅ |  | Full path for the exported file |
+| `format_type` | `str?` | — | `null` | Not needed: the file extension sets the format; defaults to the tool's own format |
 
 **Sample call:**
 
@@ -68,9 +66,8 @@ Export the active document to STL, like File > Save As with the STL type.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `file_path` | `str` | ✅ | `` | Full path for the exported file |
-| `format_type` | `str` | ✅ | `` | Export format (step, iges, stl, pdf, dwg, jpg, png) |
-| `options` | `Dict[str, Any]?` | — | `None` | Format-specific export options |
+| `file_path` | `str` | ✅ |  | Full path for the exported file |
+| `format_type` | `str?` | — | `null` | Not needed: the file extension sets the format; defaults to the tool's own format |
 
 **Sample call:**
 
@@ -93,9 +90,8 @@ Export the active document to PDF, like File > Save As with the PDF type.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `file_path` | `str` | ✅ | `` | Full path for the exported file |
-| `format_type` | `str` | ✅ | `` | Export format (step, iges, stl, pdf, dwg, jpg, png) |
-| `options` | `Dict[str, Any]?` | — | `None` | Format-specific export options |
+| `file_path` | `str` | ✅ |  | Full path for the exported file |
+| `format_type` | `str?` | — | `null` | Not needed: the file extension sets the format; defaults to the tool's own format |
 
 **Sample call:**
 
@@ -118,9 +114,8 @@ Export the active document to DWG, like File > Save As with the DWG type.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `file_path` | `str` | ✅ | `` | Full path for the exported file |
-| `format_type` | `str` | ✅ | `` | Export format (step, iges, stl, pdf, dwg, jpg, png) |
-| `options` | `Dict[str, Any]?` | — | `None` | Format-specific export options |
+| `file_path` | `str` | ✅ |  | Full path for the exported file |
+| `format_type` | `str?` | — | `null` | Not needed: the file extension sets the format; defaults to the tool's own format |
 
 **Sample call:**
 

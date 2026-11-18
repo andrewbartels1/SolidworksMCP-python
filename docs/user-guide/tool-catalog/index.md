@@ -1,6 +1,6 @@
-# Tool Catalog — All 139 Tools
+# Tool Catalog — All 140 Tools
 
-This reference documents all **139 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **140 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -11,7 +11,7 @@ Each section covers one functional category with parameter tables and copy-paste
 |----------|-------|-------------|
 | [Modeling Tools](modeling.md) | 42 | Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, Hole Wizard holes, cosmetic threads, shells, drafts, ribs, sheet metal (flanges, bends, the flat pattern), fillets, chamfers, patterns, reference geometry, mates, dimensions, feature renaming and the document unit system. |
 | [Sketching Tools](sketching.md) | 19 | Sketches on a plane or a flat face: lines, circles, arcs, splines, polygons, relations, dimensions, offsets, mirrors and patterns. |
-| [Drawing Tools](drawing.md) | 13 | Drawings from a model: views, notes and centre marks. Section and detail views, dimensions, the title block and a drawing check are planned. |
+| [Drawing Tools](drawing.md) | 13 | Drawings from a model: standard, section and detail views, dimensions, notes, centre marks, the sheet format and title block, and a drawing check. |
 | [Drawing Analysis Tools](drawing-analysis.md) | 1 | Compare two versions of a drawing file. |
 | [Drawing Automation Tools](drawing-automation.md) | 7 | Model dimensions laid out without overlaps, datum tags, tolerances, BOM tables, sheet scale and complete A3 drawings. |
 | [Engineering Data Tools](engineering-data.md) | 8 | Read and edit the data drawings and BOMs are built from: model dimensions by name, measurements, materials, custom properties and sheet-metal flat patterns. |
@@ -22,10 +22,11 @@ Each section covers one functional category with parameter tables and copy-paste
 | [VBA Generation Tools](vba-generation.md) | 10 | VBA macro text for steps the tools don't cover. |
 | [Template Management Tools](template-management.md) | 1 | Compare two template files. |
 | [Macro Recording Tools](macro-recording.md) | 1 | Run a binary SolidWorks macro (`.swp`). |
-| [Docs Discovery Tools](docs-discovery.md) | 5 | Look up SolidWorks API interfaces and member signatures, read from the installed SolidWorks type library. |
+| [Docs Discovery Tools](docs-discovery.md) | 6 | Look up SolidWorks API interfaces, member signatures and enum values, read from the installed SolidWorks type libraries. |
+| [Server Admin Tools](server-admin.md) | 1 | Reset the circuit breaker the server uses to pause a failing operation. |
 
-`reset_circuit_breaker` (server admin) has no page of its own; see the
-[progress page](../../progress.md). Eight tools are deprecated: each one's
+Every tool's support level is on the [progress page](../../progress.md).
+Eight tools are deprecated: each one's
 section opens with "Deprecated" and names its replacement.
 
 ## Standard Response Envelope

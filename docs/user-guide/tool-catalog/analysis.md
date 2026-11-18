@@ -33,14 +33,7 @@ Measure the active part or assembly's mass properties: volume, surface area, mas
 
 **Prerequisite:** Active model with solid geometry
 
-**Parameters:**
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `model_path` | `str?` | — | `None` | Path to the model file |
-| `units` | `str` | — | `metric` | Units for mass properties |
-| `include_hidden` | `bool` | — | `False` | Include hidden components |
-| `reference_coordinate_system` | `str?` | — | `None` | Reference coordinate system alias |
+**Parameters:** none. It always measures the active model; the inputs it used to take are refused.
 
 **Sample call:**
 
@@ -74,11 +67,9 @@ Find where the components of the active assembly overlap (Tools > Interference D
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `assembly_path` | `str?` | — | `None` | Assembly path alias |
-| `check_all_components` | `bool` | — | `False` | Check all components alias |
-| `include_hidden` | `bool` | — | `False` | Include hidden components |
-| `components` | `List[str]` | ✅ | `` | List of component names to check for interference |
-| `tolerance` | `float` | — | `0.001` | Interference detection tolerance in mm |
+| `assembly_path` | `str?` | — | `null` | Assembly path alias |
+| `include_hidden` | `bool` | — | `false` | Check hidden components too; by default they are left out, as in SolidWorks' own Interference Detection |
+| `components` | `list[str]` | — | `[]` | List of component names to check for interference |
 
 **Sample call:**
 
@@ -129,6 +120,21 @@ which never counts as a pass. `verdict` is one of:
 A model that doesn't match still returns `status: "success"`, because the tool itself
 worked. `measured` holds everything that was read, including the names of the counted
 features.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `mass_kg` | `float?` | — | `null` | Expected mass in kg (depends on the material) |
+| `volume_mm3` | `float?` | — | `null` | Expected volume, mm³ |
+| `bounding_box_mm` | `list[float]?` | — | `null` | Expected overall size [x, y, z] in mm, in model axes |
+| `feature_count` | `int?` | — | `null` | Expected number of modelling features (extrudes, cuts, fillets, patterns...); sketches, the origin, folders and the three default planes are not counted |
+| `solid_body_count` | `int?` | — | `null` | Expected number of solid bodies (parts) |
+| `component_count` | `int?` | — | `null` | Expected top-level components (assemblies) |
+| `mate_count` | `int?` | — | `null` | Expected unsuppressed mates (assemblies) |
+| `no_interference` | `bool?` | — | `null` | true to require that no components overlap (assemblies) |
+| `relative_tolerance` | `float` | — | `0.01` | Allowed relative error for mass and volume (0.01 = 1 %) |
+| `length_tolerance_mm` | `float` | — | `0.1` | Allowed error per bounding-box axis, mm |
 
 **Sample call:**
 

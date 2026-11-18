@@ -1872,7 +1872,8 @@ async def register_modeling_tools(
             dict[str, Any]: The dimension's value.
         """
         input_data = normalize_input(input_data, GetDimensionInput)
-        result = await adapter.get_dimension(input_data.name)
+        # The input's validator fills `name` (from `dimension_name` if need be).
+        result = await adapter.get_dimension(cast(str, input_data.name))
 
         require_success(result, context="Failed to get dimension")
         reading = result.data or {}
@@ -1911,7 +1912,7 @@ async def register_modeling_tools(
         """
         input_data = normalize_input(input_data, SetDimensionInput)
         result = await adapter.set_dimension(
-            input_data.name, input_data.value, input_data.configurations
+            cast(str, input_data.name), input_data.value, input_data.configurations
         )
 
         require_success(result, context="Failed to set dimension")

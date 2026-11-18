@@ -14,6 +14,12 @@ List every dimension in the active part or assembly with its full name and value
 
 **Prerequisite:** SolidWorks running
 
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `feature_name` | `str?` | — | `null` | Only list this feature's dimensions, e.g. 'Boss-Extrude1'. Omit to list every dimension in the model. |
+
 **Sample call:**
 
 ```json
@@ -37,9 +43,7 @@ Measure faces, edges or vertices of the active model with SolidWorks' Measure to
 **Sample call:**
 
 ```json
-{
-  "entities": []
-}
+{"entities": ["face:0,10,0", "face:0,0,0"]}
 ```
 
 ---
@@ -116,6 +120,12 @@ List the materials in the installed SolidWorks material libraries.
 
 **Prerequisite:** SolidWorks running
 
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `search` | `str?` | — | `null` | Case-insensitive filter on material name or classification, e.g. 'steel' or '6061' |
+
 **Sample call:**
 
 ```json
@@ -129,6 +139,12 @@ List the materials in the installed SolidWorks material libraries.
 Read the active document's custom properties, such as PartNo, Description or Revision.
 
 **Prerequisite:** SolidWorks running
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `configuration` | `str?` | — | `null` | Configuration-specific properties; file-level (what title blocks usually read) when omitted |
 
 **Sample call:**
 
@@ -155,10 +171,7 @@ Create or overwrite one text custom property on the active document, e.g. PartNo
 **Sample call:**
 
 ```json
-{
-  "name": "MCP_Demo_Part",
-  "value": 50.0
-}
+{"name": "PartNo", "value": "BR-001"}
 ```
 
 ---
@@ -178,9 +191,7 @@ Export the active sheet-metal part's flat pattern to DXF or DWG, for laser or wa
 **Sample call:**
 
 ```json
-{
-  "file_path": "C:\\Temp\\mcp_demo\\part.sldprt"
-}
+{"file_path": "C:\\Temp\\mcp_demo\\bracket.dxf"}
 ```
 
 ---

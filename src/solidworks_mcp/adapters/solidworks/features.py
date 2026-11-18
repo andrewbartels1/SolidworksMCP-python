@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from .. import sw_type_info
 from ..base import (
@@ -13,6 +13,7 @@ from ..base import (
     AdapterResultStatus,
     ExtrusionParameters,
     LoftParameters,
+    MassProperties,
     RevolveParameters,
     SolidWorksFeature,
     SweepParameters,
@@ -29,6 +30,17 @@ from .configurations import (
 
 class SolidWorksFeaturesMixin:
     """Expose SolidWorks feature methods via mixin-local implementation helpers."""
+
+    if TYPE_CHECKING:
+        # Provided by the adapter this mixin is part of.
+        @staticmethod
+        def _adapter(obj: Any) -> Any: ...
+
+        async def get_mass_properties(self) -> AdapterResult[MassProperties]: ...
+
+        async def list_features(
+            self, include_suppressed: bool = False, max_assembly_depth: int = 2
+        ) -> AdapterResult[list[dict[str, Any]]]: ...
 
     async def create_extrusion(
         self, params: ExtrusionParameters
@@ -107,8 +119,11 @@ class SolidWorksFeaturesMixin:
                     "faces of the body."
                 ),
             )
-        result.data.properties["volume_before"] = volume_before
-        result.data.properties["volume_after"] = volume_after
+        result.data.properties = {
+            **(result.data.properties or {}),
+            "volume_before": volume_before,
+            "volume_after": volume_after,
+        }
         return result
 
     async def add_chamfer(
@@ -3355,7 +3370,7 @@ def _create_reference_point_impl(
                 )
             along_type = _SW_REF_POINT_ALONG_CURVE_DISTANCE
             along_value = float(distance) / 1000.0
-        else:
+        elif percent is not None:  # exactly one of the two is given
             if not 0.0 < float(percent) < 100.0:
                 return AdapterResult(
                     status=AdapterResultStatus.ERROR,

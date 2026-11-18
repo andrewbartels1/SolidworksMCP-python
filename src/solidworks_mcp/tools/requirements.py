@@ -54,6 +54,7 @@ REQUIREMENTS: Mapping[str, Requirement] = {
     "search_solidworks_api_help": Requirement.INSTALLED,
     "lookup_api_method": Requirement.INSTALLED,
     "lookup_api_interface": Requirement.INSTALLED,
+    "get_api_enum": Requirement.INSTALLED,
     "find_related_api_members": Requirement.INSTALLED,
     "list_hole_sizes": Requirement.INSTALLED,
 }

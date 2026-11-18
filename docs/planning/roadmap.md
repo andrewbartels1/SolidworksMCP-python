@@ -81,7 +81,7 @@ clean-up (PR #177), and the release pipeline (PR #178, which superseded #75).
 
 | Order | Issue | What | Size | Note |
 |---|---|---|---|---|
-| 25 | [#95](https://github.com/andrewbartels1/SolidworksMCP-python/issues/95) | `lookup_api_enum` enum value lookup | S | Needs the swconst enums indexed |
+| 25 | [#95](https://github.com/andrewbartels1/SolidworksMCP-python/issues/95) | Enum value lookup, built as `get_api_enum` | S | Done 2026-11-16 (queue item 23) |
 | 27 | [#96](https://github.com/andrewbartels1/SolidworksMCP-python/issues/96) | Generate a runnable binary `.swp` from VBA source | L |  |
 | 28 | [#80](https://github.com/andrewbartels1/SolidworksMCP-python/issues/80) | Prompt-to-SolidWorks tutorials | L | Rescope: SimulationXpress has no COM API (see #76 notes) |
 | — | [#196](https://github.com/andrewbartels1/SolidworksMCP-python/issues/196) | Parked ideas: tool-surface expansion (#23), SolidWorks-as-Code rewind, pickup and tutorial (#29–#31), agent context and testing (#13, #22), CAD-intent routing and text-to-CAD (#42, #43), live render panel (#44), Simulation wrapper and topology loop (#76, #78) | — | Closed 2026-10-31 to keep the issue list for active work; each is reopened when picked up |

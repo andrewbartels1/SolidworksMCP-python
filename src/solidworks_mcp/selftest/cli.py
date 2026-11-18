@@ -11,7 +11,7 @@ import platform
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import typer
 
@@ -92,7 +92,7 @@ async def _start_server(config: SolidWorksMCPConfig) -> Any:
         config.model_copy(update={"toolsets": "all", "tool_mode": "list"})
     )
     await server.setup()
-    await server.adapter.connect()
+    await cast(Any, server.adapter).connect()  # setup() created it
     return server
 
 

@@ -23,21 +23,25 @@ from .tool_boundary import ToolOperationError
 
 try:
     import pythoncom
-except ImportError:
+except ImportError:  # pywin32 is Windows-only
     pythoncom = None
 
 try:
     import winreg
-except ImportError:
-    winreg = None
+except ImportError:  # winreg is Windows-only
+    winreg = None  # type: ignore[assignment]
 
 SOLIDWORKS_TYPELIB_GUID = "{83A33D31-27C5-11CE-BFD4-00400513BB57}"
+#: The constants library (swconst.tlb): every enum, registered at the same
+#: version as the main one.
+CONSTANTS_TYPELIB_GUID = "{4687F359-55D0-4CD3-B6CF-2EB42C11F989}"
 # Type library major version 34 is SolidWorks 2026.
 _YEAR_OFFSET = 1992
 # SolidWorks' first release. A lower version key (installs can leave a
 # "1.0", which would read as 1993) isn't a SolidWorks release.
 _FIRST_RELEASE_YEAR = 1995
 
+_TKIND_ENUM = 0
 _TKIND_DISPATCH = 4
 _INVOKE_FUNC = 1
 _INVOKE_PROPERTYGET = 2
@@ -97,7 +101,10 @@ class TypeInfoLike(Protocol):
     """The part of ``ITypeInfo`` the reader uses."""
 
     def GetTypeAttr(self) -> Any:
-        """The interface's TYPEATTR; the reader uses ``cFuncs``."""
+        """The type's TYPEATTR; the reader uses ``cFuncs`` and ``cVars``."""
+
+    def GetVarDesc(self, index: int, /) -> Any:
+        """The VARDESC of the variable at ``index``; an enum member's ``value``."""
 
     def GetFuncDesc(self, index: int, /) -> Any:
         """The FUNCDESC of the function at ``index``."""
@@ -232,6 +239,32 @@ class ApiInterface(BaseModel):
     property_count: int = Field(description="Number of properties")
     members: dict[str, ApiMember] = Field(
         description="Each member's signature record, by name"
+    )
+
+
+class ApiEnumMember(BaseModel):
+    """One member of a SolidWorks enum.
+
+    Attributes:
+        name (str): The member's name, e.g. ``swUnitSystem_IPS``.
+        value (int): Its integer value.
+    """
+
+    name: str = Field(description="Member name, e.g. swUnitSystem_IPS")
+    value: int = Field(description="Its integer value")
+
+
+class ApiEnum(BaseModel):
+    """One SolidWorks enum in the index.
+
+    Attributes:
+        description (str | None): The type library's help string, if any.
+        members (list[ApiEnumMember]): Its members in declaration order.
+    """
+
+    description: str | None = Field(default=None, description="Help string")
+    members: list[ApiEnumMember] = Field(
+        description="Members in declaration order, with their values"
     )
 
 
@@ -423,6 +456,30 @@ def index_type_library(lib: TypeLibLike) -> dict[str, ApiInterface]:
     return com_objects
 
 
+def index_enums(lib: TypeLibLike) -> dict[str, ApiEnum]:
+    """Index every enum in a type library, with its members' values.
+
+    Args:
+        lib (TypeLibLike): An ITypeLib (or a fake with the same methods).
+
+    Returns:
+        dict[str, ApiEnum]: Enum name -> its record.
+    """
+    enums = {}
+    for position in range(lib.GetTypeInfoCount()):
+        if lib.GetTypeInfoType(position) != _TKIND_ENUM:
+            continue
+        name, description = lib.GetDocumentation(position)[:2]
+        typeinfo = lib.GetTypeInfo(position)
+        members = []
+        for index in range(typeinfo.GetTypeAttr().cVars):
+            vardesc = typeinfo.GetVarDesc(index)
+            member = typeinfo.GetDocumentation(vardesc.memid)[0]
+            members.append(ApiEnumMember(name=member, value=int(vardesc.value)))
+        enums[name] = ApiEnum(description=description or None, members=members)
+    return enums
+
+
 def registered_versions(registry: Any) -> list[tuple[int, int]]:
     """Every registered SolidWorks type library version.
 
@@ -558,3 +615,32 @@ def load_type_library(
         path=str(com.QueryPathOfRegTypeLib(SOLIDWORKS_TYPELIB_GUID, major, minor)),
     )
     return lib, info
+
+
+def load_constants_library(major: int, minor: int, com: Any = None) -> Any:
+    """Load SolidWorks' constants type library (swconst.tlb) at a version.
+
+    It is registered beside the main library, at the same version.
+
+    Args:
+        major (int): The main library's major version.
+        minor (int): Its minor version.
+        com (Any): The ``pythoncom`` module; defaults to the real one.
+
+    Returns:
+        Any: The ITypeLib.
+
+    Raises:
+        TypeLibraryUnavailable: Not on Windows with pywin32, or the
+            constants library isn't registered at that version or won't load.
+    """
+    com = com if com is not None else pythoncom
+    if com is None:
+        raise TypeLibraryUnavailable(_NEEDS_WINDOWS)
+    try:
+        return com.LoadRegTypeLib(CONSTANTS_TYPELIB_GUID, major, minor)
+    except com.com_error as exc:
+        raise TypeLibraryUnavailable(
+            f"SolidWorks {year_of(major)}'s constants type library (swconst.tlb) "
+            f"couldn't be loaded ({exc}), so the index has no enum values."
+        ) from exc

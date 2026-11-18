@@ -110,6 +110,7 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "reset_circuit_breaker": _sets("Reset Circuit Breaker"),
     "lookup_api_method": _reads("Look Up API Method"),
     "lookup_api_interface": _reads("Look Up API Interface"),
+    "get_api_enum": _reads("Get API Enum"),
     "find_related_api_members": _reads("Find Related API Members"),
     # drawing
     "create_drawing_view": _adds("Create Drawing View"),

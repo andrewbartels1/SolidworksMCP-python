@@ -8,8 +8,8 @@ the existing full-text `search_solidworks_api_help`.
 ### Requirement: Structured lookups for methods and interfaces
 The adapter SHALL expose `lookup_api_method` (interface + method name →
 signature) and `lookup_api_interface` (interface name → all indexed
-members). An enum-value lookup is not part of this capability yet (issue
-#95). Each SHALL indicate no match found, rather than raising, when the name isn't
+members). Enum values are looked up by `get_api_enum` (see "Enum values"
+below). Each SHALL indicate no match found, rather than raising, when the name isn't
 in the indexed documentation. Names SHALL match regardless of case, as COM
 late binding does. A found member SHALL be reported under its real name and
 casing from the type library, and the response SHALL say when the caller's
@@ -172,4 +172,29 @@ answering from any built-in list of names.
 - **WHEN** `search_solidworks_api_help` is called with
   `auto_discover_if_missing` set
 - **THEN** the call is accepted and behaves as it would without it
+
+### Requirement: Enum values
+
+`get_api_enum` SHALL return an enum's members and their integer values
+from the installed SolidWorks constants type library. Given a member name
+instead, it SHALL return the enum that member belongs to, and say which
+member matched. Names SHALL match regardless of case. A name that is
+neither SHALL be reported as not found, with the reason, rather than
+raising.
+
+#### Scenario: An enum by name
+- **WHEN** `get_api_enum` is called with `swUnitSystem_e`
+- **THEN** the result lists its members with `swUnitSystem_IPS` = 3 and `swUnitSystem_MMGS` = 5
+
+#### Scenario: A member by name
+- **WHEN** it is called with `swunitsystem_ips`
+- **THEN** the result is `swUnitSystem_e`, with `matched_member` `swUnitSystem_IPS`
+
+#### Scenario: An unknown name
+- **WHEN** it is called with a name that is neither an enum nor a member
+- **THEN** `found` is false and the note says so
+
+#### Scenario: No constants library
+- **WHEN** the constants type library can't be loaded
+- **THEN** the index is built without enums, the other lookups still work, and `get_api_enum` says why it has nothing
 

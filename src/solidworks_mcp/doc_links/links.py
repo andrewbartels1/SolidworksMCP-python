@@ -145,9 +145,10 @@ def check_internal(root: Path, site: Site, links: Iterable[Link]) -> list[str]:
             )
             continue
         if path.is_dir():
-            path = _index_of(path)
-            if path is None:
+            index = _index_of(path)
+            if index is None:
                 continue
+            path = index
         if anchor and path.suffix == ".md":
             if path not in ids:
                 ids[path] = heading_ids(path.read_text(encoding="utf-8"))

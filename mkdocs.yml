@@ -62,6 +62,7 @@ nav:
       - Template Management: user-guide/tool-catalog/template-management.md
       - Macro Recording: user-guide/tool-catalog/macro-recording.md
       - Docs Discovery: user-guide/tool-catalog/docs-discovery.md
+      - Server Admin: user-guide/tool-catalog/server-admin.md
   - Agents and Skills:
       - Agents and Prompt Testing: agents/agents-and-testing.md
       - Family-Gated Tool Routing: agents/family-gated-tool-routing.md

@@ -255,7 +255,7 @@ def length_inside(seg: Segment, box: Box) -> float:
             t1 = min(t1, t)
         if t0 > t1:
             return 0.0
-    return (t1 - t0) * (dx * dx + dy * dy) ** 0.5
+    return float((t1 - t0) * (dx * dx + dy * dy) ** 0.5)
 
 
 def shift_box(box: Box, dx: float, dy: float) -> Box:
@@ -395,10 +395,12 @@ def _leader_inside(
 
 
 def _inside_candidates(
-    dim: DimensionGeometry, outline: Box
+    dim: DimensionGeometry, outline: Box, anchor: tuple[float, float]
 ) -> list[tuple[str, float, float]]:
-    """Moves putting a leader's text inside its view, toward the view's centre."""
-    anchor = leader_anchor(dim)
+    """Moves putting a leader's text inside its view, toward the view's centre.
+
+    ``anchor`` is where the leader meets the part (:func:`leader_anchor`).
+    """
     tb = dim.text_box
     w, h = tb[2] - tb[0], tb[3] - tb[1]
     cx, cy = (tb[0] + tb[2]) / 2.0, (tb[1] + tb[3]) / 2.0
@@ -637,11 +639,13 @@ def plan_layout(
             continue
         chosen = None
         candidates = _candidates(dim, outline)
-        if dim.key in (inside_first or set()) and dim.orientation is None:
-            candidates = _inside_candidates(dim, outline) + candidates
+        anchor = leader_anchor(dim)
+        try_inside = dim.key in (inside_first or set()) and dim.orientation is None
+        if try_inside and anchor is not None:
+            candidates = _inside_candidates(dim, outline, anchor) + candidates
             features = [
                 *feature_points(dims, dim.view, outline, skip=dim.key),
-                leader_anchor(dim),
+                anchor,
             ]
         for side, dx, dy in candidates:
             box = shift_box(dim.text_box, dx, dy)

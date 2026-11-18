@@ -19,14 +19,8 @@ Compare two template files on disk: whether they are byte-identical, and how the
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `template1_path` | `str` | ✅ | `` | Path to first template |
-| `template2_path` | `str` | ✅ | `` | Path to second template |
-| `comparison_type` | `str` | — | `full` | Comparison type (full, properties, dimensions) |
-| `comparison_depth` | `str` | — | `full` | Comparison depth alias |
-| `include_properties` | `bool` | — | `True` | Include properties |
-| `include_dimensions` | `bool` | — | `True` | Include dimensions |
-| `include_materials` | `bool` | — | `True` | Include materials |
-| `generate_report` | `bool` | — | `True` | Generate comparison report |
+| `template1_path` | `str` | ✅ |  | Path to first template |
+| `template2_path` | `str` | ✅ |  | Path to second template |
 
 **Sample call:**
 

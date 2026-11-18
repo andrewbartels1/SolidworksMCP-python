@@ -71,6 +71,8 @@ dev = [
     # Code quality and linting
     "coverage[toml]>=7.3.0",
     "mypy>=1.6.0",
+    "types-PyYAML>=6.0",  # stubs mypy needs (make typecheck)
+    "types-defusedxml>=0.7",
     "ruff>=0.1.0",
     "black>=23.9.0",
     
@@ -287,6 +289,7 @@ exclude_lines = [
 
 [tool.mypy]
 python_version = "3.13"
+platform = "win32"
 exclude = [
     "src/utils/",
 ]
@@ -310,6 +313,13 @@ module = [
     "pywintypes",
     "win32api",
     "win32con",
+    "win32gui",
+    "win32process",
+    # Optional extras, not installed by every environment that type-checks.
+    "PIL",
+    "PIL.*",
+    "faiss",
+    "sentence_transformers",
 ]
 ignore_missing_imports = true
 

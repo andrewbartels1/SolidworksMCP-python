@@ -14,6 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A macro that waits for the user no longer hangs the server** (queue
+  item 25, #97): while `execute_macro` runs, a watchdog thread (Win32 only,
+  no COM) looks for a dialog the SolidWorks process opened. One still open
+  after `dialog_timeout` seconds (30) is answered with Cancel, or its only
+  button, and the run fails as `macro_waited_for_user`, naming the dialog.
+  A Yes/No prompt is left for the user. Checked live.
+- **Tool catalog check** (queue item 24, #156): a test reads every catalog
+  page and fails when a tool has no entry, an entry's parameter table
+  doesn't match the tool's inputs, or its sample call isn't one the tool
+  accepts. The 20 tools that had no entry have one, about 30 stale tables
+  and samples are fixed, and `reset_circuit_breaker` has a Server Admin
+  page. `src/utils/generate_tool_catalog.py`, which overwrote the
+  hand-written pages, is removed.
+- **`get_api_enum`** (queue item 23, #95): an enum's members and their
+  integer values, by the enum's name or a member's, read from SolidWorks'
+  constants type library (`swconst.tlb`), checked live (`swUnitSystem_IPS`
+  is 3). The API index now holds the enums too (format 2.1; a saved index
+  is rebuilt once). 140 tools.
+- **mypy gates CI** (queue item 17, #157): `make typecheck` runs mypy over
+  the package, and CI fails on any error. The 139 errors on `main` are
+  fixed with no change in behaviour, apart from one fault it found:
+  dimension layout raised `TypeError` for a leader with no lines when asked
+  to place it inside its view; it now goes outside. Every `# type: ignore`
+  names its error code (checked by a test).
 - **What each tool needs from SolidWorks** (queue item 16, #79): every tool
   has a `needs:` tag, `nothing`, `installed` or `running`, from one table
   (`tools/requirements.py`). The tools overview lists the 20 tools that
@@ -794,7 +818,7 @@ Minor release — new tools, all additive and backward compatible.
   against `ActiveDoc`.
 - **Granular API-lookup tools** (#64) — `lookup_api_method`,
   `lookup_api_interface`, `find_related_api_members` in the docs-discovery
-  layer (`lookup_api_enum` split to a follow-up).
+  layer (`get_api_enum` split to a follow-up).
 - **SoC `script_line` capture** (#28) — every `ToolCallRecord` now stores the
   rendered SolidWorks-as-Code line at write time; a startup `ALTER TABLE`
   check backfills the column on existing local databases.

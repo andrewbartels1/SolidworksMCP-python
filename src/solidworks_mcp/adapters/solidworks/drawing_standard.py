@@ -492,7 +492,7 @@ class SolidWorksDrawingStandardMixin:
         ) -> AdapterResult[Any]: ...
 
         def _attempt(
-            self, operation: Callable[[], Any], default: Any = None
+            self, operation: Callable[..., Any], default: Any = None
         ) -> Any: ...
 
         def _require_drawing(self) -> AdapterResult[Any] | None: ...
@@ -1270,7 +1270,8 @@ class SolidWorksDrawingStandardMixin:
             lambda: self._dimension_geometry(an, "note", "sheet"), default=None
         )
         if geometry is not None:
-            return geometry.text_box
+            box: Box = geometry.text_box
+            return box
         width = 0.62 * height * len(fallback_text)
         return (x, y - height, x + width, y)
 
@@ -1428,8 +1429,10 @@ class SolidWorksDrawingStandardMixin:
 
     def _fit_iso(self, s: _Sheet) -> None:
         """Scale the isometric to the largest standard scale that fits its cell."""
-        s.iso_scale = iso_fit_scale(s.iso_size, s.cells["iso"])
-        iso = s.views[s.iso_name]
+        # Called once the isometric is placed, so its size and name are set.
+        size = cast("tuple[float, float]", s.iso_size)
+        s.iso_scale = iso_fit_scale(size, s.cells["iso"])
+        iso = s.views[cast(str, s.iso_name)]
         ratio = _double_array([float(s.iso_scale[0]), float(s.iso_scale[1])])
         self._attempt(lambda: setattr(iso, "UseSheetScale", False), default=None)
         self._attempt(lambda: setattr(iso, "ScaleRatio", ratio), default=None)
@@ -1534,7 +1537,7 @@ class SolidWorksDrawingStandardMixin:
             lambda: _sw_type_info.flagged(drawing.GetFirstView(), "IView"),
             default=None,
         )
-        found = []
+        found: list[Any] = []
         note = self._attempt(lambda: sheet_view.GetFirstNote(), default=None)
         while note is not None and len(found) < 500:
             n = _sw_type_info.flagged(note, "INote")
@@ -1900,7 +1903,8 @@ class SolidWorksDrawingStandardMixin:
             if name == "bom":
                 data["bom"] = done.data
             if name == "views":
-                data["hidden_lines_visible"] = done.data["hidden_lines_visible"]
+                views_data = cast("dict[str, Any]", done.data)
+                data["hidden_lines_visible"] = views_data["hidden_lines_visible"]
             if name == "check":
                 data["overlap_check"] = done.data
         data.update(
@@ -1967,13 +1971,13 @@ class SolidWorksDrawingStandardMixin:
         )
         if overlaps:
             check = data["overlap_check"]
-            found = [
+            remaining = [
                 *check.get("remaining_overlaps", []),
                 *check.get("annotation_overlaps", []),
             ]
             named = "; ".join(
                 f"{o['dimension']} vs {o['conflicts_with']} ({o['kind']})"
-                for o in found[:5]
+                for o in remaining[:5]
             )
             return failed(
                 f"Drawing saved but {overlaps} overlap(s) remain - the no-overlap "
