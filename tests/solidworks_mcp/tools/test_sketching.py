@@ -890,6 +890,24 @@ async def test_add_polygon_passes_its_angle_on(mcp_server, mock_config):
 
 
 @pytest.mark.asyncio
+async def test_add_ellipse_passes_its_angle_on(mcp_server, mock_config):
+    """The angle reaches the adapter and comes back in the reply (0 by default)."""
+    adapter = _SketchAdapterStub()
+    adapter.add_ellipse = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="E_1")
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "add_ellipse")
+
+    turned = await tool(input_data={"major_axis": 13, "minor_axis": 2.6, "angle": 15})
+    plain = await tool(input_data={"major_axis": 13, "minor_axis": 2.6})
+
+    assert adapter.add_ellipse.await_args_list[0].args == (0.0, 0.0, 13, 2.6, 15)
+    assert turned["ellipse"]["angle"] == 15
+    assert plain["ellipse"]["angle"] == 0.0
+
+
+@pytest.mark.asyncio
 async def test_sketching_tool_error_return_branches(mcp_server, mock_config):
     """Test sketching tool error return branches."""
     adapter = _SketchAdapterStub()

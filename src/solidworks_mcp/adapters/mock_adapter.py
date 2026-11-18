@@ -1946,14 +1946,16 @@ class MockSolidWorksAdapter(
         center_y: float,
         major_axis: float,
         minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
-        """Mock adding an axis-aligned ellipse to sketch.
+        """Mock adding an ellipse to sketch.
 
         Args:
             center_x (float): Ellipse centre X in millimetres.
             center_y (float): Ellipse centre Y in millimetres.
             major_axis (float): Full major-axis length in millimetres.
             minor_axis (float): Full minor-axis length in millimetres.
+            angle (float): The major axis's turn from +x, in degrees.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.

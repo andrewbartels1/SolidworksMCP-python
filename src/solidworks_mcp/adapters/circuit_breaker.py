@@ -1457,12 +1457,13 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         center_y: float,
         major_axis: float,
         minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add ellipse through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_ellipse",
             lambda: self.adapter.add_ellipse(
-                center_x, center_y, major_axis, minor_axis
+                center_x, center_y, major_axis, minor_axis, angle
             ),
             input_dict={
                 "center_x": center_x,

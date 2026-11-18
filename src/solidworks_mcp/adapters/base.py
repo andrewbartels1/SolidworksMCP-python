@@ -843,6 +843,7 @@ class SolidWorksAdapter(ABC):
         center_y: float,
         major_axis: float,
         minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add an ellipse to the current sketch.
 
@@ -851,6 +852,7 @@ class SolidWorksAdapter(ABC):
             center_y (float): The center y value.
             major_axis (float): The major axis value.
             minor_axis (float): The minor axis value.
+            angle (float): The major axis's turn from +x, in degrees.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.

@@ -911,6 +911,116 @@ def test_a_polygon_angle_turns_its_first_corner() -> None:
     assert args[6:] == (6, True)
 
 
+def test_an_ellipse_angle_turns_its_axes() -> None:
+    """The major point is ``angle`` from +x, the minor point a quarter turn on."""
+    adapter = _FakeSketchAdapter()
+    create = Mock(return_value=object())
+    adapter.currentSketchManager = SimpleNamespace(CreateEllipse=create)
+
+    result = sketch._add_ellipse_impl(adapter, 10.0, 0.0, 13.0, 2.6, 15.0)
+
+    assert result.is_success, result.error
+    args = create.call_args.args
+    turn = math.radians(15)
+    assert args[3] == pytest.approx((10.0 + 6.5 * math.cos(turn)) / 1000)
+    assert args[4] == pytest.approx(6.5 * math.sin(turn) / 1000)
+    assert args[6] == pytest.approx((10.0 - 1.3 * math.sin(turn)) / 1000)
+    assert args[7] == pytest.approx(1.3 * math.cos(turn) / 1000)
+
+
+class _Point:
+    """A sketch point that records whether it was selected."""
+
+    def __init__(self, x: float, selects: bool = True) -> None:
+        self.X, self.Y, self.Z = x, 0.0, 0.0
+        self._selects = selects
+        self.selected: list[bool] = []
+
+    def Select2(self, append: bool, _mark: int) -> bool:
+        self.selected.append(append)
+        return self._selects
+
+
+def _ellipse_adapter(
+    ellipse: object, added: object
+) -> tuple[_FakeSketchAdapter, list[tuple[object, ...]]]:
+    """A fake adapter with ``Ellipse_1``; the AddSpecificDimension calls made."""
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    adapter._sketch_entities = {"Ellipse_1": ellipse}
+    calls: list[tuple[object, ...]] = []
+
+    def _add(*args: object) -> object:
+        calls.append(args)
+        return added
+
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_a: True,
+        Extension=SimpleNamespace(AddSpecificDimension=_add),
+    )
+    return adapter, calls
+
+
+@pytest.mark.parametrize(
+    ("axis", "getter"),
+    [("major_axis", "GetMajorPoint2"), ("minor_axis", "GetMinorPoint2")],
+)
+def test_an_ellipse_axis_is_dimensioned_from_its_centre(axis: str, getter: str) -> None:
+    """Centre then axis point, aligned; the dimension holds half the axis."""
+    centre, end = _Point(0.0), _Point(0.0065)
+    ellipse = SimpleNamespace(GetCenterPoint2=lambda: centre, **{getter: lambda: end})
+    values: list[float] = []
+    dimension = SimpleNamespace(SetSystemValue3=lambda v, *_a: values.append(v) or True)
+    display = SimpleNamespace(GetDimension2=lambda *_a: dimension)
+    adapter, calls = _ellipse_adapter(ellipse, (display, 0))
+
+    result = sketch._add_sketch_dimension_impl(adapter, "Ellipse_1", None, axis, 13.0)
+
+    assert result.is_success, result.error
+    assert (centre.selected, end.selected) == ([False], [True])
+    assert calls[0][3] == 2  # swLinearDimension: aligned
+    assert values == [pytest.approx(0.0065)]
+
+
+def test_an_axis_dimension_needs_an_ellipse() -> None:
+    adapter, _calls = _ellipse_adapter(SimpleNamespace(), None)
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "major_axis", 13.0
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "is not an ellipse" in (result.error or "")
+
+
+def test_an_axis_point_that_cannot_be_selected_is_an_error() -> None:
+    ellipse = SimpleNamespace(
+        GetCenterPoint2=lambda: _Point(0.0), GetMajorPoint2=lambda: _Point(1.0, False)
+    )
+    adapter, _calls = _ellipse_adapter(ellipse, None)
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "major_axis", 13.0
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Failed to select the major_axis points" in (result.error or "")
+
+
+def test_no_axis_dimension_from_solidworks_is_an_error() -> None:
+    ellipse = SimpleNamespace(
+        GetCenterPoint2=lambda: _Point(0.0), GetMinorPoint2=lambda: _Point(1.0)
+    )
+    adapter, _calls = _ellipse_adapter(ellipse, None)
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "minor_axis", 2.6
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "added no minor_axis dimension" in (result.error or "")
+
+
 def test_a_diameter_on_a_polygon_dimensions_its_construction_circle() -> None:
     """The circle inside the polygon sizes it across flats; its sides are skipped."""
     side = SimpleNamespace(GetType=lambda: 0)

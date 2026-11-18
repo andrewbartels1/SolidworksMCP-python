@@ -809,12 +809,13 @@ async def register_sketching_tools(
         """Draw an ellipse in the open sketch from its centre and axis lengths, in mm.
 
         Use it for oval holes and bosses. Needs: an open sketch (`create_sketch`).
-        Changes: adds an ellipse. Returns: `ellipse` with `id`, `center`, `major_axis`
-        and `minor_axis`.
+        Changes: adds an ellipse. Returns: `ellipse` with `id`, `center`, `major_axis`,
+        `minor_axis` and `angle`.
 
         Args:
             input_data: A mapping: `center_x`, `center_y` (mm, default 0),
-                `major_axis` (default 20) and `minor_axis` (default 10), in mm.
+                `major_axis` (default 20) and `minor_axis` (default 10), in mm, and
+                `angle`, the major axis's turn from +x in degrees (default 0).
 
         Returns:
             dict[str, Any]: The ellipse added.
@@ -823,8 +824,11 @@ async def register_sketching_tools(
         center_y = input_data.get("center_y", 0.0)
         major_axis = input_data.get("major_axis", 20.0)
         minor_axis = input_data.get("minor_axis", 10.0)
+        angle = input_data.get("angle", 0.0)
 
-        result = await adapter.add_ellipse(center_x, center_y, major_axis, minor_axis)
+        result = await adapter.add_ellipse(
+            center_x, center_y, major_axis, minor_axis, angle
+        )
 
         require_success(result, context="Failed to add ellipse")
         ellipse_id = result.data
@@ -836,6 +840,7 @@ async def register_sketching_tools(
                 "center": {"x": center_x, "y": center_y},
                 "major_axis": major_axis,
                 "minor_axis": minor_axis,
+                "angle": angle,
             },
             "execution_time": result.execution_time,
         }
@@ -882,12 +887,13 @@ async def register_sketching_tools(
 
     @mcp.tool()
     async def add_sketch_dimension(input_data: AddDimensionInput) -> dict[str, Any]:
-        """Add a driving dimension to sketch entities: linear, angular, radial or diameter.
+        """Add a driving dimension to sketch entities: linear, angular, radial, diameter or an ellipse axis.
 
         Use it to fix a size so the sketch is fully defined and can be changed later
         with `set_dimension`. Entities are the `id`s the add_* tools returned; two
-        connected lines for angular, a circle or arc for radial or diameter. No dialog
-        opens. Needs: an open sketch (`create_sketch`). Changes: adds the dimension and
+        connected lines for angular, a circle or arc for radial or diameter, an
+        ellipse for `major_axis` or `minor_axis` (`value` is the whole axis; the
+        dimension runs from the centre, so it shows half). No dialog opens. Needs: an open sketch (`create_sketch`). Changes: adds the dimension and
         resizes the geometry to `value`. Returns: `dimension` with `id`, `type`, `value`
         and the entities.
 

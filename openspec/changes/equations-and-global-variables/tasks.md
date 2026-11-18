@@ -19,4 +19,6 @@
 - [x] 4.1 Live probes of `IEquationMgr` (2026-11-17/18) and the fixes they led to (design decision 4); `Value` is in the document's units
 - [x] 4.2 Wrench demo `tests/live/test_live_sw_equations_wrench.py`: 13 mm combination wrench, 19 equations, `Size` = 19mm regrows it, 8 mm in its own configuration, a bad expression refused; passed live and recorded 2026-11-18. Needed `create_cut_extrude` mid-plane for Blind `both_directions`, a polygon `diameter` dimension and `add_polygon` `angle`; tests for each
 - [x] 4.3 Demos page section, README tile, catalog notes, CHANGELOG
+- [ ] 4.5 The wrench closer to the user's reference (review 2026-11-18): the jaw bottom curved by an ellipse cut (`add_ellipse` `angle`; `add_sketch_dimension` `major_axis` / `minor_axis` on an ellipse), neck fillets on both heads sized by Size, material 1.8159 (51CrV4) chrome-vanadium steel; tests for each tool change
+- [ ] 4.6 Once the user approves the wrench: re-record, then the demos page section, README tile, catalog notes and CHANGELOG
 - [ ] 4.4 The user runs `tests/live/test_live_sw_equations.py` (block tests) and approves the demo; archive after

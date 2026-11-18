@@ -2,10 +2,11 @@
 
 Modelled from pictures of the user's reference wrench (a 16 mm combination
 wrench; standard views exported read-only, its feature tree not read): an
-open end whose jaw is a parallel-sided slot at 15° with a flat bottom at the
-head's centre (a nut Size across flats seats on it and bears on both walls),
-a 12-point box end tilted 15°, and a flat handle with rounded edges, thinner
-than the heads. It is built at Size = 13 mm with fixed numbers, then
+open end whose jaw is a parallel-sided slot at 15°, its bottom a shallow
+curve just past the head's centre (a nut Size across flats bears on both
+walls, its corners clear in the curve), a 12-point box end tilted 15°, a
+flat handle with rounded edges, thinner than the heads, filleted into both
+heads, and chrome-vanadium steel (51CrV4), what wrenches are forged from. It is built at Size = 13 mm with fixed numbers, then
 ``set_equation`` ties every size to ``Size``, so one edit makes a 19 mm
 wrench and a configuration holds an 8 mm one.
 
@@ -21,7 +22,12 @@ shape at any size:
   whose spacing is the length; a clearance cut then removes the pattern's
   seed at the origin;
 - the open end is a disc at the origin and a jaw Size wide, cut both ways
-  from a plane at 15° from the head's centre outward, so its bottom is flat.
+  from a plane at 15° from the head's centre outward; an ellipse at the
+  centre, Size across the jaw and 0.2 x Size along it, curves the bottom
+  (measured on the reference: 0.1 x Size past the centre);
+- fillets where the handle meets each head, 0.2 x Size at its sides and
+  0.08 x Size at its faces (the step from handle to head is only 0.1 x
+  Size there).
 
 The reference's handle also bends up into the box end; that bend is left
 out (a tilt about the ring's centre is as close as these tools come while
@@ -68,6 +74,12 @@ RATIOS = {
 CLEARANCE = 1.1
 JAW_ANGLE_DEG = 15.0
 BOX_TILT_DEG = 15.0
+#: The jaw's curved bottom: an ellipse's axes as multiples of Size.
+RELIEF = {"across": 1.0, "along": 0.2}
+#: Neck fillet radii as multiples of Size: at the handle's sides and faces.
+FILLET = {"sides": 0.2, "faces": 0.08}
+#: Chrome-vanadium spring steel, the usual wrench steel (SAE 6150 / 51CrV4).
+MATERIAL = "1.8159 (51CrV4)"
 _ISO_VIEW = 7  # swStandardViews_e.swIsometricView
 #: ``swUserPreferenceToggle_e``: swDisplayAxes, swDisplayPlanes,
 #: swDisplayOrigins, swDisplayTemporaryAxes.
@@ -190,7 +202,9 @@ async def _flatten(tools: dict[str, Any], adapter: Any, flip: bool) -> None:
     raise AssertionError(f"neither cut from {name} left the flattened handle")
 
 
-async def _box_end(tools: dict[str, Any], adapter: Any) -> list[str]:
+async def _box_end(
+    tools: dict[str, Any], adapter: Any
+) -> tuple[list[str], tuple[float, ...]]:
     """The box end at the origin, tilted 15°: a disc and a 12-point opening.
 
     All three are sketched on a plane through the z axis, 15° off the Top
@@ -200,7 +214,8 @@ async def _box_end(tools: dict[str, Any], adapter: Any) -> list[str]:
     box end, so the second hexagon is drawn turned instead.)
 
     Returns:
-        The features for the linear pattern to copy.
+        The features for the linear pattern to copy, and the tilted plane's
+        normal (the ring's axis).
     """
     s = SIZE_MM
     z_axis = await tools["create_axis"]({"reference": "z"})
@@ -232,7 +247,8 @@ async def _box_end(tools: dict[str, Any], adapter: Any) -> list[str]:
         )
         assert hole["status"] == "success", hole
         features.append(hole["cut_extrude"]["name"])
-    return features
+    _origin, normal = _plane(adapter, tilted)
+    return features, tuple(normal)
 
 
 async def _through_circle(tools: dict[str, Any], diameter: float) -> None:
@@ -283,7 +299,7 @@ async def _angled_plane(
     raise AssertionError(f"no plane through {axis} came out at 15°: {made}")
 
 
-async def _jaw(tools: dict[str, Any], adapter: Any, axis: str) -> None:
+async def _jaw(tools: dict[str, Any], adapter: Any, axis: str) -> tuple[float, ...]:
     """The jaw: Size wide, cut both ways from the jaw's centre plane.
 
     On this plane SolidWorks 2026 puts sketch x along the model's y (up) and
@@ -294,6 +310,9 @@ async def _jaw(tools: dict[str, Any], adapter: Any, axis: str) -> None:
     leaves one body, so the overall size decides: a wrong jaw leaves the open
     end's full radius, 0.2 mm too long. Then the cut and its sketch are undone
     and drawn on the other side.
+
+    Returns:
+        The jaw plane's normal: the direction across the jaw.
     """
     # Flipped so the jaw's walls rise towards the handle, as on the reference.
     name = await _angled_plane(tools, adapter, "Front Plane", axis, facing=2, flip=True)
@@ -309,14 +328,131 @@ async def _jaw(tools: dict[str, Any], adapter: Any, axis: str) -> None:
             {"sketch_y": [y1, y2], "cut": cut.get("measured_change"), "size": size}
         )
         if size["verdict"] == "pass":
-            return
+            _origin, normal = _plane(adapter, name)
+            return tuple(normal)
         undone = await tools["undo"]({"count": 2})
         tried[-1]["undone"] = undone.get("data")
     raise AssertionError(f"neither side of the plane gave the jaw its size: {tried}")
 
 
-async def build_wrench(tools: dict[str, Any], adapter: Any) -> None:
-    """The 13 mm combination wrench, at fixed sizes."""
+async def _relief(tools: dict[str, Any], across: tuple[float, ...]) -> str:
+    """Curve the jaw's bottom: an ellipse at the head's centre, cut through.
+
+    Its major axis lies across the jaw (``across``, the jaw plane's normal),
+    Size long, so it meets both walls where the flat bottom ended; its minor
+    axis, 0.2 x Size, takes the bottom 0.1 x Size past the centre. The half
+    towards the opening is inside the jaw already. On the Top Plane sketch x
+    is model x and sketch y is model -z.
+
+    Returns:
+        The ellipse's sketch.
+    """
+    angle = math.degrees(math.atan2(-across[2], across[0]))
+    made = await tools["create_sketch"]({"plane": "Top"})
+    assert made["status"] == "success", made
+    ellipse = await tools["add_ellipse"](
+        {
+            "major_axis": SIZE_MM * RELIEF["across"],
+            "minor_axis": SIZE_MM * RELIEF["along"],
+            "angle": angle,
+        }
+    )
+    assert ellipse["status"] == "success", ellipse
+    for axis, ratio in (("major_axis", "across"), ("minor_axis", "along")):
+        sized = await tools["add_sketch_dimension"](
+            {
+                "entity1": ellipse["ellipse"]["id"],
+                "dimension_type": axis,
+                "value": SIZE_MM * RELIEF[ratio],
+            }
+        )
+        assert sized["status"] == "success", sized
+    closed = await tools["exit_sketch"]()
+    assert closed["status"] == "success", closed
+    sketch = str(closed.get("sketch", made["sketch"])["name"])
+    cut = await tools["create_cut_extrude"](
+        {"sketch_name": sketch, "depth": 1, "end_condition": "ThroughAllBoth"}
+    )
+    assert cut["status"] == "success", cut
+    return sketch
+
+
+def _entry(
+    inside: Any, start: tuple[float, float, float], step: tuple[float, float, float]
+) -> list[float]:
+    """Where a line from ``start`` along ``step`` first enters a head, in metres.
+
+    Marched in 0.01 mm steps: the neck edges for the fillets are where the
+    handle's faces and sides meet each head, found this way rather than by
+    solving each surface.
+    """
+    point = list(start)
+    for _ in range(100_000):
+        if inside(point):
+            return [round(c / 1000, 6) for c in point]
+        point = [p + d for p, d in zip(point, step, strict=True)]
+    raise AssertionError(f"the line from {start} never reached the head")
+
+
+def _neck_edges(ring_axis: tuple[float, ...]) -> dict[str, list[str]]:
+    """Points on the edges where the handle meets each head, 'x,y,z' in metres.
+
+    ``sides``: the handle's rounded sides (y = 0, z = ±half its width);
+    ``faces``: its flat faces (z = 0, y = ±half its thickness). The open end
+    is a disc about y at the origin; the box end a disc about ``ring_axis``
+    at x = Length.
+    """
+    r_open = _mm("OpenHead") / 2
+    r_box = _mm("BoxHead") / 2
+    half = _mm("HeadT") / 2
+    length = _mm("Length")
+    w = _mm("HandleW") / 2
+    t = _mm("HandleT") / 2
+
+    def in_open(p: list[float]) -> bool:
+        return abs(p[1]) <= half and p[0] ** 2 + p[2] ** 2 <= r_open**2
+
+    def in_box(p: list[float]) -> bool:
+        d = (p[0] - length, p[1], p[2])
+        along = sum(a * b for a, b in zip(d, ring_axis, strict=False))
+        radial = sum(c * c for c in d) - along**2
+        return abs(along) <= half and radial <= r_box**2
+
+    starts = {"sides": [(0.0, w), (0.0, -w)], "faces": [(t, 0.0), (-t, 0.0)]}
+    edges: dict[str, list[str]] = {}
+    for kind, offsets in starts.items():
+        points = []
+        for y, z in offsets:
+            mid = length / 2
+            points.append(_entry(in_open, (mid, y, z), (-0.01, 0.0, 0.0)))
+            points.append(_entry(in_box, (mid, y, z), (0.01, 0.0, 0.0)))
+        edges[kind] = [",".join(str(c) for c in p) for p in points]
+    return edges
+
+
+async def _necks(tools: dict[str, Any], ring_axis: tuple[float, ...]) -> list[str]:
+    """Fillet the handle into both heads: its sides, then its faces.
+
+    Returns:
+        The two fillets.
+    """
+    names = []
+    for kind, points in _neck_edges(ring_axis).items():
+        fillet = await tools["add_fillet"](
+            {"radius": round(SIZE_MM * FILLET[kind], 4), "edge_names": points}
+        )
+        assert fillet["status"] == "success", (kind, points, fillet)
+        names.append(str(fillet["fillet"]["name"]))
+    return names
+
+
+async def build_wrench(tools: dict[str, Any], adapter: Any) -> str:
+    """The 13 mm combination wrench, at fixed sizes.
+
+    Returns:
+        The sketch of the jaw's curved bottom (its two dimensions are
+        picked by that sketch, not by value).
+    """
     assert (await tools["create_part"]({"name": "wrench"}))["status"] == "success"
     bar = await _sized_sketch(
         tools,
@@ -333,7 +469,7 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> None:
     await _flatten(tools, adapter, flip=False)
     await _flatten(tools, adapter, flip=True)
 
-    box_features = await _box_end(tools, adapter)
+    box_features, ring_axis = await _box_end(tools, adapter)
     x_axis = await tools["create_axis"]({"reference": "x"})
     tried = []
     for reverse in (False, True):
@@ -370,14 +506,21 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> None:
     )
     assert boss["status"] == "success", boss
     y_axis = await tools["create_axis"]({"reference": "y"})
-    await _jaw(tools, adapter, str(y_axis["axis"]["name"]))
+    across = await _jaw(tools, adapter, str(y_axis["axis"]["name"]))
+    relief = await _relief(tools, across)
+    await _necks(tools, ring_axis)
+    steel = await tools["set_material"]({"material_name": MATERIAL})
+    assert steel["status"] == "success", steel
+    return relief
 
 
-def drivers(dimensions: list[dict[str, Any]]) -> dict[str, str]:
+def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
     """Each dimension's full name -> the expression that will drive it.
 
     Picked by the value it was built with, so the test doesn't depend on
-    SolidWorks' feature numbering.
+    SolidWorks' feature numbering. The jaw's ellipse (sketch ``relief``) is
+    picked by its sketch: half its long axis is Size / 2, the same number as
+    HeadT. Each of its dimensions holds half an axis.
     """
     by_value = {
         _mm("Length"): '"Length"',
@@ -388,9 +531,17 @@ def drivers(dimensions: list[dict[str, Any]]) -> dict[str, str]:
         _mm("HandleT") / 2: '"HandleT" / 2',
         round(_mm("BoxHead") * CLEARANCE, 4): f'"BoxHead" * {CLEARANCE}',
         SIZE_MM: '"Size"',
+        round(SIZE_MM * FILLET["sides"], 4): f'"Size" * {FILLET["sides"]}',
+        round(SIZE_MM * FILLET["faces"], 4): f'"Size" * {FILLET["faces"]}',
     }
+    halves = {SIZE_MM * RELIEF[k] / 2: f'"Size" * {RELIEF[k] / 2}' for k in RELIEF}
     found: dict[str, str] = {}
     for row in dimensions:
+        if str(row["full_name"]).endswith(f"@{relief}"):
+            for value, expression in halves.items():
+                if abs(float(row["value"]) - value) < 1e-3:
+                    found[row["full_name"]] = expression
+            continue
         for value, expression in by_value.items():
             if abs(float(row["value"]) - value) < 1e-3:
                 found[row["full_name"]] = expression
@@ -423,15 +574,16 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
        wrench is unchanged.
     """
     tools = await _tools(scratch.adapter)
-    await build_wrench(tools, scratch.adapter)
+    relief = await build_wrench(tools, scratch.adapter)
     listed = await tools["list_model_dimensions"]({})
-    found = drivers(listed["data"])
+    found = drivers(listed["data"], relief)
     built = await _size(tools, SIZE_MM)
     _frame(scratch.adapter, room_for=wrench_box(19)[0] / wrench_box(SIZE_MM)[0])
     evidence(
         "A 13 mm combination wrench, built at fixed sizes",
         {"dimensions_to_drive": found, "size": built},
-        call="create_part, 9 sketches, 3 extrusions, 6 cuts, a linear pattern",
+        call="create_part, 10 sketches, 3 extrusions, 7 cuts, a linear pattern, "
+        "2 fillets, set_material",
     )
     assert built["verdict"] == "pass", built
     assert sorted(set(found.values())) == sorted(
@@ -444,6 +596,10 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
             '"HandleT" / 2',
             f'"BoxHead" * {CLEARANCE}',
             '"Size"',
+            f'"Size" * {FILLET["sides"]}',
+            f'"Size" * {FILLET["faces"]}',
+            f'"Size" * {RELIEF["across"] / 2}',
+            f'"Size" * {RELIEF["along"] / 2}',
         ]
     ), listed
 

@@ -112,9 +112,19 @@ Building it found two gaps, fixed here:
   turn from +x), so two hexagons 30° apart make a 12-point opening.
   SolidWorks wouldn't linear-pattern a circular pattern of one hexagon,
   which is why the second is drawn turned.
+- **Ellipses couldn't be turned or sized by a dimension.** On the user's
+  reference wrench the jaw's bottom is a shallow curve that meets both
+  jaw walls. Here that is an ellipse cut at the head's centre: its major
+  axis is Size long across the jaw (turned 15° with it), its minor axis
+  0.2 x Size. `add_ellipse` now takes an `angle` (the major axis's turn
+  from +x), and `add_sketch_dimension` takes `major_axis` and
+  `minor_axis` on an ellipse's `id`. Each is a dimension from the centre
+  to that axis's end point, so it holds half the axis (an ellipse has no
+  point at the other end to dimension the whole axis to); `value` is the
+  whole axis, as `add_ellipse` takes it.
 
 ## Migration Plan
 
-New tools; `add_polygon`'s `angle` defaults to 0, so existing calls are
-unchanged. A Blind cut with `both_directions` now cuts both ways, as its
+New tools; `add_polygon`'s and `add_ellipse`'s `angle` default to 0, so
+existing calls are unchanged. A Blind cut with `both_directions` now cuts both ways, as its
 name and the extrusion tool always said.

@@ -1284,6 +1284,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         center_y: float,
         major_axis: float,
         minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add ellipse using pool.
 
@@ -1292,6 +1293,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             center_y (float): The center y value.
             major_axis (float): The major axis value.
             minor_axis (float): The minor axis value.
+            angle (float): The major axis's turn from +x, in degrees.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -1299,7 +1301,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         return await self._execute_with_pool(
             "add_ellipse",
             lambda adapter: adapter.add_ellipse(
-                center_x, center_y, major_axis, minor_axis
+                center_x, center_y, major_axis, minor_axis, angle
             ),
         )
 

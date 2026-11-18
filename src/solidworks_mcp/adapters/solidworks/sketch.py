@@ -152,9 +152,16 @@ class SolidWorksSketchMixin:
         return _add_polygon_impl(self, center_x, center_y, radius, sides, angle)
 
     async def add_ellipse(
-        self, center_x: float, center_y: float, major_axis: float, minor_axis: float
+        self,
+        center_x: float,
+        center_y: float,
+        major_axis: float,
+        minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
-        return _add_ellipse_impl(self, center_x, center_y, major_axis, minor_axis)
+        return _add_ellipse_impl(
+            self, center_x, center_y, major_axis, minor_axis, angle
+        )
 
     async def add_sketch_constraint(
         self,
@@ -955,13 +962,13 @@ def _add_ellipse_impl(
     center_y: float,
     major_axis: float,
     minor_axis: float,
+    angle: float = 0.0,
 ) -> AdapterResult[str]:
-    """Add an axis-aligned ellipse to the active sketch.
+    """Add an ellipse to the active sketch, its major axis turned by ``angle``.
 
-    Calls ``SketchManager.CreateEllipse`` with the major-axis endpoint on the
-    positive X direction from the centre and the minor-axis endpoint on the
-    positive Y direction.  The ellipse is therefore axis-aligned and cannot
-    be rotated via this function.
+    Calls ``SketchManager.CreateEllipse`` with the major-axis endpoint
+    ``angle`` degrees anticlockwise from the sketch's +X and the minor-axis
+    endpoint a quarter turn further.
 
     The created ellipse is registered in the adapter's sketch-entity
     registry so subsequent constraint and dimension calls can reference it
@@ -976,6 +983,7 @@ def _add_ellipse_impl(
             as the offset from centre).
         minor_axis: Full minor-axis length in **millimetres** (half is used
             as the offset from centre).
+        angle: The major axis's turn from +X, in degrees.
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the registered entity ID
@@ -1004,15 +1012,18 @@ def _add_ellipse_impl(
         Raises:
             Exception: If ``CreateEllipse`` returns ``None``.
         """
+        turn = math.radians(angle)
+        cos, sin = math.cos(turn), math.sin(turn)
+        major, minor = major_axis / 2, minor_axis / 2
         ellipse = adapter.currentSketchManager.CreateEllipse(
             center_x / 1000.0,
             center_y / 1000.0,
             0,
-            (center_x + major_axis / 2) / 1000.0,
-            center_y / 1000.0,
+            (center_x + major * cos) / 1000.0,
+            (center_y + major * sin) / 1000.0,
             0,
-            center_x / 1000.0,
-            (center_y + minor_axis / 2) / 1000.0,
+            (center_x - minor * sin) / 1000.0,
+            (center_y + minor * cos) / 1000.0,
             0,
         )
         if not ellipse:
@@ -1331,6 +1342,12 @@ def _add_sketch_dimension_impl(
                 )
 
         dim_type = (dimension_type or "linear").strip().lower()
+        if dim_type in ELLIPSE_AXES:
+            display_ellipse = _ellipse_axis_dimension(
+                adapter, entity1_obj, entity1, dim_type
+            )
+            _set_dimension_value(adapter, display_ellipse, value / 2 / 1000.0)
+            return adapter._register_sketch_entity("Dimension", display_ellipse)  # type: ignore[no-any-return]
         placement = None
         if dim_type == "angular" and entity2_obj is not None:
             placement = adapter._angular_dimension_placement(entity1_obj, entity2_obj)
@@ -1446,27 +1463,7 @@ def _add_sketch_dimension_impl(
             value_si = value * _math_dim.pi / 180.0
         else:
             value_si = value / 1000.0
-
-        dim_obj = (
-            adapter._attempt(lambda: display_dim.GetDimension2(0), default=None)
-            or adapter._attempt(lambda: display_dim.GetDimension(), default=None)
-            or display_dim
-        )
-        if (
-            adapter._attempt(
-                lambda: dim_obj.SetSystemValue3(value_si, 1, None), default=None
-            )
-            is None
-        ):
-            if (
-                adapter._attempt(
-                    lambda: dim_obj.SetSystemValue2(value_si, 1), default=None
-                )
-                is None
-            ):
-                if hasattr(dim_obj, "SystemValue"):
-                    dim_obj.SystemValue = value_si
-
+        _set_dimension_value(adapter, display_dim, value_si)
         return adapter._register_sketch_entity("Dimension", display_dim)  # type: ignore[no-any-return]
 
     return cast(
@@ -1475,8 +1472,91 @@ def _add_sketch_dimension_impl(
     )
 
 
+def _set_dimension_value(adapter: Any, display_dim: Any, value_si: float) -> None:
+    """Set a new dimension's value (metres or radians) in this configuration.
+
+    ``SetSystemValue3``, then ``SetSystemValue2``, then the ``SystemValue``
+    property, whichever this SolidWorks accepts.
+    """
+    dim_obj = (
+        adapter._attempt(lambda: display_dim.GetDimension2(0), default=None)
+        or adapter._attempt(lambda: display_dim.GetDimension(), default=None)
+        or display_dim
+    )
+    if (
+        adapter._attempt(
+            lambda: dim_obj.SetSystemValue3(value_si, 1, None), default=None
+        )
+        is None
+    ):
+        if (
+            adapter._attempt(lambda: dim_obj.SetSystemValue2(value_si, 1), default=None)
+            is None
+        ):
+            if hasattr(dim_obj, "SystemValue"):
+                dim_obj.SystemValue = value_si
+
+
 #: ``swSketchSegments_e.swSketchARC``: a circle or arc segment.
 _SKETCH_ARC = 1
+
+#: ``swDimensionType_e.swLinearDimension``: aligned, along the two points.
+_ALIGNED_DIMENSION = 2
+
+#: An ellipse's axis dimensions, and the ``ISketchEllipse`` getter for the
+#: point at that axis's end.
+ELLIPSE_AXES = {"major_axis": "GetMajorPoint2", "minor_axis": "GetMinorPoint2"}
+
+
+def _ellipse_axis_dimension(
+    adapter: Any, ellipse: Any, entity_id: str, axis: str
+) -> Any:
+    """An aligned dimension from an ellipse's centre to the end of ``axis``.
+
+    It holds half the axis: an ellipse has a point at one end of each axis
+    only. Turned ellipses need it aligned, so it is added with
+    ``AddSpecificDimension`` (``swLinearDimension``), not a smart dimension
+    that would pick horizontal or vertical.
+
+    Args:
+        adapter: The adapter, with the ellipse's sketch open.
+        ellipse: The ellipse, as ``CreateEllipse`` returned it.
+        entity_id: Its registered id, for messages.
+        axis: ``major_axis`` or ``minor_axis``.
+
+    Returns:
+        The display dimension.
+
+    Raises:
+        Exception: If the entity isn't an ellipse, a point can't be selected,
+            or SolidWorks adds no dimension.
+    """
+    flagged = _sw_type_info.flagged(ellipse, "ISketchEllipse")
+    centre = adapter._attempt(lambda: flagged.GetCenterPoint2(), default=None)
+    end = adapter._attempt(lambda: getattr(flagged, ELLIPSE_AXES[axis])(), default=None)
+    if centre is None or end is None:
+        raise Exception(
+            f"'{entity_id}' is not an ellipse; {axis} dimensions an ellipse from add_ellipse."
+        )
+    model = adapter.currentModel
+    model.ClearSelection2(True)
+    for point, append in ((centre, False), (end, True)):
+        if not adapter._attempt(lambda p=point, a=append: bool(p.Select2(a, 0)), False):
+            raise Exception(f"Failed to select the {axis} points of '{entity_id}'")
+    error = 0
+    display = adapter._attempt(
+        lambda: model.Extension.AddSpecificDimension(
+            end.X, end.Y, end.Z, _ALIGNED_DIMENSION, error
+        ),
+        default=None,
+    )
+    # AddSpecificDimension's error is passed by reference; pywin32 returns it
+    # with the dimension.
+    if isinstance(display, tuple):
+        display = display[0]
+    if not display:
+        raise Exception(f"SolidWorks added no {axis} dimension to '{entity_id}'")
+    return display
 
 
 def _polygon_circle(segments: Any, entity_id: str) -> Any:
