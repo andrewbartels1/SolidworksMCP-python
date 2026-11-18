@@ -4,9 +4,10 @@ Modelled from pictures of the user's reference wrench (a 16 mm combination
 wrench; standard views exported read-only, its feature tree not read): an
 open end whose jaw is a parallel-sided slot at 15°, its bottom a shallow
 curve just past the head's centre (a nut Size across flats bears on both
-walls, its corners clear in the curve), a 12-point box end tilted 15°, a
-flat handle with rounded edges, thinner than the heads, filleted into both
-heads, and chrome-vanadium steel (51CrV4), what wrenches are forged from. It is built at Size = 13 mm with fixed numbers, then
+walls, its corners clear in the curve), a 12-point box end tilted 15° and
+raised, a flat handle with rounded edges, thinner than the heads, filleted
+into both heads, and chrome-vanadium steel (51CrV4), the usual wrench
+steel. It is built at Size = 13 mm with fixed numbers, then
 ``set_equation`` ties every size to ``Size``, so one edit makes a 19 mm
 wrench and a configuration holds an 8 mm one.
 
@@ -18,9 +19,9 @@ shape at any size:
   offset either side of the Top Plane (the offsets are its thickness);
 - the box end is a disc with two hexagon cuts 30° apart (a 12-point opening,
   each hexagon sized across flats), all on a plane tilted 15° about the z
-  axis, built at the origin and moved to the far end by a linear pattern
-  whose spacing is the length; a clearance cut then removes the pattern's
-  seed at the origin;
+  axis and moved 0.32 x Size along the ring's axis, built near the origin
+  and moved to the far end by a linear pattern whose spacing is the
+  length; a clearance cut then removes the pattern's seed;
 - the open end is a disc at the origin and a jaw Size wide, cut both ways
   from a plane at 15° from the head's centre outward; an ellipse at the
   centre, Size across the jaw and 0.2 x Size along it, curves the bottom
@@ -29,9 +30,9 @@ shape at any size:
   0.08 x Size at its faces (the step from handle to head is only 0.1 x
   Size there).
 
-The reference's handle also bends up into the box end; that bend is left
-out (a tilt about the ring's centre is as close as these tools come while
-every size stays driven by Size).
+The reference's handle bends up into the box end. Here the ring is raised
+instead, so its low edge meets the handle's underside and the handle runs
+into its side; a true bend would need a swept or lofted handle.
 
 Run it with::
 
@@ -70,10 +71,15 @@ RATIOS = {
     "HandleT": 0.3,
 }
 #: The clearance cut that removes the box end's pattern seed: a little wider
-#: than the tilted ring reaches (0.813 x Size).
-CLEARANCE = 1.1
+#: than the raised, tilted ring reaches (0.89 x Size from the origin).
+CLEARANCE = 1.2
 JAW_ANGLE_DEG = 15.0
 BOX_TILT_DEG = 15.0
+#: How far the ring is moved along its own axis, as a multiple of Size: it
+#: lifts the ring about 0.31 x Size, so its lowest edge is level with the
+#: handle's underside and the handle meets its side, as the reference's
+#: bent handle does.
+RING_RISE = 0.32
 #: The jaw's curved bottom: an ellipse's axes as multiples of Size.
 RELIEF = {"across": 1.0, "along": 0.2}
 #: Neck fillet radii as multiples of Size: at the handle's sides and faces.
@@ -117,27 +123,49 @@ def _mm(variable: str, size: float = SIZE_MM) -> float:
     return round(RATIOS[variable] * size, 4)
 
 
-def wrench_box(size: float) -> list[float]:
+#: The box end as built at Size = 13 mm: its centre's offset from where the
+#: pattern puts it (x = Length on the handle's line), and its axis.
+Ring = tuple[tuple[float, ...], tuple[float, ...]]
+
+
+def _ring_centre(size: float, ring: Ring) -> tuple[float, float, float]:
+    """The box end's centre in mm for a given Size (everything scales)."""
+    offset, _axis = ring
+    k = size / SIZE_MM
+    return (_mm("Length", size) + k * offset[0], k * offset[1], k * offset[2])
+
+
+def _disc_reach(radius: float, half: float, axis_part: float) -> float:
+    """How far a disc reaches along a model axis from its centre.
+
+    ``axis_part`` is that model axis's component of the disc's own axis:
+    the rim reaches radius x sin, the faces half the thickness x cos.
+    """
+    return radius * math.sqrt(1 - axis_part**2) + half * abs(axis_part)
+
+
+def wrench_box(size: float, ring: Ring) -> list[float]:
     """The wrench's overall size [x, y, z] in mm for a given Size.
 
     x: the jaw takes the open end's tip off; what stays furthest out is the
     jaw corner nearer the axis, √(R² − (S/2)²) along the jaw and S/2 across
-    it, turned 15°. Then Length, then the tilted ring's reach: its radius
-    turned 15° plus half its thickness turned the other way.
-    y: the tilted ring, its radius x sin 15° plus half its thickness x
-    cos 15°, either side. z: the open end's diameter.
+    it, turned 15°. Then the ring's centre and its reach along x.
+    y: from the open end's underside (half its thickness below) to the
+    ring's top, its centre plus its reach along y. z: the open end's
+    diameter.
     """
     r = _mm("OpenHead", size) / 2
     rb = _mm("BoxHead", size) / 2
     t = _mm("HeadT", size) / 2
     jaw = math.radians(JAW_ANGLE_DEG)
-    tilt = math.radians(BOX_TILT_DEG)
     open_reach = math.sqrt(r**2 - (size / 2) ** 2) * math.cos(jaw)
     open_reach += size / 2 * math.sin(jaw)
-    box_reach = rb * math.cos(tilt) + t * math.sin(tilt)
-    x = open_reach + _mm("Length", size) + box_reach
-    y = 2 * (rb * math.sin(tilt) + t * math.cos(tilt))
-    return [round(x, 2), round(y, 2), round(2 * r, 2)]
+    centre = _ring_centre(size, ring)
+    axis = ring[1]
+    x = open_reach + centre[0] + _disc_reach(rb, t, axis[0])
+    top = centre[1] + _disc_reach(rb, t, axis[1])
+    bottom = min(-t, centre[1] - _disc_reach(rb, t, axis[1]))
+    return [round(x, 2), round(top - bottom, 2), round(2 * r, 2)]
 
 
 async def _one_body(tools: dict[str, Any]) -> bool:
@@ -202,26 +230,26 @@ async def _flatten(tools: dict[str, Any], adapter: Any, flip: bool) -> None:
     raise AssertionError(f"neither cut from {name} left the flattened handle")
 
 
-async def _box_end(
-    tools: dict[str, Any], adapter: Any
-) -> tuple[list[str], tuple[float, ...]]:
-    """The box end at the origin, tilted 15°: a disc and a 12-point opening.
+async def _box_end(tools: dict[str, Any], adapter: Any) -> tuple[list[str], Ring]:
+    """The box end near the origin, tilted 15°: a disc and a 12-point opening.
 
-    All three are sketched on a plane through the z axis, 15° off the Top
-    Plane. The 12 points are two hexagons 30° apart, each its own cut and
+    All three are sketched on a plane 0.32 x Size up along the ring's axis
+    from a plane through the z axis, 15° off the Top Plane: the ring tilts
+    and rises clear of the handle's line. The 12 points are two hexagons 30° apart, each its own cut and
     each sized across flats by a dimension. (SolidWorks wouldn't copy a
     circular pattern of one hexagon with the linear pattern that moves the
     box end, so the second hexagon is drawn turned instead.)
 
     Returns:
-        The features for the linear pattern to copy, and the tilted plane's
-        normal (the ring's axis).
+        The features for the linear pattern to copy, and the ring: its
+        centre (the raised plane's origin) and axis, pointing up.
     """
     s = SIZE_MM
     z_axis = await tools["create_axis"]({"reference": "z"})
     tilted = await _angled_plane(
         tools, adapter, "Top Plane", str(z_axis["axis"]["name"]), facing=1
     )
+    tilted, centre, axis = await _raised(tools, adapter, tilted)
     disc = await _sized_sketch(
         tools,
         tilted,
@@ -247,8 +275,37 @@ async def _box_end(
         )
         assert hole["status"] == "success", hole
         features.append(hole["cut_extrude"]["name"])
-    _origin, normal = _plane(adapter, tilted)
-    return features, tuple(normal)
+    return features, (centre, axis)
+
+
+async def _raised(
+    tools: dict[str, Any], adapter: Any, tilted: str
+) -> tuple[str, tuple[float, ...], tuple[float, ...]]:
+    """A plane RING_RISE x Size from ``tilted``, on the upper side.
+
+    Which side an offset plane lands on isn't certain, so its origin is
+    measured; one below the Top Plane is undone and made flipped.
+
+    Returns:
+        The plane, its origin in mm (the ring's centre) and its normal,
+        turned to point up.
+    """
+    rise = round(SIZE_MM * RING_RISE, 4)
+    tried = []
+    for flip in (False, True):
+        plane = await tools["create_reference_plane"](
+            {"reference": tilted, "offset": rise, "flip": flip}
+        )
+        assert plane["status"] == "success", plane
+        name = str(plane["plane"]["name"])
+        origin, normal = _plane(adapter, name)
+        tried.append([round(c, 3) for c in origin])
+        if origin[1] > 0:
+            assert math.dist(origin, (0, 0, 0)) == pytest.approx(rise, abs=1e-3), origin
+            up = tuple(c if normal[1] > 0 else -c for c in normal)
+            return name, tuple(origin), up
+        await tools["undo"]({"count": 1})
+    raise AssertionError(f"no plane {rise} mm above {tilted}: origins {tried}")
 
 
 async def _through_circle(tools: dict[str, Any], diameter: float) -> None:
@@ -299,7 +356,9 @@ async def _angled_plane(
     raise AssertionError(f"no plane through {axis} came out at 15°: {made}")
 
 
-async def _jaw(tools: dict[str, Any], adapter: Any, axis: str) -> tuple[float, ...]:
+async def _jaw(
+    tools: dict[str, Any], adapter: Any, axis: str, ring: Ring
+) -> tuple[float, ...]:
     """The jaw: Size wide, cut both ways from the jaw's centre plane.
 
     On this plane SolidWorks 2026 puts sketch x along the model's y (up) and
@@ -323,7 +382,7 @@ async def _jaw(tools: dict[str, Any], adapter: Any, axis: str) -> tuple[float, .
             {"sketch_name": sketch, "depth": SIZE_MM, "both_directions": True}
         )
         assert cut["status"] == "success", cut
-        size = await _size(tools, SIZE_MM)
+        size = await _size(tools, SIZE_MM, ring)
         tried.append(
             {"sketch_y": [y1, y2], "cut": cut.get("measured_change"), "size": size}
         )
@@ -378,34 +437,38 @@ async def _relief(tools: dict[str, Any], across: tuple[float, ...]) -> str:
 
 
 def _entry(
-    inside: Any, start: tuple[float, float, float], step: tuple[float, float, float]
-) -> list[float]:
-    """Where a line from ``start`` along ``step`` first enters a head, in metres.
+    inside: Any, start: tuple[float, float, float], step: float, stop: float
+) -> list[float] | None:
+    """Where a line along x from ``start`` first enters a head, in metres.
 
-    Marched in 0.01 mm steps: the neck edges for the fillets are where the
-    handle's faces and sides meet each head, found this way rather than by
-    solving each surface.
+    Marched ``step`` mm at a time up to x = ``stop``: the neck edges for the
+    fillets are where the handle's faces and sides meet each head, found
+    this way rather than by solving each surface. None if the line never
+    enters before ``stop`` (the handle's underside passes beneath the raised
+    ring, so there is no edge there).
     """
     point = list(start)
-    for _ in range(100_000):
+    while (point[0] - stop) * step < 0:
         if inside(point):
             return [round(c / 1000, 6) for c in point]
-        point = [p + d for p, d in zip(point, step, strict=True)]
-    raise AssertionError(f"the line from {start} never reached the head")
+        point[0] += step
+    return None
 
 
-def _neck_edges(ring_axis: tuple[float, ...]) -> dict[str, list[str]]:
+def _neck_edges(ring: Ring) -> dict[str, list[str]]:
     """Points on the edges where the handle meets each head, 'x,y,z' in metres.
 
     ``sides``: the handle's rounded sides (y = 0, z = ±half its width);
     ``faces``: its flat faces (z = 0, y = ±half its thickness). The open end
-    is a disc about y at the origin; the box end a disc about ``ring_axis``
-    at x = Length.
+    is a disc about y at the origin; the box end the raised, tilted disc
+    ``ring``.
     """
     r_open = _mm("OpenHead") / 2
     r_box = _mm("BoxHead") / 2
     half = _mm("HeadT") / 2
     length = _mm("Length")
+    centre = _ring_centre(SIZE_MM, ring)
+    ring_axis = ring[1]
     w = _mm("HandleW") / 2
     t = _mm("HandleT") / 2
 
@@ -413,31 +476,33 @@ def _neck_edges(ring_axis: tuple[float, ...]) -> dict[str, list[str]]:
         return abs(p[1]) <= half and p[0] ** 2 + p[2] ** 2 <= r_open**2
 
     def in_box(p: list[float]) -> bool:
-        d = (p[0] - length, p[1], p[2])
+        d = (p[0] - centre[0], p[1] - centre[1], p[2] - centre[2])
         along = sum(a * b for a, b in zip(d, ring_axis, strict=False))
         radial = sum(c * c for c in d) - along**2
         return abs(along) <= half and radial <= r_box**2
 
-    starts = {"sides": [(0.0, w), (0.0, -w)], "faces": [(t, 0.0), (-t, 0.0)]}
+    # Faces first: a side fillet at the box end ran on round the neck and
+    # took the face edge with it (2026-11-18).
+    starts = {"faces": [(t, 0.0), (-t, 0.0)], "sides": [(0.0, w), (0.0, -w)]}
     edges: dict[str, list[str]] = {}
     for kind, offsets in starts.items():
         points = []
         for y, z in offsets:
             mid = length / 2
-            points.append(_entry(in_open, (mid, y, z), (-0.01, 0.0, 0.0)))
-            points.append(_entry(in_box, (mid, y, z), (0.01, 0.0, 0.0)))
-        edges[kind] = [",".join(str(c) for c in p) for p in points]
+            points.append(_entry(in_open, (mid, y, z), -0.01, 0.0))
+            points.append(_entry(in_box, (mid, y, z), 0.01, length))
+        edges[kind] = [",".join(str(c) for c in p) for p in points if p]
     return edges
 
 
-async def _necks(tools: dict[str, Any], ring_axis: tuple[float, ...]) -> list[str]:
-    """Fillet the handle into both heads: its sides, then its faces.
+async def _necks(tools: dict[str, Any], ring: Ring) -> list[str]:
+    """Fillet the handle into both heads: its faces, then its sides.
 
     Returns:
         The two fillets.
     """
     names = []
-    for kind, points in _neck_edges(ring_axis).items():
+    for kind, points in _neck_edges(ring).items():
         fillet = await tools["add_fillet"](
             {"radius": round(SIZE_MM * FILLET[kind], 4), "edge_names": points}
         )
@@ -446,12 +511,12 @@ async def _necks(tools: dict[str, Any], ring_axis: tuple[float, ...]) -> list[st
     return names
 
 
-async def build_wrench(tools: dict[str, Any], adapter: Any) -> str:
+async def build_wrench(tools: dict[str, Any], adapter: Any) -> tuple[str, Ring]:
     """The 13 mm combination wrench, at fixed sizes.
 
     Returns:
         The sketch of the jaw's curved bottom (its two dimensions are
-        picked by that sketch, not by value).
+        picked by that sketch, not by value), and the box end's ring.
     """
     assert (await tools["create_part"]({"name": "wrench"}))["status"] == "success"
     bar = await _sized_sketch(
@@ -469,7 +534,7 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> str:
     await _flatten(tools, adapter, flip=False)
     await _flatten(tools, adapter, flip=True)
 
-    box_features, ring_axis = await _box_end(tools, adapter)
+    box_features, ring = await _box_end(tools, adapter)
     x_axis = await tools["create_axis"]({"reference": "x"})
     tried = []
     for reverse in (False, True):
@@ -506,12 +571,12 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> str:
     )
     assert boss["status"] == "success", boss
     y_axis = await tools["create_axis"]({"reference": "y"})
-    across = await _jaw(tools, adapter, str(y_axis["axis"]["name"]))
+    across = await _jaw(tools, adapter, str(y_axis["axis"]["name"]), ring)
     relief = await _relief(tools, across)
-    await _necks(tools, ring_axis)
+    await _necks(tools, ring)
     steel = await tools["set_material"]({"material_name": MATERIAL})
     assert steel["status"] == "success", steel
-    return relief
+    return relief, ring
 
 
 def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
@@ -530,6 +595,7 @@ def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
         _mm("HandleW"): '"HandleW"',
         _mm("HandleT") / 2: '"HandleT" / 2',
         round(_mm("BoxHead") * CLEARANCE, 4): f'"BoxHead" * {CLEARANCE}',
+        round(SIZE_MM * RING_RISE, 4): f'"Size" * {RING_RISE}',
         SIZE_MM: '"Size"',
         round(SIZE_MM * FILLET["sides"], 4): f'"Size" * {FILLET["sides"]}',
         round(SIZE_MM * FILLET["faces"], 4): f'"Size" * {FILLET["faces"]}',
@@ -548,9 +614,9 @@ def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
     return found
 
 
-async def _size(tools: dict[str, Any], size: float) -> dict[str, Any]:
+async def _size(tools: dict[str, Any], size: float, ring: Ring) -> dict[str, Any]:
     """verify_model against the wrench's expected size: verdict and box."""
-    want = wrench_box(size)
+    want = wrench_box(size, ring)
     checked = await tools["verify_model"](
         {"bounding_box_mm": want, "solid_body_count": 1}
     )
@@ -574,11 +640,14 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
        wrench is unchanged.
     """
     tools = await _tools(scratch.adapter)
-    relief = await build_wrench(tools, scratch.adapter)
+    relief, ring = await build_wrench(tools, scratch.adapter)
     listed = await tools["list_model_dimensions"]({})
     found = drivers(listed["data"], relief)
-    built = await _size(tools, SIZE_MM)
-    _frame(scratch.adapter, room_for=wrench_box(19)[0] / wrench_box(SIZE_MM)[0])
+    built = await _size(tools, SIZE_MM, ring)
+    _frame(
+        scratch.adapter,
+        room_for=wrench_box(19, ring)[0] / wrench_box(SIZE_MM, ring)[0],
+    )
     evidence(
         "A 13 mm combination wrench, built at fixed sizes",
         {"dimensions_to_drive": found, "size": built},
@@ -595,6 +664,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
             '"HandleW"',
             '"HandleT" / 2',
             f'"BoxHead" * {CLEARANCE}',
+            f'"Size" * {RING_RISE}',
             '"Size"',
             f'"Size" * {FILLET["sides"]}',
             f'"Size" * {FILLET["faces"]}',
@@ -630,7 +700,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     assert all(a["status"] == "success" for a in added), added
 
     grown = await tools["set_equation"]({"name": "Size", "expression": "19mm"})
-    at_19 = await _size(tools, 19)
+    at_19 = await _size(tools, 19, ring)
     _hide_references(scratch.adapter)
     evidence(
         "Size = 19mm: one edit, the whole wrench regrows",
@@ -645,9 +715,9 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     small = await tools["set_equation"](
         {"name": "Size", "expression": "8mm", "configurations": ["8 mm"]}
     )
-    default_size = await _size(tools, 19)
+    default_size = await _size(tools, 19, ring)
     await tools["activate_configuration"]({"name": "8 mm"})
-    small_size = await _size(tools, 8)
+    small_size = await _size(tools, 8, ring)
     _hide_references(scratch.adapter)
     evidence(
         'Size = 8mm in configuration "8 mm" only',
@@ -662,7 +732,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
 
     await tools["activate_configuration"]({"name": "Default"})
     refused = await tools["set_equation"]({"name": "Size", "expression": '"Nut" * 2'})
-    unchanged = await _size(tools, 19)
+    unchanged = await _size(tools, 19, ring)
     _hide_references(scratch.adapter)
     evidence(
         "A variable that doesn't exist is refused; the wrench is unchanged",
