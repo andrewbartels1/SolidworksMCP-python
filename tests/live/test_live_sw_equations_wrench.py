@@ -19,7 +19,7 @@ shape at any size:
   offset either side of the Top Plane (the offsets are its thickness);
 - the box end is a disc with two hexagon cuts 30° apart (a 12-point opening,
   each hexagon sized across flats), all on a plane tilted 15° about the z
-  axis and moved 0.32 x Size along the ring's axis, built near the origin
+  axis and moved 0.13 x Size along the ring's axis, built near the origin
   and moved to the far end by a linear pattern whose spacing is the
   length; a clearance cut then removes the pattern's seed;
 - the open end is a disc at the origin and a jaw Size wide, cut both ways
@@ -30,9 +30,10 @@ shape at any size:
   0.16 x Size along its flat faces, where they meet the head and the side
   fillets (the user's pick, 2 mm on the 13 mm wrench).
 
-The reference's handle bends up into the box end. Here the ring is raised
-instead, so its low edge meets the handle's underside and the handle runs
-into its side; a true bend would need a swept or lofted handle.
+The reference's handle bends up into the box end. Here the ring is lifted
+just enough to cover the handle's end on both faces, so the handle meets
+only its round wall and the neck fillets curve it in; a true bend would
+need a swept or lofted handle.
 
 Run it with::
 
@@ -75,17 +76,20 @@ RATIOS = {
 CLEARANCE = 1.2
 JAW_ANGLE_DEG = 15.0
 BOX_TILT_DEG = 15.0
-#: How far the ring is moved along its own axis, as a multiple of Size: it
-#: lifts the ring about 0.31 x Size, so its lowest edge is level with the
-#: handle's underside and the handle meets its side, as the reference's
-#: bent handle does.
-RING_RISE = 0.32
+#: How far the ring is moved along its own axis, as a multiple of Size. The
+#: handle runs to the ring's centre, so the ring must cover it up to the
+#: 12-point hole: lifted less than 0.12 x Size the handle shows above the
+#: ring's top face, more than 0.14 x Size it shows below its underside as a
+#: ledge (checked numerically 2026-11-18). In between, the handle meets only
+#: the ring's round wall, and the neck fillets curve it in.
+RING_RISE = 0.13
 #: The jaw's curved bottom: an ellipse's axes as multiples of Size.
 RELIEF = {"across": 1.0, "along": 0.2}
 #: Neck fillet radii as multiples of Size: at the handle's sides and faces.
 FILLET = {"sides": 0.2, "faces": 0.16}
 #: Chrome-vanadium spring steel, the usual wrench steel (SAE 6150 / 51CrV4).
 MATERIAL = "1.8159 (51CrV4)"
+MATERIAL_LIBRARY = "SolidWorks DIN Materials"
 _ISO_VIEW = 7  # swStandardViews_e.swIsometricView
 #: ``swUserPreferenceToggle_e``: swDisplayAxes, swDisplayPlanes,
 #: swDisplayOrigins, swDisplayTemporaryAxes.
@@ -241,9 +245,9 @@ async def _flatten(tools: dict[str, Any], adapter: Any, flip: bool) -> None:
 async def _box_end(tools: dict[str, Any], adapter: Any) -> tuple[list[str], Ring]:
     """The box end near the origin, tilted 15°: a disc and a 12-point opening.
 
-    All three are sketched on a plane 0.32 x Size up along the ring's axis
+    All three are sketched on a plane 0.13 x Size up along the ring's axis
     from a plane through the z axis, 15° off the Top Plane: the ring tilts
-    and rises clear of the handle's line. The 12 points are two hexagons 30° apart, each its own cut and
+    and covers the handle's end on both faces. The 12 points are two hexagons 30° apart, each its own cut and
     each sized across flats by a dimension. (SolidWorks wouldn't copy a
     circular pattern of one hexagon with the linear pattern that moves the
     box end, so the second hexagon is drawn turned instead.)
@@ -452,8 +456,7 @@ def _entry(
     Marched ``step`` mm at a time up to x = ``stop``: the neck edges for the
     fillets are where the handle's faces and sides meet each head, found
     this way rather than by solving each surface. None if the line never
-    enters before ``stop`` (the handle's underside passes beneath the raised
-    ring, so there is no edge there).
+    enters before ``stop`` (no edge there to fillet).
     """
     point = list(start)
     while (point[0] - stop) * step < 0:
@@ -558,7 +561,7 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> tuple[str, Ring]:
         tried.append(moved)
         if moved["status"] != "success":
             continue  # the tool already removed a pattern that built nothing
-        # The raised seed floats clear of the handle, so the part is two
+        # A lifted seed can float clear of the handle, so the part may be two
         # bodies until the clearance cut; the overall length tells the way
         # instead: about Length plus the ring's reach along the handle,
         # nearly twice Length the wrong way.
@@ -587,7 +590,9 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> tuple[str, Ring]:
     across = await _jaw(tools, adapter, str(y_axis["axis"]["name"]), ring)
     relief = await _relief(tools, across)
     await _necks(tools, ring)
-    steel = await tools["set_material"]({"material_name": MATERIAL})
+    steel = await tools["set_material"](
+        {"material_name": MATERIAL, "database": MATERIAL_LIBRARY}
+    )
     assert steel["status"] == "success", steel
     return relief, ring
 
