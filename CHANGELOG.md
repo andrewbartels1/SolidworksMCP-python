@@ -19,7 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drive several dimensions (`"D1@Sketch1" = "Width" / 2`); `set_equation`
   adds or changes one, in every configuration by default, solves and
   rebuilds, and gives the new value. An expression SolidWorks can't use
-  fails as `equation_refused` and changes nothing. 143 tools.
+  fails as `equation_refused` and changes nothing. 143 tools. Named
+  configurations are set one at a time; the reply's `values` gives each
+  one's value. Demo: one variable sizes a combination wrench (13, 19 and
+  8 mm), on the demos page and in the README.
+- **`add_polygon` takes an `angle`**: the degrees its first corner is
+  turned from +x (0 by default), e.g. two hexagons 30° apart for a
+  12-point opening.
+- **A polygon can be dimensioned**: a `diameter` dimension
+  (`add_sketch_dimension`) on a polygon's `id` sizes it by the circle drawn
+  inside it, across flats for a hexagon, so an equation can drive it.
 - **`save_body_as_part` leaves no extra assembly open** (queue item 27,
   #101): a new, unsaved assembly SolidWorks opens alongside Save Bodies is
   closed, the part is made active again, and the reply's
@@ -186,6 +195,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`create_cut_extrude` with `both_directions` on a Blind cut** cut one way
+  only, so a slot meant to straddle its sketch plane came out beside it. It
+  is now a mid-plane cut, `depth` in total, as `create_extrusion` does.
 - **`add_fillet` on the current selection** (empty `edge_names`, after
   `select_face_edges`) built no fillet: reading the volume first rebuilt
   the part, which cleared the selection. It no longer reads the volume in

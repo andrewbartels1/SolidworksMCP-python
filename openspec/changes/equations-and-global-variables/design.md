@@ -35,14 +35,31 @@ equations' own tool; equation folders and solve order
 3. **Finding an equation.** Walk `Equation(i)` for `i` in
    `0..GetCount()-1` and take the text between the first pair of quotes
    as its name; compare without case, as SolidWorks does.
-4. **Checking.** A dimension name is checked with
-   `IModelDoc2.Parameter(name)` before anything is written. After
-   `Add3`/`SetEquationAndConfigurationOption`, the stored text is read
-   back from `Equation(index)`: `Add3` returning -1, or the stored text
-   not being the one written, is a refusal. A refused change restores the
-   previous text, so nothing is left half-done. The return value of
-   `SetEquationAndConfigurationOption` is not relied on (its meaning
-   isn't documented in the type library); the read-back is.
+4. **The COM calls, as measured on SolidWorks 2026** (live probes,
+   2026-11-17/18). Every call that takes an array of configuration names
+   returns -1 from Python, whatever the array's form (`Add3`,
+   `SetEquationAndConfigurationOption`, `ISetEquationAndConfiguration
+   Option`), so none is given names:
+   - **add:** `Add2(-1, text, True)`, which adds in every configuration
+     and returns the new index, or -1 when refused;
+   - **change in every configuration:** write the `Equation(i)` property
+     (an `IDispatch` property put; pywin32's late binding can't assign an
+     indexed property). `SetEquationAndConfigurationOption(i, text, 2,
+     None)` worked on a two-equation part but returned -1 on the wrench's
+     19, even for the same text;
+   - **this configuration:** `SetEquationAndConfigurationOption(i, text,
+     1, None)` with the configuration active; it returns 0;
+   - **named configurations:** each made active in turn and set as "this
+     configuration", then the one that was active is shown again,
+     whatever happens; the reply's `values` gives each one's solved value.
+
+   A dimension name is checked with `IModelDoc2.Parameter(name)` before
+   anything is written. A refusal is the call's -1, `Status` going to -1,
+   or the stored text not reading back as written (ignoring spaces and
+   case: SolidWorks respaces it). A refused add is deleted again; a refused
+   change restores the previous text, so nothing is left half-done.
+   `EvaluateAll`'s return value isn't used: it returned -1 on a part that
+   solved.
 5. **Configurations default to `all`**, as SolidWorks' Equations dialog
    does, unlike `set_dimension` (`this`, as SolidWorks' dimension
    dialog). The scope reuses `configuration_scope` from
@@ -70,14 +87,34 @@ equations' own tool; equation folders and solve order
 
 ## Risks / Trade-offs
 
-- **Units of `Value`** may turn out to be SI (0.06 for 60 mm). The live
-  test checks it first; if so, the reply converts dimension values to mm
-  and degrees as the other tools do, and the design is updated.
+- **Units of `Value`**: confirmed live as the document's units (`19.0`
+  for `19mm` in an MMGS part), so the reply passes it through.
 - **`Add3` on an assembly** writes the equation on the assembly; an
   equation driving a part's dimension inside it needs the
   `D1@Sketch1@Part1<1>` form. Out of scope for the live check; the
   description says the dimension must be the active document's own.
 
+## The wrench demo, and two tool fixes it needed
+
+The live demo (`tests/live/test_live_sw_equations_wrench.py`, on the
+demos page and in the README) builds a 13 mm combination wrench and drives
+all twelve of its sizing dimensions from one global variable. Every size
+grows from the centre line, so the wrench keeps its shape at any size.
+Building it found two gaps, fixed here:
+
+- **`create_cut_extrude` with `both_directions` on a Blind cut** cut one
+  way only (the flag was read only with `ThroughAll`). It is now a
+  mid-plane cut, `depth` in total, as `create_extrusion` already did.
+- **Polygons couldn't be sized by a dimension or turned.**
+  `add_sketch_dimension` with `diameter` on a polygon's `id` now
+  dimensions the circle `CreatePolygon` draws inside it (across flats
+  for a hexagon), and `add_polygon` takes an `angle` (the first corner's
+  turn from +x), so two hexagons 30° apart make a 12-point opening.
+  SolidWorks wouldn't linear-pattern a circular pattern of one hexagon,
+  which is why the second is drawn turned.
+
 ## Migration Plan
 
-New tools only; nothing existing changes.
+New tools; `add_polygon`'s `angle` defaults to 0, so existing calls are
+unchanged. A Blind cut with `both_directions` now cuts both ways, as its
+name and the extrusion tool always said.

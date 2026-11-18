@@ -813,7 +813,12 @@ class SolidWorksAdapter(ABC):
         )
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add a regular polygon to the current sketch.
 
@@ -822,6 +827,7 @@ class SolidWorksAdapter(ABC):
             center_y (float): The center y value.
             radius (float): The radius value.
             sides (int): The sides value.
+            angle (float): Degrees the first vertex is turned from +x.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.

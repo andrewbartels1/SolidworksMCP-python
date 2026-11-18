@@ -174,9 +174,9 @@ async def test_circuit_breaker_add_spline(cb_with_mock):
 async def test_circuit_breaker_add_polygon(cb_with_mock):
     """add_polygon should route through _execute_with_circuit_breaker. Covers line 738."""
     cb, inner = cb_with_mock
-    result = await cb.add_polygon(0.0, 0.0, 5.0, 6)
+    result = await cb.add_polygon(0.0, 0.0, 5.0, 6, 30.0)
     assert result.is_success
-    inner.add_polygon.assert_awaited_once()
+    inner.add_polygon.assert_awaited_once_with(0.0, 0.0, 5.0, 6, 30.0)
 
 
 @pytest.mark.asyncio

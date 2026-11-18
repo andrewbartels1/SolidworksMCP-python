@@ -1485,7 +1485,9 @@ def _create_cut_extrude_impl(
               ``"through_all_both"`` (through all in both directions, cut as a
               double-ended Through All feature).
             - ``both_directions`` (bool): With ``"ThroughAll"``, cut through
-              all in both directions (same as ``"ThroughAllBoth"``).
+              all in both directions (same as ``"ThroughAllBoth"``); with
+              ``"Blind"``, a mid-plane cut ``depth`` deep in total, centred on
+              the sketch plane (as ``create_extrusion`` does).
             - ``feature_scope`` (bool): Limit cut to selected bodies.
             - ``auto_select`` (bool): Auto-select bodies in scope.
             - ``sketch_name`` (str | None): Sketch to cut from. See sketch
@@ -1596,6 +1598,20 @@ def _create_cut_extrude_impl(
                     " [Sd=True, T1=ThroughAllBoth]",
                     True,
                     adapter.constants["swEndCondThroughAllBoth"],
+                    blind,
+                    reverse,
+                ),
+            ]
+        elif normalized.both_directions:
+            # Blind both ways is a mid-plane cut: ``depth`` in total, centred
+            # on the sketch plane, as create_extrusion does. It used to be cut
+            # one way only, so a slot meant to straddle its plane came out on
+            # one side of it (seen live on SW 2026, the wrench demo's jaw).
+            forms = [
+                (
+                    " [mid-plane]",
+                    True,
+                    adapter.constants["swEndCondMidPlane"],
                     blind,
                     reverse,
                 ),

@@ -917,6 +917,76 @@ deletes the hole it had started, and the plate's volume doesn't change.
 7. `pattern_circular({"features": ["Ø6.0 (6) Diameter Hole1"], "axis": "Axis1", "count": 6})`
 8. `create_hole({"face_point": [0, 15, 22], "hole_type": "counterbore", "size": "M6", "end_condition": "blind", "depth": 8, "positions": [[0, 20, -22]]})`, refused on purpose
 
+## Equations {#equations}
+
+Source: [`tests/live/test_live_sw_equations_wrench.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_equations_wrench.py).
+
+### One variable sizes a combination wrench {#wrench}
+
+![A combination wrench driven by one global variable: built at 13 mm, regrown to 19 mm by one equation edit, shrunk to 8 mm in its own configuration, and a bad expression refused](assets/demos/equations/test_a_combination_wrench_sized_by_one_variable-motion.gif)
+
+> *Example prompt:* Make a 13 mm combination wrench: an open end with its jaw
+> at 15° to the handle, a 12-point box end, and a flat handle. Drive every
+> size from one global variable, `Size`, so I can make a 19 mm one by
+> changing one number, then add an 8 mm size as its own configuration.
+
+**What it shows.** A combination wrench in the usual layout (ISO 3318 /
+DIN 3113), modelled from a picture of one: an open end with its jaw at 15°,
+a 12-point box end, and a flat handle with rounded edges. It is built first
+at fixed 13 mm sizes. Then `set_equation` adds a global variable `Size` =
+13mm, six variables computed from it, and an equation on each of the twelve
+dimensions that size the wrench: 19 equations in all.
+
+| Variable | Expression | Drives |
+| --- | --- | --- |
+| `Size` | 13mm | the jaw's width; both hexagons of the 12-point opening, across flats |
+| `Length` | `"Size" * 13.0` | the handle bar's length and the box end's pattern spacing (head centre to head centre) |
+| `OpenHead` | `"Size" * 2.4` | the open end's diameter |
+| `BoxHead` | `"Size" * 1.8` | the box end's diameter |
+| `HeadT` | `"Size" * 0.45` | both heads' thickness |
+| `HandleW` | `"Size" * 0.95` | the handle's width (the round bar it is cut from) |
+| `HandleT` | `"Size" * 0.32` | the handle's thickness (two planes `"HandleT" / 2` either side of the Top Plane) |
+
+Every size grows from the wrench's centre line, so it keeps its shape at
+any size: the jaw is a mid-plane cut on a plane at 15°, the heads and the
+handle bar are circle diameters, the 12-point opening is two hexagons 30°
+apart, each sized across flats, and the box end sits at the far end of the
+handle by a linear pattern.
+
+Changing `Size` to 19mm is one call, and the whole wrench regrows. Setting
+it to 8mm with `configurations: ["8 mm"]` changes only that configuration,
+so the part holds both sizes. After each change, `verify_model` checks the
+overall size against the hand calculation:
+
+| `Size` | Expected size, mm (x, y, z) | Measured |
+| --- | --- | --- |
+| 13 mm, as built | 196.08 x 5.85 x 31.2 | 196.0804 x 5.85 x 31.2 |
+| 19 mm, Default | 286.58 x 8.55 x 45.6 | 286.5791 x 8.55 x 45.6 |
+| 8 mm, configuration "8 mm" | 120.66 x 3.6 x 19.2 | 120.6649 x 3.6 x 19.2 |
+
+Length is `Length` plus the box end's radius (0.9 x `Size`) plus how far
+the open end still reaches once the jaw is cut: the jaw corner nearer the
+axis, √(1.2² − 0.5²) along the jaw and 0.5 across it, turned 15°, which
+is 1.1831 x `Size`.
+
+The last call fails **on purpose**: `"Nut" * 2` names a variable that
+doesn't exist, so SolidWorks refuses it (`equation_refused`), the equation
+keeps its old text and the wrench stays at 19 mm.
+
+**Tool calls**
+
+1. `create_part`, then the handle: a Right-plane circle Ø12.35 sized with `add_sketch_dimension({"dimension_type": "diameter"})`, `create_extrusion({"depth": 169})` along x
+2. Flatten it: `create_reference_plane({"reference": "Top Plane", "offset": 2.08})` and the same with `"flip": true`, then a `ThroughAll` cut from each, away from the handle
+3. The box end at the origin: a Top-plane circle Ø23.4, `create_extrusion({"depth": 5.85, "both_directions": true})`, then two `add_polygon({"sides": 6, "radius": 6.5})` cuts, the second with `"angle": 30`, each sized across flats with a `diameter` dimension
+4. `create_axis({"reference": "x"})`, then `pattern_linear` of the three box-end features, 2 instances 169 mm apart, to the handle's far end
+5. The open end at the origin: a Top-plane circle Ø31.2, `create_extrusion({"depth": 5.85, "both_directions": true})`, which also fills the box end's pattern seed
+6. The jaw: `create_axis({"reference": "y"})`, `create_reference_plane({"reference": "Front Plane", "angle": 15, "axis": "Axis2"})`, a rectangle on it, `create_cut_extrude({"depth": 13, "both_directions": true})`, a mid-plane cut
+7. `list_model_dimensions()` to find the twelve dimensions' full names
+8. `set_equation({"name": "Size", "expression": "13mm"})`, then the six variables, then one `set_equation` per dimension, e.g. `{"name": "D1@Sketch7", "expression": "\"OpenHead\""}`, then `list_equations()`
+9. `set_equation({"name": "Size", "expression": "19mm"})`, then `verify_model({"bounding_box_mm": [286.58, 8.55, 45.6]})`
+10. `create_configuration({"name": "8 mm"})`, `set_equation({"name": "Size", "expression": "8mm", "configurations": ["8 mm"]})`, `activate_configuration({"name": "8 mm"})`, `verify_model`
+11. `set_equation({"name": "Size", "expression": "\"Nut\" * 2"})`, refused on purpose
+
 ## Run a demo yourself
 
 The demos need Windows, SolidWorks open and idle, and the project's `.venv`.

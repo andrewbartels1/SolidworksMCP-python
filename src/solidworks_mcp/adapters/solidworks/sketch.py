@@ -142,9 +142,14 @@ class SolidWorksSketchMixin:
         return _add_centerline_impl(self, x1, y1, x2, y2)
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
-        return _add_polygon_impl(self, center_x, center_y, radius, sides)
+        return _add_polygon_impl(self, center_x, center_y, radius, sides, angle)
 
     async def add_ellipse(
         self, center_x: float, center_y: float, major_axis: float, minor_axis: float
@@ -862,6 +867,7 @@ def _add_polygon_impl(
     center_y: float,
     radius: float,
     sides: int,
+    angle: float = 0.0,
 ) -> AdapterResult[str]:
     """Add a regular polygon inscribed in a circle to the active sketch.
 
@@ -869,8 +875,8 @@ def _add_polygon_impl(
     Inscribed)``.  All eight arguments are required by the COM API — passing
     fewer arguments surfaces a pywin32 ``"Parameter not optional."`` error at
     the SOLIDWORKS boundary.  The vertex point ``(Xp, Yp, Zp)`` is placed on
-    the positive X axis at ``radius`` from centre, which fixes the polygon's
-    rotation reproducibly.
+    positive X axis at ``radius`` from centre, turned by ``angle`` degrees,
+    which fixes the polygon's rotation reproducibly.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
@@ -880,6 +886,7 @@ def _add_polygon_impl(
             vertex). Corresponds to ``CreatePolygon(..., Inscribed=True)``,
             i.e. the polygon is inscribed in a circle of this radius.
         sides: Number of polygon sides.  SolidWorks accepts 3–40.
+        angle: Degrees the vertex point is turned from +X (0 by default).
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the registered entity ID
@@ -916,8 +923,8 @@ def _add_polygon_impl(
             center_x / 1000.0,
             center_y / 1000.0,
             0,
-            (center_x + radius) / 1000.0,
-            center_y / 1000.0,
+            (center_x + radius * math.cos(math.radians(angle))) / 1000.0,
+            (center_y + radius * math.sin(math.radians(angle))) / 1000.0,
             0,
             sides,
             True,
@@ -1310,6 +1317,11 @@ def _add_sketch_dimension_impl(
                 f"Unknown sketch entity '{entity1}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
             )
 
+        if isinstance(entity1_obj, (tuple, list)) and (
+            (dimension_type or "").strip().lower() in {"radial", "diameter"}
+        ):
+            entity1_obj = _polygon_circle(entity1_obj, entity1)
+
         entity2_obj = None
         if entity2:
             entity2_obj = adapter._sketch_entities.get(entity2)
@@ -1461,6 +1473,26 @@ def _add_sketch_dimension_impl(
         AdapterResult[str],
         adapter._handle_com_operation("add_sketch_dimension", _dimension_operation),
     )
+
+
+#: ``swSketchSegments_e.swSketchARC``: a circle or arc segment.
+_SKETCH_ARC = 1
+
+
+def _polygon_circle(segments: Any, entity_id: str) -> Any:
+    """A polygon's construction circle, which sizes it across its flats.
+
+    ``CreatePolygon`` returns the polygon's sides and the circle drawn
+    inside them; a diameter dimension on that circle drives the polygon.
+
+    Raises:
+        Exception: If no segment is a circle.
+    """
+    for segment in segments:
+        flagged = _sw_type_info.flagged(segment, "ISketchSegment")
+        if flagged.GetType() == _SKETCH_ARC:
+            return segment
+    raise Exception(f"Polygon '{entity_id}' has no construction circle to dimension.")
 
 
 def _sketch_point_xyz(

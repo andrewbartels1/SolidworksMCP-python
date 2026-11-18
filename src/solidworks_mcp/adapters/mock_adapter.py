@@ -1976,7 +1976,12 @@ class MockSolidWorksAdapter(
         )
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Mock adding a regular polygon to sketch.
 
@@ -1987,6 +1992,7 @@ class MockSolidWorksAdapter(
                 to each vertex; matches the real adapter's
                 ``CreatePolygon(..., Inscribed=True)`` semantics).
             sides (int): Number of polygon sides.
+            angle (float): Degrees the first vertex is turned from +x.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.

@@ -258,12 +258,14 @@ Draw a centreline (construction line) in the open sketch, in mm.
 
 Draw a regular polygon (e.g. a hexagon) in the open sketch from its centre, radius and number of sides.
 
+`angle` turns it: the degrees its first corner is turned from +x (0 by default), so two hexagons 30° apart make a 12-point opening. A `diameter` dimension (`add_sketch_dimension`) on the polygon's `id` sizes it by the circle drawn inside it, so a hexagon is sized across flats and an equation can drive it.
+
 **Prerequisite:** Active sketch edit mode
 
 **Sample call:**
 
 ```json
-{}
+{"center_x": 0, "center_y": 0, "radius": 6.5, "sides": 6, "angle": 30}
 ```
 
 ---

@@ -1432,12 +1432,17 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add polygon through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_polygon",
-            lambda: self.adapter.add_polygon(center_x, center_y, radius, sides),
+            lambda: self.adapter.add_polygon(center_x, center_y, radius, sides, angle),
             input_dict={
                 "center_x": center_x,
                 "center_y": center_y,

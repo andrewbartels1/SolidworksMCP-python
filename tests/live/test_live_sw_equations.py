@@ -36,6 +36,7 @@ async def _tools(adapter: Any) -> dict[str, Any]:
     from fastmcp import FastMCP
 
     from solidworks_mcp.tools.analysis import register_analysis_tools
+    from solidworks_mcp.tools.engineering_data import register_engineering_data_tools
     from solidworks_mcp.tools.equations import register_equation_tools
     from solidworks_mcp.tools.file_management import register_file_management_tools
     from solidworks_mcp.tools.modeling import register_modeling_tools
@@ -47,6 +48,7 @@ async def _tools(adapter: Any) -> dict[str, Any]:
         register_sketching_tools,
         register_file_management_tools,
         register_analysis_tools,
+        register_engineering_data_tools,
         register_equation_tools,
     ):
         await register(mcp, adapter, {})

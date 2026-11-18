@@ -876,6 +876,67 @@ def test_add_sketch_dimension_radial_diameter_and_selection_errors() -> None:
     assert "Failed to select secondary entity" in (bad_secondary.error or "")
 
 
+def _polygon_adapter(
+    segments: tuple[object, ...],
+) -> tuple[_FakeSketchAdapter, list[object]]:
+    """A fake adapter whose ``Polygon_1`` is ``segments``; the selections made."""
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    adapter._sketch_entities = {"Polygon_1": segments}
+    selected: list[object] = []
+    adapter._select_sketch_entity = lambda entity, append: (
+        selected.append(entity) or True
+    )
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_args: True,
+        AddDiameterDimension2=lambda *_args: SimpleNamespace(
+            GetDimension2=lambda *_a: SimpleNamespace(SetSystemValue3=lambda *_b: True)
+        ),
+    )
+    return adapter, selected
+
+
+def test_a_polygon_angle_turns_its_first_corner() -> None:
+    """The vertex point CreatePolygon takes is turned ``angle`` degrees from +x."""
+    adapter = _FakeSketchAdapter()
+    create = Mock(return_value=(object(),))
+    adapter.currentSketchManager = SimpleNamespace(CreatePolygon=create)
+
+    result = sketch._add_polygon_impl(adapter, 10.0, 0.0, 6.5, 6, 30.0)
+
+    assert result.is_success, result.error
+    args = create.call_args.args
+    assert args[3] == pytest.approx((10.0 + 6.5 * math.cos(math.radians(30))) / 1000)
+    assert args[4] == pytest.approx(6.5 * math.sin(math.radians(30)) / 1000)
+    assert args[6:] == (6, True)
+
+
+def test_a_diameter_on_a_polygon_dimensions_its_construction_circle() -> None:
+    """The circle inside the polygon sizes it across flats; its sides are skipped."""
+    side = SimpleNamespace(GetType=lambda: 0)
+    circle = SimpleNamespace(GetType=lambda: 1)
+    adapter, selected = _polygon_adapter((side, side, circle))
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Polygon_1", None, "diameter", 13.0
+    )
+
+    assert result.is_success, result.error
+    assert selected == [circle]
+
+
+def test_a_polygon_with_no_circle_cannot_be_dimensioned() -> None:
+    side = SimpleNamespace(GetType=lambda: 0)
+    adapter, _selected = _polygon_adapter((side, side))
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Polygon_1", None, "diameter", 13.0
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "no construction circle" in (result.error or "")
+
+
 def test_add_sketch_dimension_missing_entities_and_placement_errors() -> None:
     adapter = _FakeSketchAdapter()
     adapter.currentSketchManager = object()

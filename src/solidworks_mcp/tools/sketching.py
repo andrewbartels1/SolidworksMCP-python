@@ -770,11 +770,13 @@ async def register_sketching_tools(
 
         Use it for nuts, hex bosses and pockets. Needs: an open sketch
         (`create_sketch`). Changes: adds the polygon's sides. Returns: `polygon` with
-        `id`, `center`, `radius` and `sides`.
+        `id`, `center`, `radius`, `sides` and `angle`. A `diameter` dimension
+        (`add_sketch_dimension`) on its `id` sizes it by the circle drawn inside it.
 
         Args:
             input_data: A mapping: `center_x`, `center_y` (mm, default 0), `radius`
-                (mm, circumscribed, default 10) and `sides` (default 6).
+                (mm, circumscribed, default 10), `sides` (default 6) and `angle`
+                (degrees the first corner is turned from +x, default 0).
 
         Returns:
             dict[str, Any]: The polygon added.
@@ -783,8 +785,9 @@ async def register_sketching_tools(
         center_y = input_data.get("center_y", 0.0)
         radius = input_data.get("radius", 10.0)
         sides = input_data.get("sides", 6)
+        angle = float(input_data.get("angle", 0.0))
 
-        result = await adapter.add_polygon(center_x, center_y, radius, sides)
+        result = await adapter.add_polygon(center_x, center_y, radius, sides, angle)
 
         require_success(result, context="Failed to add polygon")
         polygon_id = result.data
@@ -796,6 +799,7 @@ async def register_sketching_tools(
                 "center": {"x": center_x, "y": center_y},
                 "radius": radius,
                 "sides": sides,
+                "angle": angle,
             },
             "execution_time": result.execution_time,
         }

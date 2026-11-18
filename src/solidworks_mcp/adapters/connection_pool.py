@@ -1252,7 +1252,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         )
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add polygon using pool.
 
@@ -1261,13 +1266,16 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             center_y (float): The center y value.
             radius (float): The radius value.
             sides (int): The sides value.
+            angle (float): Degrees the first vertex is turned from +x.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_pool(
             "add_polygon",
-            lambda adapter: adapter.add_polygon(center_x, center_y, radius, sides),
+            lambda adapter: adapter.add_polygon(
+                center_x, center_y, radius, sides, angle
+            ),
         )
 
     async def add_ellipse(

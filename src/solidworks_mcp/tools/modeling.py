@@ -487,7 +487,7 @@ class CreateCutExtrudeInput(CompatInput):
         draft_angle (float): Draft angle in degrees.
         end_condition (str): End condition type.
         reverse_direction (bool): Reverse cut direction.
-        both_directions (bool): With ``"ThroughAll"``, cut both ways.
+        both_directions (bool): Cut both ways: mid-plane when Blind.
         sketch_name (str | None): Sketch to cut from.
     """
 
@@ -512,8 +512,10 @@ class CreateCutExtrudeInput(CompatInput):
     both_directions: bool = Field(
         default=False,
         description=(
-            "With end_condition 'ThroughAll', cut through the body both ways "
-            "(same as 'ThroughAllBoth')"
+            "Cut both ways from the sketch plane: with 'Blind', a mid-plane "
+            "cut 'depth' mm in total, centred on the plane (a slot either side "
+            "of it); with 'ThroughAll', through the body both ways (same as "
+            "'ThroughAllBoth')"
         ),
     )
     sketch_name: str | None = Field(

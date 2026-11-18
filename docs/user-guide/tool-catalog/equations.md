@@ -32,9 +32,11 @@ Each row has `index`, `name`, `expression`, `kind` (`global_variable`, `dimensio
 
 Add or change an equation or global variable, so one value drives others.
 
-A `name` with `@` is a dimension of the active document; any other name is a global variable. If the model already has an equation for `name` (case doesn't matter), its expression is replaced; otherwise one is added. The model is solved and rebuilt, and the reply gives the equation, its `value`, `action` (`added` or `changed`) and the `configurations` it applies in. An expression SolidWorks can't use, such as one naming a variable that doesn't exist, fails as `equation_refused` and changes nothing.
+A `name` with `@` is a dimension of the active document; any other name is a global variable. If the model already has an equation for `name` (case doesn't matter), its expression is replaced; otherwise one is added. The model is solved and rebuilt, and the reply gives the equation, its `value`, `action` (`added` or `changed`) and the `configurations` it applies in. With configuration names, each is made active in turn and set for that configuration only, then the configuration that was active is shown again; the reply's `expression` and `value` are what was set, and `values` gives the solved value in each named configuration. An expression SolidWorks can't use, such as one naming a variable that doesn't exist, fails as `equation_refused` and changes nothing.
 
 It applies in every configuration by default, as SolidWorks' Equations dialog does; `set_dimension` defaults to the active one only.
+
+See it drive a whole part: [one variable sizes a combination wrench](../../demos.md#wrench).
 
 **Prerequisite:** Active part or assembly; for a dimension, the dimension.
 
