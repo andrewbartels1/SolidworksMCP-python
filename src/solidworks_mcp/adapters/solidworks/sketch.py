@@ -1500,8 +1500,8 @@ def _set_dimension_value(adapter: Any, display_dim: Any, value_si: float) -> Non
 #: ``swSketchSegments_e.swSketchARC``: a circle or arc segment.
 _SKETCH_ARC = 1
 
-#: ``swDimensionType_e.swLinearDimension``: aligned, along the two points.
-_ALIGNED_DIMENSION = 2
+#: How far beside an ellipse's axis its dimension text goes, in metres.
+_AXIS_TEXT_OFFSET = 0.005
 
 #: An ellipse's axis dimensions, and the ``ISketchEllipse`` getter for the
 #: point at that axis's end.
@@ -1514,9 +1514,12 @@ def _ellipse_axis_dimension(
     """An aligned dimension from an ellipse's centre to the end of ``axis``.
 
     It holds half the axis: an ellipse has a point at one end of each axis
-    only. Turned ellipses need it aligned, so it is added with
-    ``AddSpecificDimension`` (``swLinearDimension``), not a smart dimension
-    that would pick horizontal or vertical.
+    only. ``AddDimension2`` with the text beside the axis's middle makes it
+    aligned, so a turned ellipse gets its true half-axis (SolidWorks 2026,
+    2026-11-18: 6.5 mm on an ellipse turned 30°, where a horizontal one
+    would read 5.63; ``AddSpecificDimension`` added nothing). A dimension
+    that doesn't read the axis's length (horizontal or vertical after all)
+    is refused rather than set, which would bend the ellipse.
 
     Args:
         adapter: The adapter, with the ellipse's sketch open.
@@ -1529,7 +1532,7 @@ def _ellipse_axis_dimension(
 
     Raises:
         Exception: If the entity isn't an ellipse, a point can't be selected,
-            or SolidWorks adds no dimension.
+            or SolidWorks adds no dimension or one that isn't aligned.
     """
     flagged = _sw_type_info.flagged(ellipse, "ISketchEllipse")
     centre = adapter._attempt(lambda: flagged.GetCenterPoint2(), default=None)
@@ -1543,19 +1546,27 @@ def _ellipse_axis_dimension(
     for point, append in ((centre, False), (end, True)):
         if not adapter._attempt(lambda p=point, a=append: bool(p.Select2(a, 0)), False):
             raise Exception(f"Failed to select the {axis} points of '{entity_id}'")
-    error = 0
+    dx, dy = end.X - centre.X, end.Y - centre.Y
+    length = math.hypot(dx, dy)
+    side = (-dy / length, dx / length) if length else (0.0, 1.0)
     display = adapter._attempt(
-        lambda: model.Extension.AddSpecificDimension(
-            end.X, end.Y, end.Z, _ALIGNED_DIMENSION, error
+        lambda: model.AddDimension2(
+            centre.X + dx / 2 + side[0] * _AXIS_TEXT_OFFSET,
+            centre.Y + dy / 2 + side[1] * _AXIS_TEXT_OFFSET,
+            0.0,
         ),
         default=None,
     )
-    # AddSpecificDimension's error is passed by reference; pywin32 returns it
-    # with the dimension.
-    if isinstance(display, tuple):
-        display = display[0]
     if not display:
         raise Exception(f"SolidWorks added no {axis} dimension to '{entity_id}'")
+    measured = adapter._attempt(
+        lambda: display.GetDimension2(0).SystemValue, default=None
+    )
+    if measured is None or abs(float(measured) - length) > 1e-6:
+        raise Exception(
+            f"The {axis} dimension of '{entity_id}' reads {measured}, not the "
+            f"axis's {length:.6f} m: it isn't aligned with the axis."
+        )
     return display
 
 

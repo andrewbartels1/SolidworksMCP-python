@@ -944,7 +944,7 @@ class _Point:
 def _ellipse_adapter(
     ellipse: object, added: object
 ) -> tuple[_FakeSketchAdapter, list[tuple[object, ...]]]:
-    """A fake adapter with ``Ellipse_1``; the AddSpecificDimension calls made."""
+    """A fake adapter with ``Ellipse_1``; the AddDimension2 calls made."""
     adapter = _FakeSketchAdapter()
     adapter.currentSketchManager = object()
     adapter._sketch_entities = {"Ellipse_1": ellipse}
@@ -955,10 +955,17 @@ def _ellipse_adapter(
         return added
 
     adapter.currentModel = SimpleNamespace(
-        ClearSelection2=lambda *_a: True,
-        Extension=SimpleNamespace(AddSpecificDimension=_add),
+        ClearSelection2=lambda *_a: True, AddDimension2=_add
     )
     return adapter, calls
+
+
+def _display(reads: float, values: list[float]) -> SimpleNamespace:
+    """A display dimension that reads ``reads`` m and records values set."""
+    dimension = SimpleNamespace(
+        SystemValue=reads, SetSystemValue3=lambda v, *_a: values.append(v) or True
+    )
+    return SimpleNamespace(GetDimension2=lambda *_a: dimension)
 
 
 @pytest.mark.parametrize(
@@ -966,20 +973,50 @@ def _ellipse_adapter(
     [("major_axis", "GetMajorPoint2"), ("minor_axis", "GetMinorPoint2")],
 )
 def test_an_ellipse_axis_is_dimensioned_from_its_centre(axis: str, getter: str) -> None:
-    """Centre then axis point, aligned; the dimension holds half the axis."""
+    """Centre then axis point, text beside the axis; it holds half the axis."""
     centre, end = _Point(0.0), _Point(0.0065)
     ellipse = SimpleNamespace(GetCenterPoint2=lambda: centre, **{getter: lambda: end})
     values: list[float] = []
-    dimension = SimpleNamespace(SetSystemValue3=lambda v, *_a: values.append(v) or True)
-    display = SimpleNamespace(GetDimension2=lambda *_a: dimension)
-    adapter, calls = _ellipse_adapter(ellipse, (display, 0))
+    adapter, calls = _ellipse_adapter(ellipse, _display(0.0065, values))
 
     result = sketch._add_sketch_dimension_impl(adapter, "Ellipse_1", None, axis, 13.0)
 
     assert result.is_success, result.error
     assert (centre.selected, end.selected) == ([False], [True])
-    assert calls[0][3] == 2  # swLinearDimension: aligned
+    # Beside the axis's middle: half way along x, 5 mm off it in y.
+    assert calls[0] == (pytest.approx(0.00325), pytest.approx(0.005), 0.0)
     assert values == [pytest.approx(0.0065)]
+
+
+def test_an_axis_dimension_that_is_not_aligned_is_refused() -> None:
+    """A dimension reading less than the axis (horizontal on a turned one)."""
+    ellipse = SimpleNamespace(
+        GetCenterPoint2=lambda: _Point(0.0), GetMajorPoint2=lambda: _Point(0.0065)
+    )
+    values: list[float] = []
+    adapter, _calls = _ellipse_adapter(ellipse, _display(0.0056, values))
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "major_axis", 13.0
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "isn't aligned with the axis" in (result.error or "")
+    assert values == []
+
+
+def test_a_zero_length_axis_puts_its_text_above_the_centre() -> None:
+    ellipse = SimpleNamespace(
+        GetCenterPoint2=lambda: _Point(0.0), GetMinorPoint2=lambda: _Point(0.0)
+    )
+    adapter, calls = _ellipse_adapter(ellipse, _display(0.0, []))
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "minor_axis", 0.0
+    )
+
+    assert result.is_success, result.error
+    assert calls[0] == (0.0, pytest.approx(0.005), 0.0)
 
 
 def test_an_axis_dimension_needs_an_ellipse() -> None:
