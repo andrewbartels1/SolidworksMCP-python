@@ -906,8 +906,7 @@ async def test_add_sketch_text_passes_everything_on(mcp_server, mock_config):
         input_data={
             "text": 'size $PRP:"Size" mm',
             "height": 4,
-            "along": "Centerline_1",
-            "mirror": True,
+            "center_at": [60, 2, 0],
         }
     )
 
@@ -916,21 +915,22 @@ async def test_add_sketch_text_passes_everything_on(mcp_server, mock_config):
         0.0,
         0.0,
         4.0,
-        "Centerline_1",
-        True,
+        [60.0, 2.0, 0.0],
     )
     assert reply["status"] == "success"
     assert reply["sketch_text"] == {
         "id": "Text_1",
         "text": "size 13.00 mm",
         "height": 4.0,
-        "along": "Centerline_1",
-        "mirror": True,
+        "center_at": [60.0, 2.0, 0.0],
     }
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("bad", [{"text": ""}, {"text": "a", "height": 0}])
+@pytest.mark.parametrize(
+    "bad",
+    [{"text": ""}, {"text": "a", "height": 0}, {"text": "a", "center_at": [1, 2]}],
+)
 async def test_add_sketch_text_rejects_bad_input(mcp_server, mock_config, bad):
     adapter = _SketchAdapterStub()
     adapter.add_sketch_text = AsyncMock()

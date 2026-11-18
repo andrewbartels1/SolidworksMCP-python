@@ -868,18 +868,17 @@ class SolidWorksAdapter(ABC):
         x: float = 0.0,
         y: float = 0.0,
         height: float = 3.5,
-        along: str | None = None,
-        mirror: bool = False,
+        center_at: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Add text to the current sketch.
 
         Args:
             text (str): The text; ``$PRP:"name"`` shows a custom property.
-            x (float): Start x in mm, without ``along``.
-            y (float): Start y in mm, without ``along``.
+            x (float): Start x in mm (sketch coordinates).
+            y (float): Start y in mm (the baseline).
             height (float): Letter height in mm.
-            along (str | None): A line or centreline id to lay it along.
-            mirror (bool): Mirror it left to right, to read from behind.
+            center_at (list[float] | None): A model point [x, y, z] in mm for
+                the text's middle.
 
         Returns:
             AdapterResult[dict[str, Any]]: ``id``, ``text`` and ``height``.

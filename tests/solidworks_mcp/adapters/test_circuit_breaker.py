@@ -1146,6 +1146,8 @@ async def test_circuit_breaker_create_sketch_forwards_face_point(monkeypatch):
 async def test_circuit_breaker_add_sketch_text(cb_with_mock):
     """add_sketch_text routes through the breaker with every argument."""
     cb, inner = cb_with_mock
-    result = await cb.add_sketch_text("abc", 1.0, 2.0, 4.0, "Line_1", True)
+    result = await cb.add_sketch_text("abc", 1.0, 2.0, 4.0, [60.0, 2.0, 0.0])
     assert result.status == AdapterResultStatus.SUCCESS
-    inner.add_sketch_text.assert_awaited_once_with("abc", 1.0, 2.0, 4.0, "Line_1", True)
+    inner.add_sketch_text.assert_awaited_once_with(
+        "abc", 1.0, 2.0, 4.0, [60.0, 2.0, 0.0]
+    )

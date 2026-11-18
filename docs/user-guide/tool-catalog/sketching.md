@@ -286,27 +286,26 @@ Draw an ellipse in the open sketch from its centre and axis lengths, in mm.
 
 ### `add_sketch_text`
 
-Write text in the open sketch, along a line, to deboss or emboss it.
+Write text in the open sketch, at a point or centred on one, to deboss or emboss it.
 
-**Prerequisite:** Active sketch edit mode; for `along`, a line or centreline drawn in it
+**Prerequisite:** Active sketch edit mode. To read from a face's own side (an underside), open the sketch on that face (`create_sketch` with `face_point`).
 
-**SolidWorks automation note:** `IModelDoc2.InsertSketchText` with the line selected first, so the text runs along it from its start; the letter height is the text format's `CharHeight`. `$PRP:"name"` in the text shows a custom property: set one to a dimension's name in quotes (`set_custom_property`, value `"D1@Sketch3"`) and the text follows that dimension, through any equation that drives it.
+**SolidWorks automation note:** `IModelDoc2.InsertSketchText` at the point, with normal letter spacing; the letter height is the text format's `CharHeight`. `center_at` measures the text from its edges (`ISketchText.GetEdges2`) and moves it (`SetCoordinates`) so its middle is on that model point. `$PRP:"name"` in the text shows a custom property: set one to a dimension's name in quotes (`set_custom_property`, value `"D1@Sketch3"`) and the text follows that dimension, through any equation that drives it. On SolidWorks 2026 a line selected first didn't lay the text along it, centre alignment didn't centre it, and mirrored text couldn't be cut, so the tool uses none of them.
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `text` | `str` | ✅ | | The text; `$PRP:"name"` shows a custom property |
-| `x` | `float` | — | `0` | Start x in mm, when not along a line |
-| `y` | `float` | — | `0` | Start y in mm, when not along a line |
+| `x` | `float` | — | `0` | Start x in mm, sketch coordinates |
+| `y` | `float` | — | `0` | Start y (baseline) in mm |
 | `height` | `float` | — | `3.5` | Letter height in mm |
-| `along` | `str?` | — | `None` | id of a line or centreline in this sketch |
-| `mirror` | `bool` | — | `false` | Mirror left to right, for text read from behind (an underside) |
+| `center_at` | `list[float]?` | — | `None` | Model point `[x, y, z]` in mm for the text's middle |
 
 **Sample call:**
 
 ```json
-{"text": "solidworksmcp-python $PRP:\"WrenchSize\" mm", "height": 3.5, "along": "Centerline_1"}
+{"text": "solidworksmcp-python $PRP:\"WrenchSize\" mm", "height": 3.5, "center_at": [85, 1.95, 0]}
 ```
 
 Then `create_cut_extrude` on the sketch with a small `depth` debosses it.

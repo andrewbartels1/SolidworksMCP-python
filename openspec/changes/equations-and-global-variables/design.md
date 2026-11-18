@@ -133,20 +133,35 @@ equations. Probed on SolidWorks 2026 (2026-11-18, scratch parts):
   horizontal_mirror, width_factor, space_between_chars)` adds text to the
   open sketch. `space_between_chars` 0 stacked every letter on the first;
   100 (per cent, as `width_factor`) spaces them normally.
-- With a line selected first, the text runs along it from its start (the
-  user's suggestion, the usual way in SolidWorks); the position is then
-  ignored. The tool selects `along` before inserting.
+- A line selected first did NOT lay the text along it (the user's
+  suggestion, the usual way in the SolidWorks UI): the text stayed at the
+  point given, and moving the line by its dimension left the text where it
+  was. Centre alignment (2) didn't centre it either, and a mirrored text
+  (`horizontal_mirror` 1) cut nothing. The tool uses none of them.
 - The height is `ISketchText.GetTextFormat()`, `CharHeight` (metres),
   `SetTextFormat(False, format)`; the default was 3.5 mm.
+- Centring works by measuring: `ISketchText.GetEdges2()` gives the
+  letters' edges (model space; `GetCurveParams3` start and end points
+  bound them), their middle is mapped into the sketch
+  (`ModelToSketchTransform`), and `SetCoordinates` moves the text by the
+  difference to the target point. On a 120 mm bar the text came out in
+  its middle, on the top face and on the underside.
+- Text in a sketch opened on the underside face (`face_point`) reads
+  correctly from below; on a plane offset below the part it reads
+  mirrored.
 - Text `solidworksmcp-python $PRP:"WrenchSize" mm`, with the file property
   `WrenchSize` = `"D1@Boss-Extrude1"`, read `... 4.00 mm`, and `... 6.00
-  mm` after the dimension changed: the text follows the dimension. A
-  0.5 mm cut from the sketch removed 36.7 mm³ from the bar.
+  mm` after the dimension changed: the text follows the dimension.
 
-The tool is `add_sketch_text(text, x, y, height, along, mirror)`. The
-wrench sketches it on the two planes that flatten the handle (their
-offsets follow Size), along a centreline, mirrored underneath, and links
-`WrenchSize` to a dimension the equations set to Size.
+The tool is `add_sketch_text(text, x, y, height, center_at)`.
+
+A sketch text's position can't be driven by an equation, but the
+wrench's handle middle moves with Size (x = 6.51 x Size). So the
+lettering is cut, centred, into the faces of a spare block off the open
+end (x = -190 mm, as thick as the handle), the two cuts are moved onto the
+handle by a linear pattern whose spacing is `"Size" * 6.51 + 190mm`, and
+the block is cut away, as the box end's pattern seed is. `WrenchSize` is
+linked to a dimension the equations set to Size.
 
 ## Migration Plan
 

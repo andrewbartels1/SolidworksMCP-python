@@ -96,10 +96,14 @@ MATERIAL_LIBRARY = "SolidWorks DIN Materials"
 LETTERING = 'solidworksmcp-python  $PRP:"WrenchSize" mm'
 LETTER_HEIGHT_MM = 3.5
 DEBOSS_MM = 0.3
-#: Where the lettering's line runs along the handle, in mm from the open
-#: end's centre: clear of both heads down to the 8 mm wrench (handle from
-#: about 10 to 95 mm there).
-LETTER_LINE_MM = (18.0, 108.0)
+#: The handle's visible middle as a multiple of Size: between the open
+#: end's rim (x = Size) and the ring's near edge (x = 11.95 x Size).
+HANDLE_MIDDLE = 6.48
+#: The spare block the lettering is first cut into, off the open end
+#: (x from -260 to -120 mm, centred at -190), clear of the wrench at any
+#: size; a linear pattern moves the lettering onto the handle's middle.
+SPARE_X_MM = (-260.0, -120.0)
+SPARE_CENTRE_MM = -190.0
 _ISO_VIEW = 7  # swStandardViews_e.swIsometricView
 #: ``swUserPreferenceToggle_e``: swDisplayAxes, swDisplayPlanes,
 #: swDisplayOrigins, swDisplayTemporaryAxes.
@@ -535,17 +539,25 @@ async def _necks(tools: dict[str, Any], ring: Ring) -> list[str]:
     return names
 
 
-async def _lettering(
-    tools: dict[str, Any], adapter: Any, faces: list[str], size_dimension: str
-) -> list[Any]:
-    """Deboss the lettering into both faces of the handle.
+def _spacing_to_middle(size: float = SIZE_MM) -> float:
+    """The lettering pattern's spacing: from the spare block to the handle's middle."""
+    return round(HANDLE_MIDDLE * size - SPARE_CENTRE_MM, 4)
 
-    ``WrenchSize`` is linked to ``size_dimension`` (one the equations set to
-    Size). On each face's plane a centreline runs along the handle and the
-    text follows it (the user's way: a construction line, then the text on
-    it); the underside's is mirrored so it reads from below. Which way an
-    offset plane's sketch x runs isn't certain, so a line whose text cuts
-    nothing is tried again the other way along x.
+
+async def _lettering(
+    tools: dict[str, Any], adapter: Any, x_axis: str, size_dimension: str
+) -> list[Any]:
+    """Deboss the lettering into the middle of both faces of the handle.
+
+    A sketch text's position can't follow an equation, but a pattern's
+    spacing can. So the lettering is cut, centred, into the top and bottom
+    faces of a spare block off the open end, as thick as the handle (each
+    sketch opened on its face, so the underside's text reads from below);
+    a linear pattern moves both cuts to the handle's middle, x =
+    HANDLE_MIDDLE x Size, by a spacing an equation drives; then the block is
+    cut away, as the box end's pattern seed is. ``WrenchSize``, which the
+    text shows, is linked to ``size_dimension`` (one the equations set to
+    Size).
 
     Returns:
         The two sketch texts, to read what they show after each change.
@@ -554,40 +566,56 @@ async def _lettering(
         {"name": "WrenchSize", "value": f'"{size_dimension}"'}
     )
     assert linked["status"] == "success", linked
-    texts = []
-    for plane, mirror in zip(faces, (False, True), strict=True):
-        tried = []
-        for sign in (1.0, -1.0):
-            made = await tools["create_sketch"]({"plane": plane})
-            assert made["status"] == "success", made
-            start, end = (sign * x for x in LETTER_LINE_MM)
-            line = await tools["add_centerline"](
-                {"x1": start, "y1": 0, "x2": end, "y2": 0}
-            )
-            assert line["status"] == "success", line
-            text = await tools["add_sketch_text"](
-                {
-                    "text": LETTERING,
-                    "height": LETTER_HEIGHT_MM,
-                    "along": line["centerline"]["id"],
-                    "mirror": mirror,
-                }
-            )
-            assert text["status"] == "success", text
-            sketch_text = adapter._sketch_entities[text["sketch_text"]["id"]]
-            closed = await tools["exit_sketch"]()
-            assert closed["status"] == "success", closed
-            cut = await tools["create_cut_extrude"](
-                {"sketch_name": made["sketch"]["name"], "depth": DEBOSS_MM}
-            )
-            tried.append({"sign": sign, "cut": cut.get("message")})
-            if cut["status"] == "success":
-                texts.append(sketch_text)
-                break
-            # The cut built nothing; its sketch is removed by name.
-            await tools["delete_feature"]({"name": made["sketch"]["name"]})
-        else:
-            raise AssertionError(f"the lettering cut nothing on {plane}: {tried}")
+    x0, x1 = SPARE_X_MM
+    spare = await _sketch(tools, "Top", {"x1": x0, "y1": -15, "x2": x1, "y2": 15})
+    block = await tools["create_extrusion"](
+        {"sketch_name": spare, "depth": _mm("HandleT"), "both_directions": True}
+    )
+    assert block["status"] == "success", block
+    texts, cuts = [], []
+    for y in (_mm("HandleT") / 2, -_mm("HandleT") / 2):
+        face = [SPARE_CENTRE_MM, y, 0.0]
+        made = await tools["create_sketch"]({"face_point": face})
+        assert made["status"] == "success", made
+        text = await tools["add_sketch_text"](
+            {"text": LETTERING, "height": LETTER_HEIGHT_MM, "center_at": face}
+        )
+        assert text["status"] == "success", text
+        texts.append(adapter._sketch_entities[text["sketch_text"]["id"]])
+        closed = await tools["exit_sketch"]()
+        assert closed["status"] == "success", closed
+        cut = await tools["create_cut_extrude"](
+            {"sketch_name": made["sketch"]["name"], "depth": DEBOSS_MM}
+        )
+        assert cut["status"] == "success", cut
+        cuts.append(cut["cut_extrude"]["name"])
+    tried = []
+    for reverse in (False, True):
+        moved = await tools["pattern_linear"](
+            {
+                "features": cuts,
+                "direction": x_axis,
+                "count": 2,
+                "spacing": _spacing_to_middle(),
+                "reverse": reverse,
+            }
+        )
+        tried.append(moved)
+        # The right way cuts the lettering into the handle: volume drops.
+        if moved["status"] == "success" and moved["pattern"]["volume_change"] < 0:
+            break
+        if moved["status"] == "success":
+            await tools["undo"]({"count": 1})
+    else:
+        raise AssertionError(f"the lettering didn't reach the handle: {tried}")
+    clear = await _sketch(
+        tools, "Top", {"x1": x0 - 20, "y1": -40, "x2": x1 + 20, "y2": 40}
+    )
+    gone = await tools["create_cut_extrude"](
+        {"sketch_name": clear, "depth": 1, "end_condition": "ThroughAllBoth"}
+    )
+    assert gone["status"] == "success", gone
+    assert await _one_body(tools), "the spare block is still there"
     return texts
 
 
@@ -622,10 +650,8 @@ async def build_wrench(
     )
     assert handle["status"] == "success", handle
     _frame(adapter, room_for=1.3)  # room for the heads still to come
-    faces = [
-        await _flatten(tools, adapter, flip=False),
-        await _flatten(tools, adapter, flip=True),
-    ]
+    await _flatten(tools, adapter, flip=False)
+    await _flatten(tools, adapter, flip=True)
 
     box_features, ring = await _box_end(tools, adapter)
     x_axis = await tools["create_axis"]({"reference": "x"})
@@ -683,7 +709,9 @@ async def build_wrench(
         if abs(float(row["value"]) - SIZE_MM) < 1e-3
         and not str(row["full_name"]).endswith(f"@{relief}")
     )
-    texts = await _lettering(tools, adapter, faces, size_dimension)
+    texts = await _lettering(
+        tools, adapter, str(x_axis["axis"]["name"]), size_dimension
+    )
     return relief, ring, texts
 
 
@@ -705,6 +733,8 @@ def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
         round(_mm("BoxHead") * CLEARANCE, 4): f'"BoxHead" * {CLEARANCE}',
         round(SIZE_MM * RING_RISE, 4): f'"Size" * {RING_RISE}',
         SIZE_MM: '"Size"',
+        _mm("HandleT"): '"HandleT"',
+        _spacing_to_middle(): f'"Size" * {HANDLE_MIDDLE} + {-SPARE_CENTRE_MM:g}mm',
         round(SIZE_MM * FILLET["sides"], 4): f'"Size" * {FILLET["sides"]}',
         round(SIZE_MM * FILLET["faces"], 4): f'"Size" * {FILLET["faces"]}',
     }
@@ -763,7 +793,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
             "size": built,
             "handle_reads": _reads(scratch.adapter, texts),
         },
-        call="create_part, 12 sketches, 3 extrusions, 9 cuts, a linear pattern, "
+        call="create_part, 14 sketches, 4 extrusions, 10 cuts, 2 linear patterns, "
         "2 fillets, set_material, set_custom_property, add_sketch_text x 2",
     )
     assert built["verdict"] == "pass", built
@@ -778,6 +808,8 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
             f'"BoxHead" * {CLEARANCE}',
             f'"Size" * {RING_RISE}',
             '"Size"',
+            '"HandleT"',
+            f'"Size" * {HANDLE_MIDDLE} + {-SPARE_CENTRE_MM:g}mm',
             f'"Size" * {FILLET["sides"]}',
             f'"Size" * {FILLET["faces"]}',
             f'"Size" * {RELIEF["across"] / 2}',

@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
+from .com_utils import as_list, double_array
 
 # swConstraintType_e values per the official SolidWorks API enum docs
 # (SolidWorks.Interop.swconst). The legacy IModelDoc2.SketchAddConstraints
@@ -169,10 +170,9 @@ class SolidWorksSketchMixin:
         x: float = 0.0,
         y: float = 0.0,
         height: float = 3.5,
-        along: str | None = None,
-        mirror: bool = False,
+        center_at: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
-        return _add_sketch_text_impl(self, text, x, y, height, along, mirror)
+        return _add_sketch_text_impl(self, text, x, y, height, center_at)
 
     async def add_sketch_constraint(
         self,
@@ -1052,29 +1052,86 @@ def _add_ellipse_impl(
 _TEXT_NORMAL = 100
 
 
+def _text_middle(sketch_text: Any) -> list[float]:
+    """The middle of a sketch text's extent, model metres, from its edges.
+
+    ``ISketchText.GetEdges2`` gives the letters' outline edges; their start
+    and end points bound the text closely enough to centre it.
+
+    Raises:
+        Exception: If the text has no edges to measure.
+    """
+    xs: list[float] = []
+    ys: list[float] = []
+    zs: list[float] = []
+    for edge in as_list(sketch_text.GetEdges2()):
+        params = _sw_type_info.flagged(
+            _sw_type_info.flagged(edge, "IEdge").GetCurveParams3(), "ICurveParamData"
+        )
+        for point in (params.StartPoint, params.EndPoint):
+            xs.append(float(point[0]))
+            ys.append(float(point[1]))
+            zs.append(float(point[2]))
+    if not xs:
+        raise Exception("The sketch text has no edges to centre it by")
+    return [(min(v) + max(v)) / 2 for v in (xs, ys, zs)]
+
+
+def _to_sketch_space(adapter: Any, point_m: list[float]) -> list[float]:
+    """A model point (metres) in the open sketch's coordinates (metres)."""
+    app = _sw_type_info.flagged(adapter.swApp, "ISldWorks")
+    math_utility = _sw_type_info.flagged(app.GetMathUtility(), "IMathUtility")
+    point = _sw_type_info.flagged(
+        math_utility.CreatePoint(double_array(point_m)), "IMathPoint"
+    )
+    sketch = _sw_type_info.flagged(adapter.currentSketch, "ISketch")
+    moved = _sw_type_info.flagged(
+        point.MultiplyTransform(sketch.ModelToSketchTransform), "IMathPoint"
+    )
+    return [float(v) for v in as_list(moved.ArrayData)[:3]]
+
+
+def _centre_text(adapter: Any, sketch_text: Any, point_mm: list[float]) -> None:
+    """Move ``sketch_text`` so its middle is at model point ``point_mm``.
+
+    ``InsertSketchText``'s centre alignment didn't centre the text (on SW
+    2026 it dropped the selected line and started the text at the sketch's
+    origin), so the text is measured and moved: its middle, mapped into the
+    sketch, and ``SetCoordinates`` shifted by the difference to the point,
+    mapped into the sketch the same way (projected onto its plane).
+    """
+    middle = _to_sketch_space(adapter, _text_middle(sketch_text))
+    target = _to_sketch_space(adapter, [c / 1000.0 for c in point_mm])
+    at = [float(v) for v in as_list(sketch_text.GetCoordinates())]
+    sketch_text.SetCoordinates(
+        at[0] + target[0] - middle[0], at[1] + target[1] - middle[1], at[2]
+    )
+
+
 def _add_sketch_text_impl(
     adapter: Any,
     text: str,
     x: float,
     y: float,
     height: float,
-    along: str | None,
-    mirror: bool,
+    center_at: list[float] | None,
 ) -> AdapterResult[dict[str, Any]]:
-    """Add text to the active sketch, along a line when ``along`` is given.
+    """Add text to the active sketch, from a point or centred on one.
 
-    ``IModelDoc2.InsertSketchText`` lays the text along a curve selected
-    first, from its start, and ignores the position then; the letter height
-    is the text format's ``CharHeight``.
+    ``IModelDoc2.InsertSketchText`` puts the text at the point; the letter
+    height is the text format's ``CharHeight``. ``center_at`` measures the
+    text and moves it so its middle is at that model point. (A line
+    selected first didn't lay the text along it on SolidWorks 2026, nor did
+    centre alignment centre it, so neither is used.)
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
         text: The text; ``$PRP:"name"`` shows a custom property.
-        x: Start x in mm (sketch coordinates), without ``along``.
-        y: Start y in mm, without ``along``.
+        x: Start x in mm (sketch coordinates).
+        y: Start y in mm (the baseline).
         height: Letter height in mm.
-        along: A registered line or centreline id to lay the text along.
-        mirror: Mirror the text left to right, to read from behind.
+        center_at: A model point ``[x, y, z]`` in mm to put the text's middle
+            at (projected onto the sketch).
 
     Returns:
         AdapterResult with ``id``, ``text`` (as SolidWorks shows it, links
@@ -1086,25 +1143,8 @@ def _add_sketch_text_impl(
     def _text_operation() -> dict[str, Any]:
         model = adapter.currentModel
         model.ClearSelection2(True)
-        if along is not None:
-            line = adapter._sketch_entities.get(along)
-            if line is None:
-                raise Exception(
-                    f"Unknown sketch entity '{along}'. Use the id add_line or "
-                    "add_centerline returned in this sketch."
-                )
-            if not adapter._select_sketch_entity(line, append=False):
-                raise Exception(f"Failed to select '{along}' to lay the text along")
         inserted = model.InsertSketchText(
-            x / 1000.0,
-            y / 1000.0,
-            0.0,
-            text,
-            0,
-            0,
-            1 if mirror else 0,
-            _TEXT_NORMAL,
-            _TEXT_NORMAL,
+            x / 1000.0, y / 1000.0, 0.0, text, 0, 0, 0, _TEXT_NORMAL, _TEXT_NORMAL
         )
         model.ClearSelection2(True)
         if not inserted:
@@ -1113,6 +1153,8 @@ def _add_sketch_text_impl(
         text_format = sketch_text.GetTextFormat()
         text_format.CharHeight = height / 1000.0
         sketch_text.SetTextFormat(False, text_format)
+        if center_at is not None:
+            _centre_text(adapter, sketch_text, center_at)
         shown = adapter._attempt(lambda: str(sketch_text.Text), default=text)
         read_height = adapter._attempt(
             lambda: float(sketch_text.GetTextFormat().CharHeight) * 1000.0,

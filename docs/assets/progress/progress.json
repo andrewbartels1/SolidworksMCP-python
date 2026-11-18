@@ -168,7 +168,7 @@
     "family": "sketching",
     "level": "stable",
     "reason": "",
-    "summary": "Write text in the open sketch, along a line, to deboss or emboss it."
+    "summary": "Write text in the open sketch, at a point or centred on one, to deboss or emboss it."
    },
    {
     "name": "add_spline",
@@ -1026,7 +1026,7 @@
    "total": 2838
   },
   "api": {
-   "covered": 292,
+   "covered": 296,
    "total": 5985
   },
   "interfaces": [

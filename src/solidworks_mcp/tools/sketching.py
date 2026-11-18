@@ -286,11 +286,11 @@ class AddSketchTextInput(CompatInput):
 
     Attributes:
         text (str): The text; ``$PRP:"name"`` shows a custom property.
-        x (float): Start x in mm, without ``along``.
-        y (float): Start y in mm, without ``along``.
+        x (float): Start x in mm (sketch coordinates).
+        y (float): Start y (baseline) in mm.
         height (float): Letter height in mm.
-        along (str | None): A line or centreline id to lay the text along.
-        mirror (bool): Mirror it left to right, to read from behind.
+        center_at (list[float] | None): A model point [x, y, z] in mm for the
+            text's middle.
     """
 
     text: str = Field(
@@ -298,18 +298,15 @@ class AddSketchTextInput(CompatInput):
         description='The text. $PRP:"name" shows a custom property, e.g. one '
         'linked to a dimension ("D1@Sketch3"), so the text follows it',
     )
-    x: float = Field(default=0.0, description="Start x in mm, when not along a line")
-    y: float = Field(default=0.0, description="Start y in mm, when not along a line")
+    x: float = Field(default=0.0, description="Start x in mm, sketch coordinates")
+    y: float = Field(default=0.0, description="Start y (baseline) in mm")
     height: float = Field(default=3.5, gt=0, description="Letter height in mm")
-    along: str | None = Field(
+    center_at: list[float] | None = Field(
         default=None,
-        description="id of a line or centreline in this sketch (add_centerline) "
-        "to lay the text along, from its start",
-    )
-    mirror: bool = Field(
-        default=False,
-        description="Mirror left to right, so text on a face seen from behind "
-        "(an underside) reads correctly",
+        min_length=3,
+        max_length=3,
+        description="Model point [x, y, z] in mm to put the text's middle at "
+        "(projected onto the sketch), e.g. the middle of a handle's face",
     )
 
 
@@ -879,19 +876,21 @@ async def register_sketching_tools(
 
     @mcp.tool()
     async def add_sketch_text(input_data: AddSketchTextInput) -> dict[str, Any]:
-        """Write text in the open sketch, along a line, to deboss or emboss it.
+        """Write text in the open sketch, at a point or centred on one, to deboss or emboss it.
 
-        Use it for lettering: draw a centreline where the text goes, give its id as
-        `along`, then cut (`create_cut_extrude`) or extrude the sketch. `$PRP:"name"`
-        in the text shows a custom property; one holding a dimension's name
-        (`"D1@Sketch3"`, set with `set_custom_property`) makes the text follow that
-        dimension. `mirror` for text read from behind, such as an underside. Needs: an
-        open sketch (`create_sketch`). Changes: adds text. Returns: the text's `id`,
-        the `text` as SolidWorks shows it (links resolved) and its `height`.
+        Use it for lettering, then cut (`create_cut_extrude`) or extrude the sketch.
+        `center_at` (a model point in mm) puts the text's middle there; otherwise it
+        starts at `x`, `y`. `$PRP:"name"` in the text shows a custom property;
+        one holding a dimension's name (`"D1@Sketch3"`, set with `set_custom_property`)
+        makes the text follow that dimension. To read from a face's own side, such as
+        an underside, open the sketch on that face (`create_sketch` `face_point`).
+        Needs: an open sketch (`create_sketch`). Changes: adds text. Returns: the
+        text's `id`, the `text` as SolidWorks shows it (links resolved) and its
+        `height`.
 
         Args:
             input_data: The text. `text` is required; `x`, `y` (mm), `height` (3.5
-                mm), `along` and `mirror` have defaults.
+                mm) and `center_at` have defaults.
 
         Returns:
             dict[str, Any]: The text added.
@@ -902,8 +901,7 @@ async def register_sketching_tools(
             input_data.x,
             input_data.y,
             input_data.height,
-            input_data.along,
-            input_data.mirror,
+            input_data.center_at,
         )
         require_success(result, context="Failed to add sketch text")
         added: dict[str, Any] = result.data or {}
@@ -912,8 +910,7 @@ async def register_sketching_tools(
             "message": f"Added text {added['text']!r}, {added['height']} mm high",
             "sketch_text": {
                 **added,
-                "along": input_data.along,
-                "mirror": input_data.mirror,
+                "center_at": input_data.center_at,
             },
             "execution_time": result.execution_time,
         }

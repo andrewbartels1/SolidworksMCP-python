@@ -2728,12 +2728,30 @@ class _TextFormat:
         self.CharHeight = 0.0035
 
 
-class _SketchText:
-    """ISketchText: a text format and the text as SolidWorks shows it."""
+class _CurveParams:
+    def __init__(self, start: tuple[float, ...], end: tuple[float, ...]) -> None:
+        self.StartPoint = start
+        self.EndPoint = end
 
-    def __init__(self, shown: str) -> None:
+
+class _Edge:
+    """An IEdge whose curve runs from ``start`` to ``end`` (model metres)."""
+
+    def __init__(self, start: tuple[float, ...], end: tuple[float, ...]) -> None:
+        self._params = _CurveParams(start, end)
+
+    def GetCurveParams3(self) -> _CurveParams:
+        return self._params
+
+
+class _SketchText:
+    """ISketchText: a format, the text shown, edges, and its position."""
+
+    def __init__(self, shown: str, edges: tuple[_Edge, ...] = ()) -> None:
         self.Text = shown
         self._format = _TextFormat()
+        self._edges = edges
+        self.coordinates = (0.0, 0.0, 0.0)
 
     def GetTextFormat(self) -> _TextFormat:
         return self._format
@@ -2742,11 +2760,25 @@ class _SketchText:
         self._format = text_format
         return True
 
+    def GetEdges2(self) -> tuple[_Edge, ...]:
+        return self._edges
+
+    def GetCoordinates(self) -> tuple[float, float, float]:
+        return self.coordinates
+
+    def SetCoordinates(self, x: float, y: float, z: float) -> bool:
+        self.coordinates = (x, y, z)
+        return True
+
 
 def _text_adapter(
     inserted: object,
 ) -> tuple[_FakeSketchAdapter, list[tuple[object, ...]]]:
-    """A fake adapter with an open sketch and a centreline; InsertSketchText calls."""
+    """A fake adapter with an open sketch; the InsertSketchText calls made.
+
+    Its sketch maps model x to sketch x and model z to sketch y (a sketch
+    on a face 2 mm up, seen from above), through the math utility.
+    """
     adapter = _FakeSketchAdapter()
     adapter.currentSketchManager = object()
     calls: list[tuple[object, ...]] = []
@@ -2758,77 +2790,78 @@ def _text_adapter(
     adapter.currentModel = SimpleNamespace(
         ClearSelection2=lambda *_a: True, InsertSketchText=_insert
     )
+
+    def _point(data: object) -> SimpleNamespace:
+        x, _y, z = (float(v) for v in getattr(data, "value", data))
+        return SimpleNamespace(
+            MultiplyTransform=lambda _t: SimpleNamespace(ArrayData=(x, z, 0.0))
+        )
+
+    adapter.swApp = SimpleNamespace(
+        GetMathUtility=lambda: SimpleNamespace(CreatePoint=_point)
+    )
+    adapter.currentSketch = SimpleNamespace(ModelToSketchTransform=object())
     return adapter, calls
 
 
-def test_sketch_text_along_a_line_at_a_height() -> None:
-    """The line is selected first; spacing is normal; the height is set."""
-    line = _Point(0.0)
+def test_sketch_text_at_a_point_at_a_height() -> None:
+    """Normal spacing, no flags; the height is set and read back."""
     adapter, calls = _text_adapter(_SketchText("solidworksmcp-python 13.00 mm"))
-    adapter._sketch_entities = {"Centerline_1": line}
 
     result = sketch._add_sketch_text_impl(
-        adapter,
-        'solidworksmcp-python $PRP:"Size" mm',
-        0.0,
-        0.0,
-        4.0,
-        "Centerline_1",
-        False,
+        adapter, 'solidworksmcp-python $PRP:"Size" mm', 10.0, -2.0, 4.0, None
     )
 
     assert result.is_success, result.error
-    assert line.selected == [False]
+    assert calls[0][:3] == (pytest.approx(0.01), pytest.approx(-0.002), 0.0)
     assert calls[0][3:] == ('solidworksmcp-python $PRP:"Size" mm', 0, 0, 0, 100, 100)
     assert result.data["text"] == "solidworksmcp-python 13.00 mm"
     assert result.data["height"] == pytest.approx(4.0)
     assert result.data["id"].startswith("Text_")
 
 
-def test_sketch_text_at_a_point_mirrored() -> None:
-    adapter, calls = _text_adapter(_SketchText("abc"))
+def test_sketch_text_centred_on_a_model_point() -> None:
+    """Its middle (from its edges) is moved onto the point, mapped into the sketch."""
+    edges = (
+        _Edge((0.000, 0.002, 0.000), (0.020, 0.002, 0.000)),
+        _Edge((0.040, 0.002, 0.004), (0.040, 0.002, 0.000)),
+    )
+    text = _SketchText("abc", edges)
+    adapter, _calls = _text_adapter(text)
 
-    result = sketch._add_sketch_text_impl(adapter, "abc", 10.0, -2.0, 3.5, None, True)
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 4.0, [60.0, 2.0, 1.0])
 
     assert result.is_success, result.error
-    assert calls[0][:3] == (pytest.approx(0.01), pytest.approx(-0.002), 0.0)
-    assert calls[0][6] == 1  # horizontal mirror
+    # Middle (0.020, 0.002) in the sketch; the point maps to (0.060, 0.001).
+    assert text.coordinates == (
+        pytest.approx(0.040),
+        pytest.approx(-0.001),
+        0.0,
+    )
+
+
+def test_sketch_text_with_no_edges_cannot_be_centred() -> None:
+    adapter, _calls = _text_adapter(_SketchText("abc"))
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 4.0, [60.0, 2.0, 0.0])
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "no edges to centre it by" in (result.error or "")
 
 
 def test_sketch_text_needs_an_open_sketch() -> None:
     adapter = _FakeSketchAdapter()
 
-    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, None, False)
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, None)
 
     assert result.status == AdapterResultStatus.ERROR
     assert "No active sketch" in (result.error or "")
 
 
-def test_sketch_text_along_an_unknown_line_adds_nothing() -> None:
-    adapter, calls = _text_adapter(_SketchText("abc"))
-
-    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, "Line_9", False)
-
-    assert result.status == AdapterResultStatus.ERROR
-    assert "Unknown sketch entity 'Line_9'" in (result.error or "")
-    assert calls == []
-
-
-def test_sketch_text_along_a_line_that_cannot_be_selected() -> None:
-    adapter, calls = _text_adapter(_SketchText("abc"))
-    adapter._sketch_entities = {"Line_1": _Point(0.0, selects=False)}
-
-    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, "Line_1", False)
-
-    assert result.status == AdapterResultStatus.ERROR
-    assert "Failed to select 'Line_1'" in (result.error or "")
-    assert calls == []
-
-
 def test_no_sketch_text_from_solidworks_is_an_error() -> None:
     adapter, _calls = _text_adapter(None)
 
-    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, None, False)
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, None)
 
     assert result.status == AdapterResultStatus.ERROR
     assert "added no sketch text" in (result.error or "")
@@ -2841,7 +2874,7 @@ async def test_the_mixin_passes_sketch_text_on() -> None:
         adapter
     )
 
-    result = await adapter.add_sketch_text("abc", 1.0, 2.0, 5.0, None, True)
+    result = await adapter.add_sketch_text("abc", 1.0, 2.0, 5.0)
 
     assert result.is_success, result.error
-    assert calls[0][6] == 1
+    assert calls[0][:2] == (pytest.approx(0.001), pytest.approx(0.002))

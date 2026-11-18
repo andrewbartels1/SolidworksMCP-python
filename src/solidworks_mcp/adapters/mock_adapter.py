@@ -1983,18 +1983,17 @@ class MockSolidWorksAdapter(
         x: float = 0.0,
         y: float = 0.0,
         height: float = 3.5,
-        along: str | None = None,
-        mirror: bool = False,
+        center_at: list[float] | None = None,
     ) -> AdapterResult[dict[str, Any]]:
         """Mock adding sketch text: an id, the text as given, the height.
 
         Args:
             text (str): The text; ``$PRP:"name"`` shows a custom property.
-            x (float): Start x in mm, without ``along``.
-            y (float): Start y in mm, without ``along``.
+            x (float): Start x in mm (sketch coordinates).
+            y (float): Start y in mm (the baseline).
             height (float): Letter height in mm.
-            along (str | None): A line or centreline id to lay it along.
-            mirror (bool): Mirror it left to right, to read from behind.
+            center_at (list[float] | None): A model point [x, y, z] in mm for
+                the text's middle.
 
         Returns:
             AdapterResult[dict[str, Any]]: ``id``, ``text`` and ``height``.
@@ -2002,11 +2001,6 @@ class MockSolidWorksAdapter(
         if not self._current_sketch:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
-            )
-        if along is not None and along not in self._sketch_entity_ids:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR,
-                error=f"Unknown sketch entity '{along}'",
             )
         self._operation_count += 1
         text_id = f"Text_{random.randint(1000, 9999)}"
