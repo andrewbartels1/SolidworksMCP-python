@@ -1,6 +1,6 @@
 # Macro Recording Tools
 
-Run a binary SolidWorks macro (`.swp`). Record macros in SolidWorks itself
+Run a SolidWorks macro file (`.swp` or `.swb`), or VBA source when the server allows it. Record macros in SolidWorks itself
 (Tools > Macro > Record); to write one from a description, use `generate_vba_code`.
 
 > **Prerequisite:** SolidWorks running. Macro execution requires a valid .swp file path.
@@ -11,7 +11,9 @@ Run a binary SolidWorks macro (`.swp`). Record macros in SolidWorks itself
 
 ### `execute_macro`
 
-Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, calling its `main` procedure once.
+Run a SolidWorks macro (.swp, or legacy .swb), or VBA source text, in the running SolidWorks, calling its `main` procedure.
+
+VBA source runs only when the server was started with `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1` ([why it's off by default](../../getting-started/installation.md#5-let-execute_macro-run-vba-source-off-by-default)); otherwise it is refused as `vba_source_off`. The source is saved as a `.swb` file, and the reply gives `source_file` and the `vba_source` that ran.
 
 **Prerequisite:** SolidWorks running
 
@@ -19,8 +21,9 @@ Run a binary SolidWorks macro (.swp, or legacy .swb) in the running SolidWorks, 
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `macro_path` | `str?` | — | `null` | Path to a binary SolidWorks macro (.swp, or legacy .swb). VBA source (.vb, .bas, text) cannot be run directly. |
+| `macro_path` | `str?` | — | `null` | Path to a SolidWorks macro file (.swp, or legacy .swb). For VBA source text, use vba_source. |
 | `macro_file` | `str?` | — | `null` | Alternative to macro_path (.swp or .swb) |
+| `vba_source` | `str?` | — | `null` | The macro's VBA text, instead of a file: written to a .swb and run. Only when the server allows it (SOLIDWORKS_MCP_ALLOW_VBA_SOURCE) |
 | `proc_name` | `str` | — | `"main"` | The macro procedure to call; main by default |
 | `repeat_count` | `int` | — | `1` | How many times to run the macro (1-100); it stops at the first failure |
 | `pause_between_runs` | `float` | — | `0.0` | Seconds to wait between runs |

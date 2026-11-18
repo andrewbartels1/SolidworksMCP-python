@@ -305,3 +305,76 @@ def test_dialog_timeout_defaults_to_30_s_and_is_bounded() -> None:
     for bad in (0.5, 601):
         with pytest.raises(ValidationError):
             MacroPlaybackInput(macro_file="m.swp", dialog_timeout=bad)
+
+
+_SOURCE = 'Sub main()\n    MsgBox "unused"\nEnd Sub\n'
+
+
+async def _run_source(config, monkeypatch, tmp_path, **inputs):
+    """Call execute_macro with VBA source; return the reply and the adapter's params."""
+    import tempfile
+
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    mcp = FastMCP("macro")
+    adapter = MockSolidWorksAdapter({})
+    seen: list[dict] = []
+
+    async def _execute(params: dict):
+        seen.append(dict(params))
+        return Mock(is_success=True, data={"errors": 0}, execution_time=0.1)
+
+    adapter.execute_macro = _execute
+    await register_macro_recording_tools(mcp, adapter, config)
+    tool = next(t for t in await mcp.list_tools() if t.name == "execute_macro")
+    return await tool.fn(input_data={"vba_source": _SOURCE, **inputs}), seen
+
+
+@pytest.mark.asyncio
+async def test_vba_source_runs_from_a_swb_when_allowed(monkeypatch, tmp_path) -> None:
+    from pathlib import Path
+
+    config = SolidWorksMCPConfig(allow_vba_source=True)
+
+    reply, seen = await _run_source(config, monkeypatch, tmp_path)
+
+    written = Path(reply["source_file"])
+    assert reply["status"] == "success"
+    assert reply["vba_source"] == _SOURCE
+    assert written.suffix == ".swb"
+    assert written.parent == tmp_path / "solidworks_mcp" / "macros"
+    assert written.read_text(encoding="cp1252") == _SOURCE
+    assert seen[0]["macro_path"] == str(written)
+
+
+@pytest.mark.asyncio
+async def test_vba_source_is_refused_when_not_allowed(monkeypatch, tmp_path) -> None:
+    reply, seen = await _run_source(SolidWorksMCPConfig(), monkeypatch, tmp_path)
+
+    assert reply["status"] == "error"
+    assert reply["error_type"] == "vba_source_off"
+    assert "SOLIDWORKS_MCP_ALLOW_VBA_SOURCE=1" in reply["message"]
+    assert seen == []
+    assert not (tmp_path / "solidworks_mcp").exists()
+
+
+def test_the_setting_is_off_by_default_and_read_from_the_environment(
+    monkeypatch,
+) -> None:
+    assert SolidWorksMCPConfig().allow_vba_source is False
+    monkeypatch.setenv("SOLIDWORKS_MCP_ALLOW_VBA_SOURCE", "1")
+    assert SolidWorksMCPConfig.from_env().allow_vba_source is True
+
+
+@pytest.mark.parametrize(
+    ("inputs", "message"),
+    [
+        ({"vba_source": "x", "macro_path": "m.swp"}, "not both"),
+        ({"vba_source": "Sub main()\n' \u2713\nEnd Sub"}, "can't hold"),
+    ],
+    ids=["two sources", "bad character"],
+)
+def test_vba_source_input_is_checked(inputs, message) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match=message):
+        MacroPlaybackInput(**inputs)

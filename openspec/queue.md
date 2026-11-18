@@ -36,6 +36,8 @@ Last updated 2026-11-16.
 | 23 | Enum values: an enum's members and their integers, read from SolidWorks' constants type library, so an agent never guesses one (`swUnitSystem_IPS` is 3, not 4). Named `get_api_enum` under the tool-naming rule | #95 | `api-enum-lookup` (archived) | Done 2026-11-16: `get_api_enum`, checked live against this machine's swconst.tlb (983 enums) |
 | 24 | The tool catalog pages drift from the registered tools with no check: some tools are missing and some sample payloads are null. A check that every registered tool has a catalog entry with its inputs, and the gaps filled | #156 | `tool-catalog-check` (archived) | Done 2026-11-16: a check reads every catalog page against the registered tools; 20 missing entries written, about 30 stale tables and samples fixed; the generator removed |
 | 25 | `execute_macro` hangs with no timeout on a macro that waits for the user: a time limit, and a clear error when it's hit | #97 | `macro-dialog-watchdog` (archived) | Done 2026-11-17: a dialog left waiting is answered (Cancel, or its only button) and the run fails as `macro_waited_for_user`; checked live (#244) |
+| 26 | `execute_macro` runs VBA source text (a `generate_vba_*` result, or the agent's own), saved as a `.swb` and run with the dialog watchdog. Opt-in (`SOLIDWORKS_MCP_ALLOW_VBA_SOURCE`), the user's choice 2026-11-17 | #96 | `macro-from-vba-source` | Built, unit-tested; live check pending (`tests/live/test_live_sw_macro_source.py`) |
+| 27 | `save_body_as_part` leaves an extra unsaved assembly open (the Save Bodies feature's create-assembly option) | #101 | not yet written | |
 ## Removed tools (item 10, release 2.1.0)
 
 33 tools were registered but never implemented: every call returned

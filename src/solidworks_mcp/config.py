@@ -401,6 +401,14 @@ class SolidWorksMCPConfig(BaseModel):
         "call_tool in their place) (SOLIDWORKS_MCP_TOOL_MODE).",
     )
 
+    # === Running VBA source (queue item 26) ===
+    allow_vba_source: bool = Field(
+        default=False,
+        description="Let execute_macro run VBA source text, not only macro "
+        "files. VBA can do anything the user can, so it is off unless set "
+        "(SOLIDWORKS_MCP_ALLOW_VBA_SOURCE).",
+    )
+
     model_config = ConfigDict(
         extra="allow"  # Allow extra fields for test configurations
     )
