@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`generate_drawing_package` fits every title-block field** (#158):
+  not just DWG NO. and TITLE but every field the sheet format fills from a
+  property (material, drawn by, company...), each listed in the reply's
+  `title_block`.
+
 ### Added
 
 - **`save_body_as_part` leaves no extra assembly open** (queue item 27,

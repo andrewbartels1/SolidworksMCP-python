@@ -37,6 +37,7 @@ from __future__ import annotations
 import glob
 import ntpath
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import date as _date
 from typing import TYPE_CHECKING, Any, cast
@@ -316,6 +317,25 @@ MAX_NOTE_LINES = 7
 #: the model's ``Description`` as the TITLE (measured live on SW 2026: a
 #: default drawing number ran across the size box at the format's height).
 TITLE_BLOCK_FIELDS = {"SW-File Name": "drawing number", "Description": "title"}
+
+#: Every other linked field is fitted too, named as ``update_title_block``
+#: names the drawing's own fields, or else by its property.
+OTHER_FIELD_NAMES = {
+    "DrawnBy": "drawn by",
+    "DrawnDate": "drawn date",
+    "Revision": "revision",
+    "COMPANYNAME": "company",
+}
+
+#: The property a sheet-format note shows: ``$PRP:"name"`` or ``$PRPSHEET:"name"``.
+_LINKED_PROPERTY = re.compile(r'\$PRP(?:SHEET)?:"([^"]+)"', re.IGNORECASE)
+
+
+def linked_property(linked: str) -> str | None:
+    """The first property a note's linked text shows, or None."""
+    match = _LINKED_PROPERTY.search(linked)
+    return match.group(1) if match else None
+
 
 #: A fitted field's text is never made smaller than this.
 MIN_FIELD_HEIGHT = 0.002
@@ -1600,7 +1620,10 @@ class SolidWorksDrawingStandardMixin:
         }
 
     def _fit_title_block(self, s: _Sheet) -> dict[str, dict[str, Any]]:
-        """Fit the DWG NO. and TITLE fields of the sheet format to their boxes.
+        """Fit the sheet format's title-block fields to their boxes.
+
+        DWG NO. and TITLE first, by name, then every other note linked to a
+        property, each once.
 
         Edits the sheet format (``EditTemplate``), always returning to the
         sheet (``EditSheet``). Run after the drawing is saved: the DWG NO.
@@ -1624,6 +1647,21 @@ class SolidWorksDrawingStandardMixin:
                 s.title_block[name] = {
                     "found": True,
                     **self._fit_field(match[0], right, s.field_height),
+                }
+            fitted = set(TITLE_BLOCK_FIELDS)
+            for note, linked, box in notes:
+                shown = linked_property(linked)
+                if shown is None or shown in fitted or box is None:
+                    continue
+                fitted.add(shown)
+                name = OTHER_FIELD_NAMES.get(shown, shown)
+                if name in s.title_block:  # a property named "title", say
+                    name = linked
+                others = [n[2] for n in notes if n[0] is not note and n[2] is not None]
+                right = field_room(box, others, TITLE_BLOCK[2])
+                s.title_block[name] = {
+                    "found": True,
+                    **self._fit_field(note, right, s.field_height),
                 }
         finally:
             self._attempt(lambda: drawing.EditSheet(), default=None)

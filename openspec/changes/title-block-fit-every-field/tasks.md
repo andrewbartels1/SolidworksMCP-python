@@ -1,0 +1,13 @@
+## 1. Fit
+
+- [x] 1.1 `_fit_title_block` fits every linked note after the two named fields; a property shown twice is fitted once; names from `update_title_block`'s fields, else the property; unit tests (a long linked field shrunk, a short one unchanged, a duplicate fitted once, a note with no link left alone)
+
+## 2. Docs
+
+- [x] 2.1 `generate_drawing_package`'s catalog entry, CHANGELOG, queue row 31
+- [x] 2.2 Full mock suite at 100% coverage, ruff, mypy, `mkdocs build --strict`
+
+## 3. Live
+
+- [ ] 3.1 `test_generate_drawing_package_on_a_block` asserts every listed field fits; run by the user
+- [ ] 3.2 Archive after the user's pass

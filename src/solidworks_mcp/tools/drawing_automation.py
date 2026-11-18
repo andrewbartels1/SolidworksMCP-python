@@ -195,7 +195,7 @@ class GenerateDrawingPackageInput(CompatInput):
         notes (list[str]): Extra note lines.
         include_isometric (bool): Add the isometric view.
         write_model_properties (bool): Write title-block properties into the model.
-        title_block_text_height_mm (float | None): Cap on DWG NO./TITLE text height.
+        title_block_text_height_mm (float | None): Cap on the title-block fields' text height.
         include_bom (bool): Put a BOM above the isometric view (assemblies).
     """
 
@@ -230,9 +230,10 @@ class GenerateDrawingPackageInput(CompatInput):
     title_block_text_height_mm: float | None = Field(
         default=None,
         gt=0,
-        description="Largest text height (mm) for the title block's DWG NO. and "
-        "TITLE, e.g. 3 for smaller text. By default they keep the sheet "
-        "format's height and are only shrunk to fit their boxes.",
+        description="Largest text height (mm) for the title block's fields (DWG "
+        "NO., TITLE and every other field the format fills from a property), "
+        "e.g. 3 for smaller text. By default they keep the sheet format's "
+        "height and are only shrunk to fit their boxes.",
     )
     include_bom: bool = Field(
         default=False,

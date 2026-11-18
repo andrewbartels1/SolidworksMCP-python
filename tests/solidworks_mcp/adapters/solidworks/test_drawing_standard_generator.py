@@ -1124,3 +1124,67 @@ def test_an_unreadable_prompt_toggle_is_left_alone(files) -> None:
     app.prompt = "unchanged"
     adapter._restore_dialog(None)
     assert app.prompt == "unchanged"
+
+
+# ---- every linked title-block field (title-block-fit-every-field) ---------------
+
+
+def _with_more_fields(*extra: _FormatNote) -> _Drawing:
+    """The ISO title block, plus more format notes in a row of their own."""
+    return _Drawing(format_notes=[*_title_block(), *extra])
+
+
+@pytest.mark.asyncio
+async def test_every_linked_field_is_fitted_and_named(files) -> None:
+    drawing = _with_more_fields(
+        _FormatNote(
+            "Stainless Steel AISI 316L, annealed and pickled, per EN 10088",
+            '$PRPSHEET:"SW-Material"',
+            0.23,
+            0.07,
+            0.005,
+        ),
+        _FormatNote("AB", '$PRP:"DrawnBy"', 0.23, 0.09, 0.0035),
+        _FormatNote("MATERIAL", "", 0.21, 0.07, 0.002),  # a label: not fitted
+        _FormatNote("again", '$PRPSHEET:"SW-Material"', 0.30, 0.11, 0.005),
+        _FormatNote("odd", '$PRP:"title"', 0.30, 0.13, 0.002),
+    )
+
+    result = await _adapter(files, drawing).create_standard_drawing(files.part)
+
+    title_block = result.data["title_block"]
+    material = title_block["SW-Material"]
+    assert material["fits"] is True
+    assert material["height_mm"] < material["height_mm_before"] == 5.0
+    drawn = title_block["drawn by"]
+    assert drawn["fits"] is True
+    assert drawn["height_mm"] == drawn["height_mm_before"] == 3.5
+    assert drawing.format_notes[7].format.CharHeight == 0.005  # fitted once
+    assert title_block['$PRP:"title"']["fits"] is True  # not over TITLE's entry
+    assert title_block["title"]["found"] is True
+    assert set(title_block) == {
+        "drawing number",
+        "title",
+        "SW-Material",
+        "drawn by",
+        '$PRP:"title"',
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_linked_field_with_no_box_is_skipped(files) -> None:
+    class Unmeasured(_FormatNote):
+        def GetExtent(self):  # noqa: N802
+            return None
+
+    drawing = _with_more_fields(Unmeasured("x", '$PRP:"Revision"', 0.3, 0.1, 0.004))
+
+    result = await _adapter(files, drawing).create_standard_drawing(files.part)
+
+    assert "revision" not in result.data["title_block"]
+
+
+def test_linked_property() -> None:
+    assert std.linked_property('$PRPSHEET:"SW-Material"') == "SW-Material"
+    assert std.linked_property('$prp:"DrawnBy" and $PRP:"X"') == "DrawnBy"
+    assert std.linked_property("MATERIAL") is None
