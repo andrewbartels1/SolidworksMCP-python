@@ -129,6 +129,20 @@ To turn a feature off without deleting it, `suppress_feature`. After
 3. `activate_configuration` to look at a variant; `get_dimension` reads the
    active one.
 
+## One value driving several dimensions (equations)
+
+1. `set_equation` with a global variable: `name` `Width`, `expression`
+   `60mm` (give units; a bare number is in the document's units).
+2. `list_model_dimensions` for the full name of each dimension to drive,
+   then `set_equation` with `name` `D1@Sketch1` and `expression`
+   `"Width" / 2` (names inside an expression go in double quotes).
+3. Change `Width` with `set_equation` again: the model is solved and
+   rebuilt, and every dimension that uses it follows. `verify_model` then.
+
+Equations apply in every configuration unless `configurations` says
+otherwise (unlike `set_dimension`, which changes the active one). On
+`equation_refused`, check the quoted names with `list_equations`.
+
 ## Starting every part the same way (a template)
 
 1. `create_part`, then set it up: `set_units`, `set_material`,

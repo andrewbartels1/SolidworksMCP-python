@@ -1187,6 +1187,37 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             },
         )
 
+    async def list_equations(self) -> AdapterResult[list[dict[str, Any]]]:
+        """List the active model's equations through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_equations", lambda: self.adapter.list_equations()
+        )
+
+    async def set_equation(
+        self,
+        name: str,
+        expression: str,
+        configurations: str | list[str] = "all",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add or change an equation through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_equation",
+            lambda: self.adapter.set_equation(name, expression, configurations),
+            input_dict={
+                "name": name,
+                "expression": expression,
+                "configurations": configurations,
+            },
+        )
+
+    async def delete_equation(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete an equation through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "delete_equation",
+            lambda: self.adapter.delete_equation(name),
+            input_dict={"name": name},
+        )
+
     async def active_configuration(
         self,
     ) -> AdapterResult[str]:

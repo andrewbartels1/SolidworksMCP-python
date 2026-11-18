@@ -207,6 +207,24 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         patterns=(r"No configuration named",),
     ),
     ErrorRule(
+        error_type="equation_refused",
+        hint=(
+            "SolidWorks couldn't use that expression. Names in it go in double "
+            "quotes and must exist: read them with list_equations (global "
+            "variables) and list_model_dimensions (dimensions); give units, "
+            "e.g. 60mm."
+        ),
+        patterns=(r"SolidWorks refused the equation",),
+    ),
+    ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
+            "Use a name from list_equations, or for a dimension the full_name "
+            "list_model_dimensions gives (e.g. D1@Sketch1)."
+        ),
+        patterns=(r"No equation named", r"No dimension named '[^']*' in the active"),
+    ),
+    ErrorRule(
         error_type=INVALID_INPUT,
         hint=(
             "Positions are [x, y] in sheet mm. Read the views' outlines and the "

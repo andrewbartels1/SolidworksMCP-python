@@ -1,8 +1,8 @@
 {
  "tools": {
-  "total": 140,
+  "total": 143,
   "by_level": {
-   "stable": 132,
+   "stable": 135,
    "beta": 0,
    "experimental": 0,
    "planned": 0,
@@ -409,6 +409,13 @@
     "summary": "Delete a configuration of the active model; not the active one or the only one."
    },
    {
+    "name": "delete_equation",
+    "family": "equations",
+    "level": "stable",
+    "reason": "",
+    "summary": "Delete an equation or global variable of the active part or assembly, by name."
+   },
+   {
     "name": "delete_feature",
     "family": "modeling",
     "level": "stable",
@@ -682,6 +689,13 @@
     "summary": "List the views on the active drawing, by name."
    },
    {
+    "name": "list_equations",
+    "family": "equations",
+    "level": "stable",
+    "reason": "",
+    "summary": "List the active part's or assembly's equations and global variables, with their values."
+   },
+   {
     "name": "list_features",
     "family": "file_management",
     "level": "stable",
@@ -885,6 +899,13 @@
     "summary": "Change one length dimension of the active model, in mm, and rebuild."
    },
    {
+    "name": "set_equation",
+    "family": "equations",
+    "level": "stable",
+    "reason": "",
+    "summary": "Add or change an equation or global variable, so one value drives others (a parametric part)."
+   },
+   {
     "name": "set_flat_pattern",
     "family": "modeling",
     "level": "stable",
@@ -994,11 +1015,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 252,
+   "covered": 253,
    "total": 2838
   },
   "api": {
-   "covered": 277,
+   "covered": 286,
    "total": 5985
   },
   "interfaces": [
@@ -1071,6 +1092,7 @@
      "GetActiveSketch2",
      "GetConfigurationNames",
      "GetDependencies2",
+     "GetEquationMgr",
      "GetFeatureCount",
      "GetLineCount",
      "GetMassProperties",

@@ -1033,6 +1033,30 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             lambda adapter: adapter.delete_configuration(name),
         )
 
+    async def list_equations(self) -> AdapterResult[list[dict[str, Any]]]:
+        """List the active model's equations using pool."""
+        return await self._execute_with_pool(
+            "list_equations", lambda adapter: adapter.list_equations()
+        )
+
+    async def set_equation(
+        self,
+        name: str,
+        expression: str,
+        configurations: str | list[str] = "all",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add or change an equation using pool."""
+        return await self._execute_with_pool(
+            "set_equation",
+            lambda adapter: adapter.set_equation(name, expression, configurations),
+        )
+
+    async def delete_equation(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete an equation using pool."""
+        return await self._execute_with_pool(
+            "delete_equation", lambda adapter: adapter.delete_equation(name)
+        )
+
     async def active_configuration(
         self,
     ) -> AdapterResult[str]:

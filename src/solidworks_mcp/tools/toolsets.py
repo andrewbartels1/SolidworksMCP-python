@@ -18,6 +18,7 @@ TOOLSETS: dict[str, frozenset[str]] = {
     "core": frozenset(
         {
             "modeling",
+            "equations",
             "sketching",
             "file_management",
             "analysis",

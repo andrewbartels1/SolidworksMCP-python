@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Equations and global variables** (queue item 29): `list_equations`,
+  `set_equation` and `delete_equation`. One value (`"Width" = 60mm`) can
+  drive several dimensions (`"D1@Sketch1" = "Width" / 2`); `set_equation`
+  adds or changes one, in every configuration by default, solves and
+  rebuilds, and gives the new value. An expression SolidWorks can't use
+  fails as `equation_refused` and changes nothing. 143 tools.
 - **`save_body_as_part` leaves no extra assembly open** (queue item 27,
   #101): a new, unsaved assembly SolidWorks opens alongside Save Bodies is
   closed, the part is made active again, and the reply's

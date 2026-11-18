@@ -55,6 +55,14 @@ These read SolidWorks' installed files and never start it
 
     [**42 tools available** :octicons-arrow-right-24:](tool-catalog/modeling.md)
 
+- :material-function-variant:{ .lg .middle } **Equation Tools**
+
+    ---
+
+    Equations and global variables: one value drives several dimensions, so the part stays consistent when it changes.
+
+    [**3 tools available** :octicons-arrow-right-24:](tool-catalog/equations.md)
+
 - :material-pencil:{ .lg .middle } **Sketching Tools**
 
     ---
@@ -177,7 +185,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 140 Tools**
+**Total: 143 Tools**
 
 ## Deprecated tools
 

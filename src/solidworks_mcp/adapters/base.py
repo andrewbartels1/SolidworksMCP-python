@@ -1507,6 +1507,49 @@ class SolidWorksAdapter(ABC):
             error="delete_configuration is not implemented by this adapter",
         )
 
+    async def list_equations(self) -> AdapterResult[list[dict[str, Any]]]:
+        """List the active model's equations and global variables.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_equations is not implemented by this adapter",
+        )
+
+    async def set_equation(
+        self,
+        name: str,
+        expression: str,
+        configurations: str | list[str] = "all",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add an equation, or change the one ``name`` has.
+
+        Args:
+            name (str): A global variable or a dimension (``D1@Sketch1``).
+            expression (str): The right-hand side.
+            configurations (str | list[str]): "all", "this" or names.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_equation is not implemented by this adapter",
+        )
+
+    async def delete_equation(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete the equation for ``name``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="delete_equation is not implemented by this adapter",
+        )
+
     async def active_configuration(
         self,
     ) -> AdapterResult[str]:

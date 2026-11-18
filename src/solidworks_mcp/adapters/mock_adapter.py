@@ -31,6 +31,7 @@ from .base import (
     SweepParameters,
 )
 from .mock_drawing_pack import MockDrawingPackMixin
+from .mock_equations import MockEquationsMixin
 from .mock_sheet_metal import MockSheetMetalMixin
 from .mock_templates import MockTemplatesMixin
 from .solidworks.documentation import MATERIAL_PROPERTIES
@@ -143,7 +144,11 @@ class _BoolCallable:
 
 
 class MockSolidWorksAdapter(
-    MockSheetMetalMixin, MockTemplatesMixin, MockDrawingPackMixin, SolidWorksAdapter
+    MockSheetMetalMixin,
+    MockTemplatesMixin,
+    MockDrawingPackMixin,
+    MockEquationsMixin,
+    SolidWorksAdapter,
 ):
     """Mock adapter that simulates SolidWorks operations.
 

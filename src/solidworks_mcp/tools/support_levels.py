@@ -247,6 +247,10 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_configuration": _STABLE,
     "activate_configuration": _STABLE,
     "delete_configuration": _STABLE,
+    # equations
+    "list_equations": _STABLE,
+    "set_equation": _STABLE,
+    "delete_equation": _STABLE,
     "list_features": _STABLE,
     "list_open_documents": _STABLE,
     "load_assembly": _deprecated("open_model"),
