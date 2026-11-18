@@ -27,8 +27,8 @@ shape at any size:
   centre, Size across the jaw and 0.2 x Size along it, curves the bottom
   (measured on the reference: 0.1 x Size past the centre);
 - fillets where the handle meets each head, 0.2 x Size at its sides and
-  0.08 x Size at its faces (the step from handle to head is only 0.1 x
-  Size there).
+  0.16 x Size along its flat faces, where they meet the head and the side
+  fillets (the user's pick, 2 mm on the 13 mm wrench).
 
 The reference's handle bends up into the box end. Here the ring is raised
 instead, so its low edge meets the handle's underside and the handle runs
@@ -83,7 +83,7 @@ RING_RISE = 0.32
 #: The jaw's curved bottom: an ellipse's axes as multiples of Size.
 RELIEF = {"across": 1.0, "along": 0.2}
 #: Neck fillet radii as multiples of Size: at the handle's sides and faces.
-FILLET = {"sides": 0.2, "faces": 0.08}
+FILLET = {"sides": 0.2, "faces": 0.16}
 #: Chrome-vanadium spring steel, the usual wrench steel (SAE 6150 / 51CrV4).
 MATERIAL = "1.8159 (51CrV4)"
 _ISO_VIEW = 7  # swStandardViews_e.swIsometricView
@@ -172,6 +172,14 @@ async def _one_body(tools: dict[str, Any]) -> bool:
     """Whether the part is still one solid body."""
     checked = await tools["verify_model"]({"solid_body_count": 1})
     return bool(checked["verdict"] == "pass")
+
+
+async def _length(tools: dict[str, Any]) -> float:
+    """The part's overall size along x, in mm (its body count isn't judged)."""
+    checked = await tools["verify_model"]({"solid_body_count": 1})
+    box = checked["measured"]["bounding_box_mm"]
+    size = box.get("size") if isinstance(box, dict) else box
+    return float(size[0])
 
 
 async def _sized_sketch(
@@ -550,15 +558,20 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> tuple[str, Ring]:
         tried.append(moved)
         if moved["status"] != "success":
             continue  # the tool already removed a pattern that built nothing
-        if await _one_body(tools):
+        # The raised seed floats clear of the handle, so the part is two
+        # bodies until the clearance cut; the overall length tells the way
+        # instead: about Length plus the ring's reach along the handle,
+        # nearly twice Length the wrong way.
+        if await _length(tools) < 1.5 * _mm("Length"):
             break
         await tools["undo"]({"count": 1})
     else:
         raise AssertionError(f"the box end didn't reach the handle's end: {tried}")
 
-    # The pattern's seed at the origin pokes out of the open end (it's
-    # tilted), so it is cut away; the open end then fills the gap.
+    # The pattern's seed near the origin pokes out of the open end (it's
+    # tilted and raised), so it is cut away; the open end then fills the gap.
     await _through_circle(tools, round(_mm("BoxHead") * CLEARANCE, 4))
+    assert await _one_body(tools), "the box end isn't joined to the handle"
     head = await _sized_sketch(
         tools,
         "Top",
