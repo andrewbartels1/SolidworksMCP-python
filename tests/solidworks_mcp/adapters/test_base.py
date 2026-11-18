@@ -132,6 +132,9 @@ async def test_base_default_sketch_helpers_return_error() -> None:
     result = await adapter.add_ellipse(0.0, 0.0, 2.0, 1.0)
     assert result.status == AdapterResultStatus.ERROR
 
+    result = await adapter.add_sketch_text("abc")
+    assert result.status == AdapterResultStatus.ERROR
+
     result = await adapter.add_sketch_constraint("e1", None, "coincident")
     assert result.status == AdapterResultStatus.ERROR
 

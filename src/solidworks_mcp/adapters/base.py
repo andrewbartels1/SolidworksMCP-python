@@ -862,6 +862,33 @@ class SolidWorksAdapter(ABC):
             error="add_ellipse is not implemented by this adapter",
         )
 
+    async def add_sketch_text(
+        self,
+        text: str,
+        x: float = 0.0,
+        y: float = 0.0,
+        height: float = 3.5,
+        along: str | None = None,
+        mirror: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add text to the current sketch.
+
+        Args:
+            text (str): The text; ``$PRP:"name"`` shows a custom property.
+            x (float): Start x in mm, without ``along``.
+            y (float): Start y in mm, without ``along``.
+            height (float): Letter height in mm.
+            along (str | None): A line or centreline id to lay it along.
+            mirror (bool): Mirror it left to right, to read from behind.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``id``, ``text`` and ``height``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_sketch_text is not implemented by this adapter",
+        )
+
     async def add_sketch_constraint(
         self,
         entity1: str,

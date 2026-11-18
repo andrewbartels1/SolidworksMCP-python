@@ -233,6 +233,7 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "add_centerline": _adds("Add Sketch Centerline"),
     "add_polygon": _adds("Add Sketch Polygon"),
     "add_ellipse": _adds("Add Sketch Ellipse"),
+    "add_sketch_text": _adds("Add Sketch Text"),
     "add_sketch_constraint": _adds("Add Sketch Relation"),
     "add_sketch_dimension": _adds("Add Sketch Dimension"),
     "sketch_linear_pattern": _adds("Sketch Linear Pattern"),

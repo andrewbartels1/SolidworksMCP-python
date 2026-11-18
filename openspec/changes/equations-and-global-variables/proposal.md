@@ -24,7 +24,12 @@ user's direction, 2026-11-17).
   nothing is changed.
 - **`delete_equation`**: removes an equation or global variable by name.
   A dimension it drove keeps its last value.
-- Tool count 140 to 143.
+- **`add_sketch_text`** (added for the wrench demo, 2026-11-18): text in
+  the open sketch, along a line, at a letter height, optionally mirrored;
+  cut or extruded, it debosses or embosses. A `$PRP:` link to a custom
+  property that names a dimension makes the text follow that dimension,
+  so the wrench's handle reads its own size after an equation changes it.
+- Tool count 140 to 144.
 
 ## Capabilities
 
@@ -32,6 +37,8 @@ user's direction, 2026-11-17).
 
 - `tools/equations`: reading, adding, changing and deleting equations and
   global variables.
+- `tools/sketch-text`: text in a sketch, along a line, at a height,
+  mirrored or not, optionally showing a linked custom property.
 
 ### Modified Capabilities
 

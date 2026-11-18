@@ -123,6 +123,31 @@ Building it found two gaps, fixed here:
   point at the other end to dimension the whole axis to); `value` is the
   whole axis, as `add_ellipse` takes it.
 
+## Text on the wrench's handle: `add_sketch_text`
+
+The user asked for "solidworksmcp-python" and the wrench's size debossed
+on both faces of the handle, so the size visibly changes with the
+equations. Probed on SolidWorks 2026 (2026-11-18, scratch parts):
+
+- `IModelDoc2.InsertSketchText(x, y, z, text, alignment, flip,
+  horizontal_mirror, width_factor, space_between_chars)` adds text to the
+  open sketch. `space_between_chars` 0 stacked every letter on the first;
+  100 (per cent, as `width_factor`) spaces them normally.
+- With a line selected first, the text runs along it from its start (the
+  user's suggestion, the usual way in SolidWorks); the position is then
+  ignored. The tool selects `along` before inserting.
+- The height is `ISketchText.GetTextFormat()`, `CharHeight` (metres),
+  `SetTextFormat(False, format)`; the default was 3.5 mm.
+- Text `solidworksmcp-python $PRP:"WrenchSize" mm`, with the file property
+  `WrenchSize` = `"D1@Boss-Extrude1"`, read `... 4.00 mm`, and `... 6.00
+  mm` after the dimension changed: the text follows the dimension. A
+  0.5 mm cut from the sketch removed 36.7 mm³ from the bar.
+
+The tool is `add_sketch_text(text, x, y, height, along, mirror)`. The
+wrench sketches it on the two planes that flatten the handle (their
+offsets follow Size), along a centreline, mirrored underneath, and links
+`WrenchSize` to a dimension the equations set to Size.
+
 ## Migration Plan
 
 New tools; `add_polygon`'s and `add_ellipse`'s `angle` default to 0, so

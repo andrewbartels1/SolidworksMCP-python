@@ -281,6 +281,38 @@ class AddRelationInput(BaseModel):
     )
 
 
+class AddSketchTextInput(CompatInput):
+    """Input schema for adding text to the open sketch.
+
+    Attributes:
+        text (str): The text; ``$PRP:"name"`` shows a custom property.
+        x (float): Start x in mm, without ``along``.
+        y (float): Start y in mm, without ``along``.
+        height (float): Letter height in mm.
+        along (str | None): A line or centreline id to lay the text along.
+        mirror (bool): Mirror it left to right, to read from behind.
+    """
+
+    text: str = Field(
+        min_length=1,
+        description='The text. $PRP:"name" shows a custom property, e.g. one '
+        'linked to a dimension ("D1@Sketch3"), so the text follows it',
+    )
+    x: float = Field(default=0.0, description="Start x in mm, when not along a line")
+    y: float = Field(default=0.0, description="Start y in mm, when not along a line")
+    height: float = Field(default=3.5, gt=0, description="Letter height in mm")
+    along: str | None = Field(
+        default=None,
+        description="id of a line or centreline in this sketch (add_centerline) "
+        "to lay the text along, from its start",
+    )
+    mirror: bool = Field(
+        default=False,
+        description="Mirror left to right, so text on a face seen from behind "
+        "(an underside) reads correctly",
+    )
+
+
 class CheckSketchDefinitionInput(CompatInput):
     """Input schema for checking sketch definition status.
 
@@ -841,6 +873,47 @@ async def register_sketching_tools(
                 "major_axis": major_axis,
                 "minor_axis": minor_axis,
                 "angle": angle,
+            },
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def add_sketch_text(input_data: AddSketchTextInput) -> dict[str, Any]:
+        """Write text in the open sketch, along a line, to deboss or emboss it.
+
+        Use it for lettering: draw a centreline where the text goes, give its id as
+        `along`, then cut (`create_cut_extrude`) or extrude the sketch. `$PRP:"name"`
+        in the text shows a custom property; one holding a dimension's name
+        (`"D1@Sketch3"`, set with `set_custom_property`) makes the text follow that
+        dimension. `mirror` for text read from behind, such as an underside. Needs: an
+        open sketch (`create_sketch`). Changes: adds text. Returns: the text's `id`,
+        the `text` as SolidWorks shows it (links resolved) and its `height`.
+
+        Args:
+            input_data: The text. `text` is required; `x`, `y` (mm), `height` (3.5
+                mm), `along` and `mirror` have defaults.
+
+        Returns:
+            dict[str, Any]: The text added.
+        """
+        input_data = normalize_input(input_data, AddSketchTextInput)
+        result = await adapter.add_sketch_text(
+            input_data.text,
+            input_data.x,
+            input_data.y,
+            input_data.height,
+            input_data.along,
+            input_data.mirror,
+        )
+        require_success(result, context="Failed to add sketch text")
+        added: dict[str, Any] = result.data or {}
+        return {
+            "status": "success",
+            "message": f"Added text {added['text']!r}, {added['height']} mm high",
+            "sketch_text": {
+                **added,
+                "along": input_data.along,
+                "mirror": input_data.mirror,
             },
             "execution_time": result.execution_time,
         }

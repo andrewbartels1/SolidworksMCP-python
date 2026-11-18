@@ -64,6 +64,9 @@ def cb_with_mock():
     inner.add_ellipse = AsyncMock(
         return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="ellipse")
     )
+    inner.add_sketch_text = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
     inner.sketch_linear_pattern = AsyncMock(
         return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
     )
@@ -1137,3 +1140,12 @@ async def test_circuit_breaker_create_sketch_forwards_face_point(monkeypatch):
     assert result.is_success
     assert inner.last_sketch_args == (None, (1.0, 2.0, 3.0))
     assert recorded == {"plane": None, "face_point": (1.0, 2.0, 3.0)}
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_add_sketch_text(cb_with_mock):
+    """add_sketch_text routes through the breaker with every argument."""
+    cb, inner = cb_with_mock
+    result = await cb.add_sketch_text("abc", 1.0, 2.0, 4.0, "Line_1", True)
+    assert result.status == AdapterResultStatus.SUCCESS
+    inner.add_sketch_text.assert_awaited_once_with("abc", 1.0, 2.0, 4.0, "Line_1", True)

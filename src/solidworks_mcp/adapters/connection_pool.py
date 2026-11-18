@@ -1305,6 +1305,33 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             ),
         )
 
+    async def add_sketch_text(
+        self,
+        text: str,
+        x: float = 0.0,
+        y: float = 0.0,
+        height: float = 3.5,
+        along: str | None = None,
+        mirror: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add sketch text using pool.
+
+        Args:
+            text (str): The text; ``$PRP:"name"`` shows a custom property.
+            x (float): Start x in mm, without ``along``.
+            y (float): Start y in mm, without ``along``.
+            height (float): Letter height in mm.
+            along (str | None): A line or centreline id to lay it along.
+            mirror (bool): Mirror it left to right, to read from behind.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_sketch_text",
+            lambda adapter: adapter.add_sketch_text(text, x, y, height, along, mirror),
+        )
+
     async def sketch_linear_pattern(
         self,
         entities: list[str],

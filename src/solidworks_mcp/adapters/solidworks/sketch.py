@@ -163,6 +163,17 @@ class SolidWorksSketchMixin:
             self, center_x, center_y, major_axis, minor_axis, angle
         )
 
+    async def add_sketch_text(
+        self,
+        text: str,
+        x: float = 0.0,
+        y: float = 0.0,
+        height: float = 3.5,
+        along: str | None = None,
+        mirror: bool = False,
+    ) -> AdapterResult[dict[str, Any]]:
+        return _add_sketch_text_impl(self, text, x, y, height, along, mirror)
+
     async def add_sketch_constraint(
         self,
         entity1: str,
@@ -1033,6 +1044,89 @@ def _add_ellipse_impl(
     return cast(
         AdapterResult[str],
         adapter._handle_com_operation("add_ellipse", _ellipse_operation),
+    )
+
+
+#: ``InsertSketchText``'s width factor and spacing between letters, in per
+#: cent; a spacing of 0 stacked every letter on the first (SolidWorks 2026).
+_TEXT_NORMAL = 100
+
+
+def _add_sketch_text_impl(
+    adapter: Any,
+    text: str,
+    x: float,
+    y: float,
+    height: float,
+    along: str | None,
+    mirror: bool,
+) -> AdapterResult[dict[str, Any]]:
+    """Add text to the active sketch, along a line when ``along`` is given.
+
+    ``IModelDoc2.InsertSketchText`` lays the text along a curve selected
+    first, from its start, and ignores the position then; the letter height
+    is the text format's ``CharHeight``.
+
+    Args:
+        adapter: A ``PyWin32Adapter`` with an open sketch.
+        text: The text; ``$PRP:"name"`` shows a custom property.
+        x: Start x in mm (sketch coordinates), without ``along``.
+        y: Start y in mm, without ``along``.
+        height: Letter height in mm.
+        along: A registered line or centreline id to lay the text along.
+        mirror: Mirror the text left to right, to read from behind.
+
+    Returns:
+        AdapterResult with ``id``, ``text`` (as SolidWorks shows it, links
+        resolved) and ``height`` (mm, read back).
+    """
+    if not adapter.currentSketchManager:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
+
+    def _text_operation() -> dict[str, Any]:
+        model = adapter.currentModel
+        model.ClearSelection2(True)
+        if along is not None:
+            line = adapter._sketch_entities.get(along)
+            if line is None:
+                raise Exception(
+                    f"Unknown sketch entity '{along}'. Use the id add_line or "
+                    "add_centerline returned in this sketch."
+                )
+            if not adapter._select_sketch_entity(line, append=False):
+                raise Exception(f"Failed to select '{along}' to lay the text along")
+        inserted = model.InsertSketchText(
+            x / 1000.0,
+            y / 1000.0,
+            0.0,
+            text,
+            0,
+            0,
+            1 if mirror else 0,
+            _TEXT_NORMAL,
+            _TEXT_NORMAL,
+        )
+        model.ClearSelection2(True)
+        if not inserted:
+            raise Exception("SolidWorks added no sketch text")
+        sketch_text = _sw_type_info.flagged(inserted, "ISketchText")
+        text_format = sketch_text.GetTextFormat()
+        text_format.CharHeight = height / 1000.0
+        sketch_text.SetTextFormat(False, text_format)
+        shown = adapter._attempt(lambda: str(sketch_text.Text), default=text)
+        read_height = adapter._attempt(
+            lambda: float(sketch_text.GetTextFormat().CharHeight) * 1000.0,
+            default=height,
+        )
+        return {
+            "id": adapter._register_sketch_entity("Text", inserted),
+            "text": shown,
+            "height": round(read_height, 4),
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("add_sketch_text", _text_operation),
     )
 
 

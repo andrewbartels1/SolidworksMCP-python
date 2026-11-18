@@ -90,6 +90,16 @@ FILLET = {"sides": 0.2, "faces": 0.16}
 #: Chrome-vanadium spring steel, the usual wrench steel (SAE 6150 / 51CrV4).
 MATERIAL = "1.8159 (51CrV4)"
 MATERIAL_LIBRARY = "SolidWorks DIN Materials"
+#: Lettering debossed into both faces of the handle. ``$PRP:"WrenchSize"``
+#: shows a custom property linked to a dimension the equations set to Size,
+#: so the handle reads its own size after each change.
+LETTERING = 'solidworksmcp-python  $PRP:"WrenchSize" mm'
+LETTER_HEIGHT_MM = 3.5
+DEBOSS_MM = 0.3
+#: Where the lettering's line runs along the handle, in mm from the open
+#: end's centre: clear of both heads down to the 8 mm wrench (handle from
+#: about 10 to 95 mm there).
+LETTER_LINE_MM = (18.0, 108.0)
 _ISO_VIEW = 7  # swStandardViews_e.swIsometricView
 #: ``swUserPreferenceToggle_e``: swDisplayAxes, swDisplayPlanes,
 #: swDisplayOrigins, swDisplayTemporaryAxes.
@@ -204,7 +214,7 @@ async def _sized_sketch(
     return str(closed.get("sketch", made["sketch"])["name"])
 
 
-async def _flatten(tools: dict[str, Any], adapter: Any, flip: bool) -> None:
+async def _flatten(tools: dict[str, Any], adapter: Any, flip: bool) -> str:
     """Cut the bar away beyond a plane HandleT/2 above (or below) the Top Plane.
 
     Which way a cut goes from a reference plane isn't certain, so the volume
@@ -212,6 +222,9 @@ async def _flatten(tools: dict[str, Any], adapter: Any, flip: bool) -> None:
     the bar (58-70 %); the wrong one leaves less (30-42 %), or SolidWorks
     refuses it because nothing would be left. Then the cut is undone and made
     the other way, from the same sketch.
+
+    Returns:
+        The plane, at the handle's flat face (the lettering goes on it).
     """
     half = _mm("HandleT") / 2
     plane = await tools["create_reference_plane"](
@@ -237,7 +250,7 @@ async def _flatten(tools: dict[str, Any], adapter: Any, flip: bool) -> None:
             continue
         change = cut.get("measured_change", {})
         if change.get("volume_after_mm3", 0) > 0.5 * change.get("volume_before_mm3", 0):
-            return
+            return name
         await tools["undo"]({"count": 1})
     raise AssertionError(f"neither cut from {name} left the flattened handle")
 
@@ -522,12 +535,79 @@ async def _necks(tools: dict[str, Any], ring: Ring) -> list[str]:
     return names
 
 
-async def build_wrench(tools: dict[str, Any], adapter: Any) -> tuple[str, Ring]:
+async def _lettering(
+    tools: dict[str, Any], adapter: Any, faces: list[str], size_dimension: str
+) -> list[Any]:
+    """Deboss the lettering into both faces of the handle.
+
+    ``WrenchSize`` is linked to ``size_dimension`` (one the equations set to
+    Size). On each face's plane a centreline runs along the handle and the
+    text follows it (the user's way: a construction line, then the text on
+    it); the underside's is mirrored so it reads from below. Which way an
+    offset plane's sketch x runs isn't certain, so a line whose text cuts
+    nothing is tried again the other way along x.
+
+    Returns:
+        The two sketch texts, to read what they show after each change.
+    """
+    linked = await tools["set_custom_property"](
+        {"name": "WrenchSize", "value": f'"{size_dimension}"'}
+    )
+    assert linked["status"] == "success", linked
+    texts = []
+    for plane, mirror in zip(faces, (False, True), strict=True):
+        tried = []
+        for sign in (1.0, -1.0):
+            made = await tools["create_sketch"]({"plane": plane})
+            assert made["status"] == "success", made
+            start, end = (sign * x for x in LETTER_LINE_MM)
+            line = await tools["add_centerline"](
+                {"x1": start, "y1": 0, "x2": end, "y2": 0}
+            )
+            assert line["status"] == "success", line
+            text = await tools["add_sketch_text"](
+                {
+                    "text": LETTERING,
+                    "height": LETTER_HEIGHT_MM,
+                    "along": line["centerline"]["id"],
+                    "mirror": mirror,
+                }
+            )
+            assert text["status"] == "success", text
+            sketch_text = adapter._sketch_entities[text["sketch_text"]["id"]]
+            closed = await tools["exit_sketch"]()
+            assert closed["status"] == "success", closed
+            cut = await tools["create_cut_extrude"](
+                {"sketch_name": made["sketch"]["name"], "depth": DEBOSS_MM}
+            )
+            tried.append({"sign": sign, "cut": cut.get("message")})
+            if cut["status"] == "success":
+                texts.append(sketch_text)
+                break
+            # The cut built nothing; its sketch is removed by name.
+            await tools["delete_feature"]({"name": made["sketch"]["name"]})
+        else:
+            raise AssertionError(f"the lettering cut nothing on {plane}: {tried}")
+    return texts
+
+
+def _reads(adapter: Any, texts: list[Any]) -> list[str]:
+    """What each sketch text shows now (its $PRP link resolved)."""
+    return [
+        str(adapter._attempt(lambda t=t: sw_type_info.flagged(t, "ISketchText").Text))
+        for t in texts
+    ]
+
+
+async def build_wrench(
+    tools: dict[str, Any], adapter: Any
+) -> tuple[str, Ring, list[Any]]:
     """The 13 mm combination wrench, at fixed sizes.
 
     Returns:
         The sketch of the jaw's curved bottom (its two dimensions are
-        picked by that sketch, not by value), and the box end's ring.
+        picked by that sketch, not by value), the box end's ring, and the
+        handle's two sketch texts.
     """
     assert (await tools["create_part"]({"name": "wrench"}))["status"] == "success"
     bar = await _sized_sketch(
@@ -542,8 +622,10 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> tuple[str, Ring]:
     )
     assert handle["status"] == "success", handle
     _frame(adapter, room_for=1.3)  # room for the heads still to come
-    await _flatten(tools, adapter, flip=False)
-    await _flatten(tools, adapter, flip=True)
+    faces = [
+        await _flatten(tools, adapter, flip=False),
+        await _flatten(tools, adapter, flip=True),
+    ]
 
     box_features, ring = await _box_end(tools, adapter)
     x_axis = await tools["create_axis"]({"reference": "x"})
@@ -594,7 +676,15 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> tuple[str, Ring]:
         {"material_name": MATERIAL, "database": MATERIAL_LIBRARY}
     )
     assert steel["status"] == "success", steel
-    return relief, ring
+    listed = await tools["list_model_dimensions"]({})
+    size_dimension = next(
+        str(row["full_name"])
+        for row in listed["data"]
+        if abs(float(row["value"]) - SIZE_MM) < 1e-3
+        and not str(row["full_name"]).endswith(f"@{relief}")
+    )
+    texts = await _lettering(tools, adapter, faces, size_dimension)
+    return relief, ring, texts
 
 
 def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
@@ -658,7 +748,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
        wrench is unchanged.
     """
     tools = await _tools(scratch.adapter)
-    relief, ring = await build_wrench(tools, scratch.adapter)
+    relief, ring, texts = await build_wrench(tools, scratch.adapter)
     listed = await tools["list_model_dimensions"]({})
     found = drivers(listed["data"], relief)
     built = await _size(tools, SIZE_MM, ring)
@@ -668,9 +758,13 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     )
     evidence(
         "A 13 mm combination wrench, built at fixed sizes",
-        {"dimensions_to_drive": found, "size": built},
-        call="create_part, 10 sketches, 3 extrusions, 7 cuts, a linear pattern, "
-        "2 fillets, set_material",
+        {
+            "dimensions_to_drive": found,
+            "size": built,
+            "handle_reads": _reads(scratch.adapter, texts),
+        },
+        call="create_part, 12 sketches, 3 extrusions, 9 cuts, a linear pattern, "
+        "2 fillets, set_material, set_custom_property, add_sketch_text x 2",
     )
     assert built["verdict"] == "pass", built
     assert sorted(set(found.values())) == sorted(
@@ -717,12 +811,27 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     )
     assert all(a["status"] == "success" for a in added), added
 
+    before = {
+        "box_mm": built["measured_mm"],
+        "handle_reads": _reads(scratch.adapter, texts),
+    }
     grown = await tools["set_equation"]({"name": "Size", "expression": "19mm"})
     at_19 = await _size(tools, 19, ring)
     _hide_references(scratch.adapter)
     evidence(
         "Size = 19mm: one edit, the whole wrench regrows",
-        {"set": grown.get("equation"), "size": at_19},
+        {
+            "equation": '"Size" = 19mm',
+            "change": {
+                "Size_mm": [13, grown.get("equation", {}).get("value")],
+                "box_mm": [before["box_mm"], at_19["measured_mm"]],
+                "handle_reads": [
+                    before["handle_reads"],
+                    _reads(scratch.adapter, texts),
+                ],
+            },
+            "size": at_19,
+        },
         call='set_equation({"name": "Size", "expression": "19mm"})',
     )
     assert grown["status"] == "success", grown
@@ -734,12 +843,31 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
         {"name": "Size", "expression": "8mm", "configurations": ["8 mm"]}
     )
     default_size = await _size(tools, 19, ring)
+    default_reads = _reads(scratch.adapter, texts)
     await tools["activate_configuration"]({"name": "8 mm"})
     small_size = await _size(tools, 8, ring)
     _hide_references(scratch.adapter)
     evidence(
         'Size = 8mm in configuration "8 mm" only',
-        {"set": small.get("equation"), "8 mm": small_size, "Default": default_size},
+        {
+            "equation": '"Size" = 8mm, in "8 mm"',
+            "change": {
+                "Size_mm": {
+                    "Default": 19,
+                    "8 mm": small.get("equation", {}).get("values"),
+                },
+                "box_mm": {
+                    "Default": default_size["measured_mm"],
+                    "8 mm": small_size["measured_mm"],
+                },
+                "handle_reads": {
+                    "Default": default_reads,
+                    "8 mm": _reads(scratch.adapter, texts),
+                },
+            },
+            "8 mm": small_size,
+            "Default": default_size,
+        },
         call='set_equation({"name": "Size", "expression": "8mm", '
         '"configurations": ["8 mm"]})',
     )
@@ -755,7 +883,12 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     evidence(
         "A variable that doesn't exist is refused; the wrench is unchanged",
         {
+            "equation": '"Size" = "Nut" * 2',
             "refused": [refused["status"], refused.get("error_type")],
+            "change": {
+                "box_mm": [at_19["measured_mm"], unchanged["measured_mm"]],
+                "handle_reads": _reads(scratch.adapter, texts),
+            },
             "size": unchanged,
         },
         call='set_equation({"name": "Size", "expression": "\\"Nut\\" * 2"})',

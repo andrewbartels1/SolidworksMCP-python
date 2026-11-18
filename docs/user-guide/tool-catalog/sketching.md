@@ -284,6 +284,35 @@ Draw an ellipse in the open sketch from its centre and axis lengths, in mm.
 
 ---
 
+### `add_sketch_text`
+
+Write text in the open sketch, along a line, to deboss or emboss it.
+
+**Prerequisite:** Active sketch edit mode; for `along`, a line or centreline drawn in it
+
+**SolidWorks automation note:** `IModelDoc2.InsertSketchText` with the line selected first, so the text runs along it from its start; the letter height is the text format's `CharHeight`. `$PRP:"name"` in the text shows a custom property: set one to a dimension's name in quotes (`set_custom_property`, value `"D1@Sketch3"`) and the text follows that dimension, through any equation that drives it.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `text` | `str` | ✅ | | The text; `$PRP:"name"` shows a custom property |
+| `x` | `float` | — | `0` | Start x in mm, when not along a line |
+| `y` | `float` | — | `0` | Start y in mm, when not along a line |
+| `height` | `float` | — | `3.5` | Letter height in mm |
+| `along` | `str?` | — | `None` | id of a line or centreline in this sketch |
+| `mirror` | `bool` | — | `false` | Mirror left to right, for text read from behind (an underside) |
+
+**Sample call:**
+
+```json
+{"text": "solidworksmcp-python $PRP:\"WrenchSize\" mm", "height": 3.5, "along": "Centerline_1"}
+```
+
+Then `create_cut_extrude` on the sketch with a small `depth` debosses it.
+
+---
+
 ### `add_sketch_constraint`
 
 Add a geometric relation between sketch entities: horizontal, vertical, parallel, perpendicular, tangent, coincident, concentric, equal, symmetric, collinear or fix.

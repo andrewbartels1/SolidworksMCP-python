@@ -1,8 +1,8 @@
 {
  "tools": {
-  "total": 143,
+  "total": 144,
   "by_level": {
-   "stable": 135,
+   "stable": 136,
    "beta": 0,
    "experimental": 0,
    "planned": 0,
@@ -161,7 +161,14 @@
     "family": "sketching",
     "level": "stable",
     "reason": "",
-    "summary": "Add a driving dimension to sketch entities: linear, angular, radial or diameter."
+    "summary": "Add a driving dimension to sketch entities: linear, angular, radial, diameter or an ellipse axis."
+   },
+   {
+    "name": "add_sketch_text",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Write text in the open sketch, along a line, to deboss or emboss it."
    },
    {
     "name": "add_spline",
@@ -1015,11 +1022,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 253,
+   "covered": 254,
    "total": 2838
   },
   "api": {
-   "covered": 288,
+   "covered": 292,
    "total": 5985
   },
   "interfaces": [
@@ -1114,6 +1121,7 @@
      "InsertRib",
      "InsertSketch",
      "InsertSketchForEdgeFlange",
+     "InsertSketchText",
      "Lock",
      "Parameter",
      "Save",

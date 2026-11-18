@@ -2721,3 +2721,127 @@ async def test_mixin_create_sketch_forwards_face_point(monkeypatch) -> None:
 
     assert await _Mixin().create_sketch(None, (1.0, 2.0, 3.0)) == "ok"
     assert calls == [(None, (1.0, 2.0, 3.0))]
+
+
+class _TextFormat:
+    def __init__(self) -> None:
+        self.CharHeight = 0.0035
+
+
+class _SketchText:
+    """ISketchText: a text format and the text as SolidWorks shows it."""
+
+    def __init__(self, shown: str) -> None:
+        self.Text = shown
+        self._format = _TextFormat()
+
+    def GetTextFormat(self) -> _TextFormat:
+        return self._format
+
+    def SetTextFormat(self, _use_doc: bool, text_format: _TextFormat) -> bool:
+        self._format = text_format
+        return True
+
+
+def _text_adapter(
+    inserted: object,
+) -> tuple[_FakeSketchAdapter, list[tuple[object, ...]]]:
+    """A fake adapter with an open sketch and a centreline; InsertSketchText calls."""
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    calls: list[tuple[object, ...]] = []
+
+    def _insert(*args: object) -> object:
+        calls.append(args)
+        return inserted
+
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_a: True, InsertSketchText=_insert
+    )
+    return adapter, calls
+
+
+def test_sketch_text_along_a_line_at_a_height() -> None:
+    """The line is selected first; spacing is normal; the height is set."""
+    line = _Point(0.0)
+    adapter, calls = _text_adapter(_SketchText("solidworksmcp-python 13.00 mm"))
+    adapter._sketch_entities = {"Centerline_1": line}
+
+    result = sketch._add_sketch_text_impl(
+        adapter,
+        'solidworksmcp-python $PRP:"Size" mm',
+        0.0,
+        0.0,
+        4.0,
+        "Centerline_1",
+        False,
+    )
+
+    assert result.is_success, result.error
+    assert line.selected == [False]
+    assert calls[0][3:] == ('solidworksmcp-python $PRP:"Size" mm', 0, 0, 0, 100, 100)
+    assert result.data["text"] == "solidworksmcp-python 13.00 mm"
+    assert result.data["height"] == pytest.approx(4.0)
+    assert result.data["id"].startswith("Text_")
+
+
+def test_sketch_text_at_a_point_mirrored() -> None:
+    adapter, calls = _text_adapter(_SketchText("abc"))
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 10.0, -2.0, 3.5, None, True)
+
+    assert result.is_success, result.error
+    assert calls[0][:3] == (pytest.approx(0.01), pytest.approx(-0.002), 0.0)
+    assert calls[0][6] == 1  # horizontal mirror
+
+
+def test_sketch_text_needs_an_open_sketch() -> None:
+    adapter = _FakeSketchAdapter()
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, None, False)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No active sketch" in (result.error or "")
+
+
+def test_sketch_text_along_an_unknown_line_adds_nothing() -> None:
+    adapter, calls = _text_adapter(_SketchText("abc"))
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, "Line_9", False)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Unknown sketch entity 'Line_9'" in (result.error or "")
+    assert calls == []
+
+
+def test_sketch_text_along_a_line_that_cannot_be_selected() -> None:
+    adapter, calls = _text_adapter(_SketchText("abc"))
+    adapter._sketch_entities = {"Line_1": _Point(0.0, selects=False)}
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, "Line_1", False)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Failed to select 'Line_1'" in (result.error or "")
+    assert calls == []
+
+
+def test_no_sketch_text_from_solidworks_is_an_error() -> None:
+    adapter, _calls = _text_adapter(None)
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, None, False)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "added no sketch text" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_the_mixin_passes_sketch_text_on() -> None:
+    adapter, calls = _text_adapter(_SketchText("abc"))
+    adapter.add_sketch_text = sketch.SolidWorksSketchMixin.add_sketch_text.__get__(
+        adapter
+    )
+
+    result = await adapter.add_sketch_text("abc", 1.0, 2.0, 5.0, None, True)
+
+    assert result.is_success, result.error
+    assert calls[0][6] == 1
