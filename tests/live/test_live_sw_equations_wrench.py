@@ -1,9 +1,12 @@
 """A combination wrench sized by one global variable (the equations demo).
 
-The wrench follows the usual combination-wrench layout (ISO 3318 / DIN 3113):
-an open end with its jaw at 15° to the handle, a 12-point box end, and a flat
-handle with rounded edges. It is built at Size = 13 mm with fixed numbers,
-then ``set_equation`` ties every size to ``Size``, so one edit makes a 19 mm
+Modelled from pictures of the user's reference wrench (a 16 mm combination
+wrench; standard views exported read-only, its feature tree not read): an
+open end whose jaw is a parallel-sided slot at 15° with a flat bottom at the
+head's centre (a nut Size across flats seats on it and bears on both walls),
+a 12-point box end tilted 15°, and a flat handle with rounded edges, thinner
+than the heads. It is built at Size = 13 mm with fixed numbers, then
+``set_equation`` ties every size to ``Size``, so one edit makes a 19 mm
 wrench and a configuration holds an 8 mm one.
 
 Each size is a dimension that grows from the centre, so the wrench keeps its
@@ -13,10 +16,16 @@ shape at any size:
   length the distance between the heads), flattened by two cuts from planes
   offset either side of the Top Plane (the offsets are its thickness);
 - the box end is a disc with two hexagon cuts 30° apart (a 12-point opening,
-  the hexagon sized across flats), built at the origin and moved to the far
-  end by a linear pattern whose spacing is the length;
-- the open end is a larger disc at the origin, which fills the pattern's seed,
-  and a jaw cut both ways from a plane at 15°, so the cut's depth is the jaw.
+  each hexagon sized across flats), all on a plane tilted 15° about the z
+  axis, built at the origin and moved to the far end by a linear pattern
+  whose spacing is the length; a clearance cut then removes the pattern's
+  seed at the origin;
+- the open end is a disc at the origin and a jaw Size wide, cut both ways
+  from a plane at 15° from the head's centre outward, so its bottom is flat.
+
+The reference's handle also bends up into the box end; that bend is left
+out (a tilt about the ring's centre is as close as these tools come while
+every size stays driven by Size).
 
 Run it with::
 
@@ -43,17 +52,22 @@ pytestmark = pytest.mark.asyncio
 
 SIZE_MM = 13.0
 
-#: Each global variable as a multiple of Size (a 13 mm wrench is 169 mm
-#: between head centres, with a Ø31.2 open end and a Ø23.4 box end).
+#: Each global variable as a multiple of Size, measured from the reference
+#: (16 mm: heads 205 mm apart, open end Ø31.6, box end Ø24.4, heads 8.2 mm
+#: thick, handle 14.6 x 4.7 mm).
 RATIOS = {
-    "Length": 13.0,
-    "OpenHead": 2.4,
-    "BoxHead": 1.8,
-    "HeadT": 0.45,
-    "HandleW": 0.95,
-    "HandleT": 0.32,
+    "Length": 12.8,
+    "OpenHead": 2.0,
+    "BoxHead": 1.55,
+    "HeadT": 0.5,
+    "HandleW": 0.9,
+    "HandleT": 0.3,
 }
+#: The clearance cut that removes the box end's pattern seed: a little wider
+#: than the tilted ring reaches (0.813 x Size).
+CLEARANCE = 1.1
 JAW_ANGLE_DEG = 15.0
+BOX_TILT_DEG = 15.0
 _ISO_VIEW = 7  # swStandardViews_e.swIsometricView
 #: ``swUserPreferenceToggle_e``: swDisplayAxes, swDisplayPlanes,
 #: swDisplayOrigins, swDisplayTemporaryAxes.
@@ -94,17 +108,24 @@ def _mm(variable: str, size: float = SIZE_MM) -> float:
 def wrench_box(size: float) -> list[float]:
     """The wrench's overall size [x, y, z] in mm for a given Size.
 
-    x: the box end reaches Length + BoxHead/2. The jaw takes the open end's
-    tip off; what stays furthest out is the jaw corner nearer the axis,
-    a = √(R² − (S/2)²) along the jaw and S/2 across it, turned by 15°.
-    y: the heads' thickness. z: the open end's diameter.
+    x: the jaw takes the open end's tip off; what stays furthest out is the
+    jaw corner nearer the axis, √(R² − (S/2)²) along the jaw and S/2 across
+    it, turned 15°. Then Length, then the tilted ring's reach: its radius
+    turned 15° plus half its thickness turned the other way.
+    y: the tilted ring, its radius x sin 15° plus half its thickness x
+    cos 15°, either side. z: the open end's diameter.
     """
     r = _mm("OpenHead", size) / 2
-    a = math.sqrt(r**2 - (size / 2) ** 2)
-    turn = math.radians(JAW_ANGLE_DEG)
-    open_reach = a * math.cos(turn) + size / 2 * math.sin(turn)
-    x = open_reach + _mm("Length", size) + _mm("BoxHead", size) / 2
-    return [round(x, 2), round(_mm("HeadT", size), 2), round(2 * r, 2)]
+    rb = _mm("BoxHead", size) / 2
+    t = _mm("HeadT", size) / 2
+    jaw = math.radians(JAW_ANGLE_DEG)
+    tilt = math.radians(BOX_TILT_DEG)
+    open_reach = math.sqrt(r**2 - (size / 2) ** 2) * math.cos(jaw)
+    open_reach += size / 2 * math.sin(jaw)
+    box_reach = rb * math.cos(tilt) + t * math.sin(tilt)
+    x = open_reach + _mm("Length", size) + box_reach
+    y = 2 * (rb * math.sin(tilt) + t * math.cos(tilt))
+    return [round(x, 2), round(y, 2), round(2 * r, 2)]
 
 
 async def _one_body(tools: dict[str, Any]) -> bool:
@@ -169,18 +190,26 @@ async def _flatten(tools: dict[str, Any], adapter: Any, flip: bool) -> None:
     raise AssertionError(f"neither cut from {name} left the flattened handle")
 
 
-async def _box_end(tools: dict[str, Any]) -> list[str]:
-    """The box end at the origin: a disc and a 12-point opening; its features.
+async def _box_end(tools: dict[str, Any], adapter: Any) -> list[str]:
+    """The box end at the origin, tilted 15°: a disc and a 12-point opening.
 
-    The 12 points are two hexagons 30° apart, each its own cut and each sized
-    across flats by a dimension. (SolidWorks wouldn't copy a circular pattern
-    of one hexagon with the linear pattern that moves the box end, so the
-    second hexagon is drawn turned instead.)
+    All three are sketched on a plane through the z axis, 15° off the Top
+    Plane. The 12 points are two hexagons 30° apart, each its own cut and
+    each sized across flats by a dimension. (SolidWorks wouldn't copy a
+    circular pattern of one hexagon with the linear pattern that moves the
+    box end, so the second hexagon is drawn turned instead.)
+
+    Returns:
+        The features for the linear pattern to copy.
     """
     s = SIZE_MM
+    z_axis = await tools["create_axis"]({"reference": "z"})
+    tilted = await _angled_plane(
+        tools, adapter, "Top Plane", str(z_axis["axis"]["name"]), facing=1
+    )
     disc = await _sized_sketch(
         tools,
-        "Top",
+        tilted,
         "add_circle",
         {"center_x": 0, "center_y": 0, "radius": _mm("BoxHead") / 2},
         _mm("BoxHead"),
@@ -193,7 +222,7 @@ async def _box_end(tools: dict[str, Any]) -> list[str]:
     for angle in (0.0, 30.0):
         hexagon = await _sized_sketch(
             tools,
-            "Top",
+            tilted,
             "add_polygon",
             {"center_x": 0, "center_y": 0, "radius": s / 2, "sides": 6, "angle": angle},
             s,
@@ -206,30 +235,52 @@ async def _box_end(tools: dict[str, Any]) -> list[str]:
     return features
 
 
-async def _jaw_plane(tools: dict[str, Any], adapter: Any, axis: str) -> str:
-    """A plane through the y axis, 15° off the Front Plane: the jaw's centre plane.
+async def _through_circle(tools: dict[str, Any], diameter: float) -> None:
+    """A round hole ``diameter`` across at the origin, through everything."""
+    sketch = await _sized_sketch(
+        tools,
+        "Top",
+        "add_circle",
+        {"center_x": 0, "center_y": 0, "radius": diameter / 2},
+        diameter,
+    )
+    cut = await tools["create_cut_extrude"](
+        {"sketch_name": sketch, "depth": 1, "end_condition": "ThroughAllBoth"}
+    )
+    assert cut["status"] == "success", cut
 
-    Its normal must be within 15° of z, so a sketch on it runs along the
-    wrench (x). ``create_reference_plane`` at 15° from the Front Plane gave a
-    plane whose normal ran along x on SolidWorks 2026 (measured 2026-11-18:
-    both sides of it cut the same volume), so the normal is measured, and a
-    plane that faces the wrong way is undone and made from the Right Plane.
+
+async def _angled_plane(
+    tools: dict[str, Any],
+    adapter: Any,
+    reference: str,
+    axis: str,
+    facing: int,
+    flip: bool = False,
+) -> str:
+    """A plane through ``axis`` whose normal is 15° off model axis ``facing``.
+
+    ``flip`` turns it the other way about ``axis``.
+
+    ``create_reference_plane`` at 15° from the Front Plane about y once gave
+    a plane whose normal ran along x (SolidWorks 2026, 2026-11-18), so the
+    normal is measured: 15° and then 75° are tried, and a plane that faces
+    the wrong way is undone.
     """
     made = []
-    for reference in ("Front Plane", "Right Plane"):
+    want = math.cos(math.radians(15.0))
+    for angle in (15.0, 75.0):
         plane = await tools["create_reference_plane"](
-            {"reference": reference, "angle": JAW_ANGLE_DEG, "axis": axis}
+            {"reference": reference, "angle": angle, "axis": axis, "flip": flip}
         )
         assert plane["status"] == "success", plane
         name = str(plane["plane"]["name"])
         _origin, normal = _plane(adapter, name)
-        made.append({"reference": reference, "normal": [round(c, 3) for c in normal]})
-        if abs(normal[2]) == pytest.approx(
-            math.cos(math.radians(JAW_ANGLE_DEG)), abs=0.01
-        ):
+        made.append({"angle": angle, "normal": [round(c, 3) for c in normal]})
+        if abs(normal[facing]) == pytest.approx(want, abs=0.01):
             return name
         await tools["undo"]({"count": 1})
-    raise AssertionError(f"no plane through y faced z at 15°: {made}")
+    raise AssertionError(f"no plane through {axis} came out at 15°: {made}")
 
 
 async def _jaw(tools: dict[str, Any], adapter: Any, axis: str) -> None:
@@ -244,7 +295,8 @@ async def _jaw(tools: dict[str, Any], adapter: Any, axis: str) -> None:
     end's full radius, 0.2 mm too long. Then the cut and its sketch are undone
     and drawn on the other side.
     """
-    name = await _jaw_plane(tools, adapter, axis)
+    # Flipped so the jaw's walls rise towards the handle, as on the reference.
+    name = await _angled_plane(tools, adapter, "Front Plane", axis, facing=2, flip=True)
     tried = []
     for y1, y2 in ((-120.0, 0.0), (0.0, 120.0)):
         sketch = await _sketch(tools, name, {"x1": -60, "y1": y1, "x2": 60, "y2": y2})
@@ -281,7 +333,7 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> None:
     await _flatten(tools, adapter, flip=False)
     await _flatten(tools, adapter, flip=True)
 
-    box_features = await _box_end(tools)
+    box_features = await _box_end(tools, adapter)
     x_axis = await tools["create_axis"]({"reference": "x"})
     tried = []
     for reverse in (False, True):
@@ -303,6 +355,9 @@ async def build_wrench(tools: dict[str, Any], adapter: Any) -> None:
     else:
         raise AssertionError(f"the box end didn't reach the handle's end: {tried}")
 
+    # The pattern's seed at the origin pokes out of the open end (it's
+    # tilted), so it is cut away; the open end then fills the gap.
+    await _through_circle(tools, round(_mm("BoxHead") * CLEARANCE, 4))
     head = await _sized_sketch(
         tools,
         "Top",
@@ -331,6 +386,7 @@ def drivers(dimensions: list[dict[str, Any]]) -> dict[str, str]:
         _mm("HeadT"): '"HeadT"',
         _mm("HandleW"): '"HandleW"',
         _mm("HandleT") / 2: '"HandleT" / 2',
+        round(_mm("BoxHead") * CLEARANCE, 4): f'"BoxHead" * {CLEARANCE}',
         SIZE_MM: '"Size"',
     }
     found: dict[str, str] = {}
@@ -375,7 +431,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     evidence(
         "A 13 mm combination wrench, built at fixed sizes",
         {"dimensions_to_drive": found, "size": built},
-        call="create_part, 8 sketches, 3 extrusions, 5 cuts, a linear pattern",
+        call="create_part, 9 sketches, 3 extrusions, 6 cuts, a linear pattern",
     )
     assert built["verdict"] == "pass", built
     assert sorted(set(found.values())) == sorted(
@@ -386,6 +442,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
             '"HeadT"',
             '"HandleW"',
             '"HandleT" / 2',
+            f'"BoxHead" * {CLEARANCE}',
             '"Size"',
         ]
     ), listed
