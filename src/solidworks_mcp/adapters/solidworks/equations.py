@@ -92,6 +92,11 @@ def _add(manager: Any, index: int, text: str) -> int:
     return added
 
 
+#: ``DISPATCH_PROPERTYPUT`` (pythoncom's value, written out so the module
+#: imports on machines without pywin32, such as CI).
+_DISPATCH_PROPERTYPUT = 4
+
+
 def _took(manager: Any, index: int, text: str) -> bool:
     """Whether SolidWorks kept ``text`` for equation ``index``.
 
@@ -107,11 +112,9 @@ def _put_everywhere(manager: Any, index: int, text: str) -> bool:
     pywin32's late binding reads indexed properties but can't assign one, so
     the property put goes through ``IDispatch.Invoke``.
     """
-    import pythoncom
-
     dispatch = manager._oleobj_
     dispid = dispatch.GetIDsOfNames("Equation")
-    dispatch.Invoke(dispid, 0, pythoncom.DISPATCH_PROPERTYPUT, False, index, text)
+    dispatch.Invoke(dispid, 0, _DISPATCH_PROPERTYPUT, False, index, text)
     return _took(manager, index, text)
 
 
