@@ -766,6 +766,7 @@ async def _size(tools: dict[str, Any], size: float, ring: Ring) -> dict[str, Any
     }
 
 
+@pytest.mark.timeout(1200)  # 25 equations, each a rebuild with the lettering
 async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     """One variable, Size, drives a whole combination wrench.
 
