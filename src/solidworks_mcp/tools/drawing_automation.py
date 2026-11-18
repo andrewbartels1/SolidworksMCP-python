@@ -187,7 +187,7 @@ class GenerateDrawingPackageInput(CompatInput):
         model_path (str): Part or assembly to draw.
         output_dir (str | None): Folder for the .SLDDRW and PDF.
         title (str | None): Title block TITLE (short).
-        subtitle (str | None): Sheet title.
+        subtitle (str | None): The TITLE's second line.
         drawing_number (str | None): DWG NO. and file name.
         author (str): DRAWN name.
         revision (str): Revision letter.
@@ -209,7 +209,9 @@ class GenerateDrawingPackageInput(CompatInput):
         description="Short title, e.g. 'Mounting Plate - Rev A'; the file name when omitted",
     )
     subtitle: str | None = Field(
-        default=None, description="Sheet title, e.g. 'Base support'"
+        default=None,
+        description="A second, smaller line under the TITLE (ISO 7200's "
+        "supplementary title), e.g. 'Base support'",
     )
     drawing_number: str | None = Field(
         default=None,

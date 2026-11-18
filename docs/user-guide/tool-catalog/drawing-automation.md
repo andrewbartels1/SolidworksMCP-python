@@ -109,7 +109,7 @@ Every title-block field the sheet format fills from a property (DWG NO., TITLE, 
 | `model_path` | `str` | ✅ |  | Full path to the .SLDPRT or .SLDASM |
 | `output_dir` | `str?` | — | `null` | Where to save the drawing; the model's folder when omitted |
 | `title` | `str?` | — | `null` | Short title, e.g. 'Mounting Plate - Rev A'; the file name when omitted |
-| `subtitle` | `str?` | — | `null` | Sheet title, e.g. 'Base support' |
+| `subtitle` | `str?` | — | `null` | A second, smaller line under the TITLE (ISO 7200's supplementary title), e.g. 'Base support' |
 | `drawing_number` | `str?` | — | `null` | DWG NO., also the drawing file name, e.g. 'MP-RevA-01' |
 | `author` | `str` | — | `""` | DRAWN name |
 | `revision` | `str` | — | `"A"` | Revision letter |

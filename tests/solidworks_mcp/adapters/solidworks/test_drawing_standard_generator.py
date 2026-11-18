@@ -199,6 +199,10 @@ class _FormatNote:
     def GetNext(self):  # noqa: N802
         return self.next
 
+    def SetText(self, text):  # noqa: N802
+        self.text = text.replace(self.PropertyLinkedText, "Mounting Plate")
+        return True
+
 
 def _title_block(drawing_number: str = "MOUNTING-PLATE-RevA-01") -> list[_FormatNote]:
     """The ISO title block's notes: DWG NO. runs into the size box at 7 mm."""
@@ -1188,3 +1192,42 @@ def test_linked_property() -> None:
     assert std.linked_property('$PRPSHEET:"SW-Material"') == "SW-Material"
     assert std.linked_property('$prp:"DrawnBy" and $PRP:"X"') == "DrawnBy"
     assert std.linked_property("MATERIAL") is None
+
+
+# ---- the subtitle: ISO 7200's supplementary title, under the TITLE ---------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("cap_mm", "height_mm"), [(None, 3.0), (2, 2.0)])
+async def test_a_subtitle_is_the_titles_second_line(files, cap_mm, height_mm) -> None:
+    drawing = _Drawing()
+    title_note = drawing.format_notes[3]
+
+    result = await _adapter(files, drawing).create_standard_drawing(
+        files.part, subtitle=" Base support ", title_block_text_height_mm=cap_mm
+    )
+
+    assert title_note.text == "Mounting Plate" + "\r\n" + "Base support"
+    title = result.data["title_block"]["title"]
+    assert title["height_mm"] <= height_mm  # 60% of the format's 5 mm, or the cap
+    assert title["fits"] is True
+
+
+@pytest.mark.asyncio
+async def test_no_subtitle_leaves_the_title_one_line(files) -> None:
+    drawing = _Drawing()
+
+    await _adapter(files, drawing).create_standard_drawing(files.part, subtitle="  ")
+
+    assert drawing.format_notes[3].text == "Mounting Plate"
+
+
+def test_a_title_with_no_readable_height_keeps_the_callers_cap(files) -> None:
+    class Unreadable(_FormatNote):
+        def GetTextFormat(self):  # noqa: N802
+            raise RuntimeError("no format")
+
+    note = Unreadable("T", '$PRPSHEET:"Description"', 0.23, 0.045, 0.005)
+    adapter = _adapter(files)
+    assert adapter._add_subtitle(note, note.PropertyLinkedText, "Sub", 0.002) == 0.002
+    assert adapter._add_subtitle(note, note.PropertyLinkedText, "Sub", None) is None

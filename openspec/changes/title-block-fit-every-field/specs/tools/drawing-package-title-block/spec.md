@@ -32,3 +32,14 @@ TITLE `title`; the drawing's own fields SHALL use the names
 - **WHEN** a drawing is generated on `a3 - iso`
 - **THEN** `title_block` lists `drawing number` and `title`, and an entry
   for each other property the format links
+
+### Requirement: The subtitle is the TITLE's second line
+A `subtitle` SHALL be shown as a second line of the TITLE field (ISO 7200's
+supplementary title), with the TITLE's text height at most 60% of the
+format's (or the caller's cap, if smaller). The company field SHALL show
+`company` only.
+
+#### Scenario: A subtitle and no company
+- **WHEN** `subtitle` is `Base support` and `company` is empty
+- **THEN** the TITLE reads `Package Block` then `Base support`, and the
+  company field is empty

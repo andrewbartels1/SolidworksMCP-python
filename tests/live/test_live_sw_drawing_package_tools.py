@@ -250,6 +250,7 @@ async def test_generate_drawing_package_on_a_block(scratch, tmp_path, monkeypatc
             "model_path": part,
             "output_dir": str(out),
             "title": "Package Block",
+            "subtitle": "Base support",
             "drawing_number": "PB-01",
             "author": "Live test",
         }
@@ -283,7 +284,10 @@ async def test_generate_drawing_package_on_a_block(scratch, tmp_path, monkeypatc
     assert len(found) > 2, data["title_block"]
     assert all(v["fits"] for v in found.values()), found
     assert "AISI 1020" in shown
-    assert "Package Block" in shown
+    # ISO 7200: the subtitle is the TITLE's second line, not the company.
+    title = next(t for t in shown if t.startswith("Package Block"))
+    assert title.splitlines() == ["Package Block", "Base support"], title
+    assert sum("Base support" in t for t in shown) == 1, shown
     # 13.5 cm^3 of AISI 1020 (7.87 g/cm^3) is about 106 g; the format shows grams.
     weight = next(t for t in shown if t.startswith("WEIGHT:"))
     assert 100 < float(weight.split(":")[1]) < 112, weight
