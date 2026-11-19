@@ -6,7 +6,7 @@ reviewed, then implemented, signed off live where it touches SolidWorks,
 and archived after its PR merges. Update this file when an item is done
 or the order changes.
 
-Last updated 2026-11-16.
+Last updated 2026-11-19.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
@@ -39,9 +39,18 @@ Last updated 2026-11-16.
 | 26 | `execute_macro` runs VBA source text (a `generate_vba_*` result, or the agent's own), saved as a `.swb` and run with the dialog watchdog. Opt-in (`SOLIDWORKS_MCP_ALLOW_VBA_SOURCE`), the user's choice 2026-11-17 | #96 | `macro-from-vba-source` (archived) | Done 2026-11-17 (#246), checked live |
 | 27 | `save_body_as_part` leaves an extra unsaved assembly open (the Save Bodies feature's create-assembly option) | #101 | `save-body-no-stray-assembly` (archived) | Done 2026-11-17 (#247), checked live: the stray `Assem<N>` is closed |
 | 28 | Restricted VBA source: `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE` = off / restricted / full; `restricted` checks the source against the SolidWorks type library and a blocklist before it runs, with every default and option disclosed in the docs (the user's choice 2026-11-17) | none | `vba-source-restricted` (archived) | Done 2026-11-17 (#248), checked live: restricted source runs, a `Shell` line is refused, `off` refuses |
-| 29 | Equations and global variables: `list_equations`, `set_equation` (add or change, in all configurations by default) and `delete_equation`, so one value drives several dimensions. The base for macro-driven parametric features | none | `equations-and-global-variables` | Built, unit-tested; live check pending (`tests/live/test_live_sw_equations.py`) |
+| 29 | Equations and global variables: `list_equations`, `set_equation` (add or change, in all configurations by default) and `delete_equation`, so one value drives several dimensions. The base for macro-driven parametric features | none | `equations-and-global-variables` | Done 2026-11-18 (#250): all three live tests passed; the wrench demo recorded. Archive after the user signs off the two small demos (task 4.4) |
 | 30 | Build a part from an engineering drawing (image or PDF): research first, then an OpenSpec change for a first version | #249 | not yet written | Research to do (the user's request 2026-11-17) |
-| 31 | `generate_drawing_package` fits every title-block field the sheet format fills from a property, not just DWG NO. and TITLE | #158 (part) | `title-block-fit-every-field` | Built, unit-tested; checked live 2026-11-18 (`test_live_sw_drawing_package_tools.py::test_generate_drawing_package_on_a_block`) |
+| 31 | `generate_drawing_package` fits every title-block field the sheet format fills from a property, not just DWG NO. and TITLE | #158 (part) | `title-block-fit-every-field` | Done 2026-11-19 (#251), checked live |
+| 32 | Sketch essentials: sketch fillet and chamfer, slots, trim and extend, tangent and 3-point arcs, centre rectangle, construction geometry on and off (ISketchManager; the user's choice 2026-11-19, first of the COM-coverage packages) | none | `sketch-essentials` | Planned |
+| 33 | Assembly depth and a ballooned drawing: exploded view, component patterns, mirror and replace components, hide/show/transparency, `AutoBalloon` on the drawing | #23 (part) | not yet written | Planned |
+| 34 | Helix and swept cuts: helix/spiral, a swept cut (`create_sweep` only adds material), thicken; springs and modelled threads | none | not yet written | Planned |
+| 35 | Multi-body tools: combine (add, subtract, common), split, move/copy, delete/keep a body, scale | none | not yet written | Planned |
+| 36 | Appearance and colour: set a part's, body's or face's colour and read it back | none | not yet written | Planned (small; may ride with another item) |
+| 37 | Drawing sheets and callouts: new and active sheet, auxiliary, break and broken-out views, hole callouts, ordinate dimensions, surface finish, revision table | #158 (part) | not yet written | Planned |
+| 38 | Weldments: structural members, trim/extend, end caps, gussets, cut list | none | not yet written | Planned (needs live probes: the profile library location varies) |
+| 39 | Reference and analysis extras: coordinate system, bounding box, centre-of-mass point, section properties; wrap (text on a curved face) | none | not yet written | Planned |
+| 40 | Structure review (the user's request 2026-11-19), not a rewrite: the adapter wrappers (`base`, `circuit_breaker`, `connection_pool`, each about 2,500 lines of near-identical per-tool methods) repeat every adapter method, and the largest modules (`mock_adapter` 4,900, `io` 4,000, `features` 3,800, `modeling` 3,200, `sketch` 2,900 lines) should split by topic, as `adapters/solidworks/` already does. Measure the repetition, propose a SOLID structure (one generic forwarding path; one module per topic), and move to it in steps that keep every test passing | none | not yet written | Planned (last) |
 ## Removed tools (item 10, release 2.1.0)
 
 33 tools were registered but never implemented: every call returned
