@@ -96,6 +96,11 @@ MATERIAL_LIBRARY = "SolidWorks DIN Materials"
 LETTERING = 'solidworksmcp-python  $PRP:"WrenchSize" mm'
 LETTER_HEIGHT_MM = 3.5
 DEBOSS_MM = 0.3
+#: ``swUserPreferenceIntegerValue_e.swUnitsLinearDecimalPlaces``: the part
+#: shows whole millimetres, so the lettering's linked size reads "13 mm",
+#: not "13.00 mm" (display only; every value stays exact).
+_LINEAR_DECIMAL_PLACES = 49
+
 #: The handle's visible middle as a multiple of Size: between the open
 #: end's rim (x = Size) and the ring's near edge (x = 11.95 x Size).
 HANDLE_MIDDLE = 6.48
@@ -113,13 +118,27 @@ _HIDDEN_REFERENCES = (4, 5, 6, 7, 196)
 
 
 def _hide_references(adapter: Any) -> None:
-    """Hide the reference planes, axes and origin, so the wrench shows alone."""
+    """Hide the reference planes, axes, origin and sketches: the wrench alone.
+
+    Sketches are hidden one by one too (``BlankSketch``): the display toggle
+    alone left the spare block's sketch showing off the open end, and
+    zoom-to-fit framed it with the wrench, which then looked tiny.
+    """
     model = adapter.currentModel
     for toggle in _HIDDEN_REFERENCES:
         adapter._attempt(
             lambda t=toggle: model.Extension.SetUserPreferenceToggle(t, 0, False),
             default=None,
         )
+    feature = adapter._attempt(lambda: model.FirstFeature(), default=None)
+    while feature:
+        flagged = sw_type_info.flagged(feature, "IFeature")
+        if adapter._attempt(lambda f=flagged: f.GetTypeName2(), "") == "ProfileFeature":
+            model.ClearSelection2(True)
+            if adapter._attempt(lambda f=flagged: f.Select2(False, 0), False):
+                adapter._attempt(lambda: model.BlankSketch(), None)
+        feature = adapter._attempt(lambda f=flagged: f.GetNextFeature(), None)
+    model.ClearSelection2(True)
 
 
 def _frame(adapter: Any, room_for: float = 1.0) -> None:
@@ -564,6 +583,11 @@ async def _lettering(
     Returns:
         The two lettering sketches, and what each read when written.
     """
+    model = adapter.currentModel
+    adapter._attempt(
+        lambda: model.Extension.SetUserPreferenceInteger(_LINEAR_DECIMAL_PLACES, 0, 0),
+        None,
+    )
     linked = await tools["set_custom_property"](
         {"name": "WrenchSize", "value": f'"{size_dimension}"'}
     )
@@ -652,13 +676,14 @@ async def _reletter(
 
 async def build_wrench(
     tools: dict[str, Any], adapter: Any
-) -> tuple[str, Ring, tuple[list[str], list[str]]]:
-    """The 13 mm combination wrench, at fixed sizes.
+) -> tuple[str, Ring, str, str]:
+    """The 13 mm combination wrench, at fixed sizes, not yet lettered.
 
     Returns:
         The sketch of the jaw's curved bottom (its two dimensions are
-        picked by that sketch, not by value), the box end's ring, and the
-        lettering: its two sketches and what they read when written.
+        picked by that sketch, not by value), the box end's ring, the x
+        axis (the lettering's pattern direction) and a dimension that is
+        Size (the lettering's link).
     """
     assert (await tools["create_part"]({"name": "wrench"}))["status"] == "success"
     bar = await _sized_sketch(
@@ -732,10 +757,7 @@ async def build_wrench(
         if abs(float(row["value"]) - SIZE_MM) < 1e-3
         and not str(row["full_name"]).endswith(f"@{relief}")
     )
-    lettering = await _lettering(
-        tools, adapter, str(x_axis["axis"]["name"]), size_dimension
-    )
-    return relief, ring, lettering
+    return relief, ring, str(x_axis["axis"]["name"]), size_dimension
 
 
 def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
@@ -756,8 +778,6 @@ def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
         round(_mm("BoxHead") * CLEARANCE, 4): f'"BoxHead" * {CLEARANCE}',
         round(SIZE_MM * RING_RISE, 4): f'"Size" * {RING_RISE}',
         SIZE_MM: '"Size"',
-        _mm("HandleT"): '"HandleT"',
-        _spacing_to_middle(): f'"Size" * {HANDLE_MIDDLE} + {-SPARE_CENTRE_MM:g}mm',
         round(SIZE_MM * FILLET["sides"], 4): f'"Size" * {FILLET["sides"]}',
         round(SIZE_MM * FILLET["faces"], 4): f'"Size" * {FILLET["faces"]}',
     }
@@ -789,7 +809,7 @@ async def _size(tools: dict[str, Any], size: float, ring: Ring) -> dict[str, Any
     }
 
 
-@pytest.mark.timeout(1200)  # 25 equations, each a rebuild with the lettering
+@pytest.mark.timeout(1200)  # 27 equations, each a rebuild
 async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     """One variable, Size, drives a whole combination wrench.
 
@@ -800,9 +820,13 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     4. Size = 8mm in a configuration "8 mm" only; Default stays 19 mm.
     5. An expression naming a variable that doesn't exist is refused and the
        wrench is unchanged.
+
+    The handle is lettered after the equations (step 2b): every equation
+    rebuilds the part, and rebuilding the lettering's text cuts each time
+    made the run 3 minutes longer, with nothing moving on screen.
     """
     tools = await _tools(scratch.adapter)
-    relief, ring, (lettering, letters) = await build_wrench(tools, scratch.adapter)
+    relief, ring, x_axis, size_dimension = await build_wrench(tools, scratch.adapter)
     listed = await tools["list_model_dimensions"]({})
     found = drivers(listed["data"], relief)
     built = await _size(tools, SIZE_MM, ring)
@@ -815,10 +839,9 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
         {
             "dimensions_to_drive": found,
             "size": built,
-            "handle_reads": letters,
         },
-        call="create_part, 14 sketches, 4 extrusions, 10 cuts, 2 linear patterns, "
-        "2 fillets, set_material, set_custom_property, add_sketch_text x 2",
+        call="create_part, 10 sketches, 3 extrusions, 7 cuts, a linear pattern, "
+        "2 fillets, set_material",
     )
     assert built["verdict"] == "pass", built
     assert sorted(set(found.values())) == sorted(
@@ -832,8 +855,6 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
             f'"BoxHead" * {CLEARANCE}',
             f'"Size" * {RING_RISE}',
             '"Size"',
-            '"HandleT"',
-            f'"Size" * {HANDLE_MIDDLE} + {-SPARE_CENTRE_MM:g}mm',
             f'"Size" * {FILLET["sides"]}',
             f'"Size" * {FILLET["faces"]}',
             f'"Size" * {RELIEF["across"] / 2}',
@@ -867,6 +888,45 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     )
     assert all(a["status"] == "success" for a in added), added
 
+    lettering, letters = await _lettering(
+        tools, scratch.adapter, x_axis, size_dimension
+    )
+    driven = {row["name"] for row in equations.get("equations", [])}
+    new_dimensions = (await tools["list_model_dimensions"]({}))["data"]
+    lettering_drivers = {
+        str(row["full_name"]): expression
+        for row in new_dimensions
+        if str(row["full_name"]) not in driven
+        for value, expression in (
+            (_mm("HandleT"), '"HandleT"'),
+            (
+                _spacing_to_middle(),
+                f'"Size" * {HANDLE_MIDDLE} + {-SPARE_CENTRE_MM:g}mm',
+            ),
+        )
+        if abs(float(row["value"]) - value) < 1e-3
+    }
+    tied = [
+        await tools["set_equation"]({"name": name, "expression": expression})
+        for name, expression in lettering_drivers.items()
+    ]
+    _frame(
+        scratch.adapter,
+        room_for=wrench_box(19, ring)[0] / wrench_box(SIZE_MM, ring)[0],
+    )
+    evidence(
+        "The handle lettered in its middle, the size read from Size",
+        {
+            "handle_reads": letters,
+            "equations": [f"{n} = {e}" for n, e in lettering_drivers.items()],
+        },
+        call="set_custom_property (WrenchSize = Size's dimension), add_sketch_text x 2 "
+        "on a spare block, pattern_linear onto the handle's middle, set_equation x 2",
+    )
+    assert len(lettering_drivers) == 2, new_dimensions
+    assert all(t["status"] == "success" for t in tied), tied
+    assert all("13 mm" in t for t in letters), letters
+
     grown = await tools["set_equation"]({"name": "Size", "expression": "19mm"})
     at_19 = await _size(tools, 19, ring)
     relettered_19 = await _reletter(tools, lettering, letters)
@@ -887,7 +947,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     )
     assert grown["status"] == "success", grown
     assert at_19["verdict"] == "pass", at_19
-    assert all("19.00" in t for t in relettered_19["after"]), relettered_19
+    assert all("19 mm" in t for t in relettered_19["after"]), relettered_19
 
     made = await tools["create_configuration"]({"name": "8 mm"})
     assert made["status"] == "success", made
@@ -924,7 +984,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     assert small["equation"]["values"] == {"8 mm": pytest.approx(8.0)}, small
     assert small_size["verdict"] == "pass", small_size
     assert default_size["verdict"] == "pass", default_size
-    assert all("8.00" in t for t in relettered_8["after"]), relettered_8
+    assert all("8 mm" in t for t in relettered_8["after"]), relettered_8
 
     await tools["activate_configuration"]({"name": "Default"})
     back = await _reletter(tools, lettering, relettered_8["after"])
