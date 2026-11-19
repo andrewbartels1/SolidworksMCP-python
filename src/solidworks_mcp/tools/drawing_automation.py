@@ -187,7 +187,7 @@ class GenerateDrawingPackageInput(CompatInput):
         model_path (str): Part or assembly to draw.
         output_dir (str | None): Folder for the .SLDDRW and PDF.
         title (str | None): Title block TITLE (short).
-        subtitle (str | None): Sheet title.
+        subtitle (str | None): The TITLE's second line.
         drawing_number (str | None): DWG NO. and file name.
         author (str): DRAWN name.
         revision (str): Revision letter.
@@ -195,7 +195,7 @@ class GenerateDrawingPackageInput(CompatInput):
         notes (list[str]): Extra note lines.
         include_isometric (bool): Add the isometric view.
         write_model_properties (bool): Write title-block properties into the model.
-        title_block_text_height_mm (float | None): Cap on DWG NO./TITLE text height.
+        title_block_text_height_mm (float | None): Cap on the title-block fields' text height.
         include_bom (bool): Put a BOM above the isometric view (assemblies).
     """
 
@@ -209,7 +209,9 @@ class GenerateDrawingPackageInput(CompatInput):
         description="Short title, e.g. 'Mounting Plate - Rev A'; the file name when omitted",
     )
     subtitle: str | None = Field(
-        default=None, description="Sheet title, e.g. 'Base support'"
+        default=None,
+        description="A second, smaller line under the TITLE (ISO 7200's "
+        "supplementary title), e.g. 'Base support'",
     )
     drawing_number: str | None = Field(
         default=None,
@@ -230,9 +232,10 @@ class GenerateDrawingPackageInput(CompatInput):
     title_block_text_height_mm: float | None = Field(
         default=None,
         gt=0,
-        description="Largest text height (mm) for the title block's DWG NO. and "
-        "TITLE, e.g. 3 for smaller text. By default they keep the sheet "
-        "format's height and are only shrunk to fit their boxes.",
+        description="Largest text height (mm) for the title block's fields (DWG "
+        "NO., TITLE and every other field the format fills from a property), "
+        "e.g. 3 for smaller text. By default they keep the sheet format's "
+        "height and are only shrunk to fit their boxes.",
     )
     include_bom: bool = Field(
         default=False,

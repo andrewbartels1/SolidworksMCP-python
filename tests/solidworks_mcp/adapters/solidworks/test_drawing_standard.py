@@ -100,8 +100,7 @@ class TestSheetMaths:
             "DrawnBy": "saiq",
             "DrawnDate": "17 Oct 2026",
             "Revision": "A",
-            "COMPANYNAME": "Part drawing",
-        }
+        }  # the subtitle is not the company (ISO 7200's legal owner)
 
     def test_empty_drawing_properties_are_left_out(self) -> None:
         _, drawing = std.title_block_properties(

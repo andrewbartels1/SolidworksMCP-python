@@ -199,6 +199,10 @@ class _FormatNote:
     def GetNext(self):  # noqa: N802
         return self.next
 
+    def SetText(self, text):  # noqa: N802
+        self.text = text.replace(self.PropertyLinkedText, "Mounting Plate")
+        return True
+
 
 def _title_block(drawing_number: str = "MOUNTING-PLATE-RevA-01") -> list[_FormatNote]:
     """The ISO title block's notes: DWG NO. runs into the size box at 7 mm."""
@@ -1124,3 +1128,106 @@ def test_an_unreadable_prompt_toggle_is_left_alone(files) -> None:
     app.prompt = "unchanged"
     adapter._restore_dialog(None)
     assert app.prompt == "unchanged"
+
+
+# ---- every linked title-block field (title-block-fit-every-field) ---------------
+
+
+def _with_more_fields(*extra: _FormatNote) -> _Drawing:
+    """The ISO title block, plus more format notes in a row of their own."""
+    return _Drawing(format_notes=[*_title_block(), *extra])
+
+
+@pytest.mark.asyncio
+async def test_every_linked_field_is_fitted_and_named(files) -> None:
+    drawing = _with_more_fields(
+        _FormatNote(
+            "Stainless Steel AISI 316L, annealed and pickled, per EN 10088",
+            '$PRPSHEET:"SW-Material"',
+            0.23,
+            0.07,
+            0.005,
+        ),
+        _FormatNote("AB", '$PRP:"DrawnBy"', 0.23, 0.09, 0.0035),
+        _FormatNote("MATERIAL", "", 0.21, 0.07, 0.002),  # a label: not fitted
+        _FormatNote("again", '$PRPSHEET:"SW-Material"', 0.30, 0.11, 0.005),
+        _FormatNote("odd", '$PRP:"title"', 0.30, 0.13, 0.002),
+    )
+
+    result = await _adapter(files, drawing).create_standard_drawing(files.part)
+
+    title_block = result.data["title_block"]
+    material = title_block["SW-Material"]
+    assert material["fits"] is True
+    assert material["height_mm"] < material["height_mm_before"] == 5.0
+    drawn = title_block["drawn by"]
+    assert drawn["fits"] is True
+    assert drawn["height_mm"] == drawn["height_mm_before"] == 3.5
+    assert drawing.format_notes[7].format.CharHeight == 0.005  # fitted once
+    assert title_block['$PRP:"title"']["fits"] is True  # not over TITLE's entry
+    assert title_block["title"]["found"] is True
+    assert set(title_block) == {
+        "drawing number",
+        "title",
+        "SW-Material",
+        "drawn by",
+        '$PRP:"title"',
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_linked_field_with_no_box_is_skipped(files) -> None:
+    class Unmeasured(_FormatNote):
+        def GetExtent(self):  # noqa: N802
+            return None
+
+    drawing = _with_more_fields(Unmeasured("x", '$PRP:"Revision"', 0.3, 0.1, 0.004))
+
+    result = await _adapter(files, drawing).create_standard_drawing(files.part)
+
+    assert "revision" not in result.data["title_block"]
+
+
+def test_linked_property() -> None:
+    assert std.linked_property('$PRPSHEET:"SW-Material"') == "SW-Material"
+    assert std.linked_property('$prp:"DrawnBy" and $PRP:"X"') == "DrawnBy"
+    assert std.linked_property("MATERIAL") is None
+
+
+# ---- the subtitle: ISO 7200's supplementary title, under the TITLE ---------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("cap_mm", "height_mm"), [(None, 3.0), (2, 2.0)])
+async def test_a_subtitle_is_the_titles_second_line(files, cap_mm, height_mm) -> None:
+    drawing = _Drawing()
+    title_note = drawing.format_notes[3]
+
+    result = await _adapter(files, drawing).create_standard_drawing(
+        files.part, subtitle=" Base support ", title_block_text_height_mm=cap_mm
+    )
+
+    assert title_note.text == "Mounting Plate" + "\r\n" + "Base support"
+    title = result.data["title_block"]["title"]
+    assert title["height_mm"] <= height_mm  # 60% of the format's 5 mm, or the cap
+    assert title["fits"] is True
+
+
+@pytest.mark.asyncio
+async def test_no_subtitle_leaves_the_title_one_line(files) -> None:
+    drawing = _Drawing()
+
+    await _adapter(files, drawing).create_standard_drawing(files.part, subtitle="  ")
+
+    assert drawing.format_notes[3].text == "Mounting Plate"
+
+
+def test_a_title_with_no_readable_height_keeps_the_callers_cap(files) -> None:
+    class Unreadable(_FormatNote):
+        def GetTextFormat(self):  # noqa: N802
+            raise RuntimeError("no format")
+
+    note = Unreadable("T", '$PRPSHEET:"Description"', 0.23, 0.045, 0.005)
+    adapter = _adapter(files)
+    assert adapter._add_subtitle(note, note.PropertyLinkedText, "Sub", 0.002) == 0.002
+    assert adapter._add_subtitle(note, note.PropertyLinkedText, "Sub", None) is None

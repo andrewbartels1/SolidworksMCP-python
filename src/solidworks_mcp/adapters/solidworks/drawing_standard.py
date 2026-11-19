@@ -37,6 +37,7 @@ from __future__ import annotations
 import glob
 import ntpath
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import date as _date
 from typing import TYPE_CHECKING, Any, cast
@@ -263,7 +264,8 @@ def title_block_properties(
     The ``a3 - iso`` format reads TITLE, MATERIAL and WEIGHT from the model
     (``$PRPSHEET``) and DRAWN, REVISION and the company from the drawing
     (``$PRP``). Material and weight are links, so they always show the model's
-    real values.
+    real values. ``subtitle`` is not a property: the title-block step writes it
+    as the TITLE's second line (ISO 7200's supplementary title).
 
     Returns:
         tuple: (model properties, drawing properties).
@@ -280,7 +282,9 @@ def title_block_properties(
         "DrawnBy": author,
         "DrawnDate": drawn_date,
         "Revision": revision,
-        "COMPANYNAME": company or (subtitle or ""),
+        # ISO 7200: the company field is the legal owner's name only; a
+        # subtitle is the supplementary title, shown under the TITLE.
+        "COMPANYNAME": company,
     }
     return model_props, {k: v for k, v in drawing_props.items() if v}
 
@@ -316,6 +320,25 @@ MAX_NOTE_LINES = 7
 #: the model's ``Description`` as the TITLE (measured live on SW 2026: a
 #: default drawing number ran across the size box at the format's height).
 TITLE_BLOCK_FIELDS = {"SW-File Name": "drawing number", "Description": "title"}
+
+#: Every other linked field is fitted too, named as ``update_title_block``
+#: names the drawing's own fields, or else by its property.
+OTHER_FIELD_NAMES = {
+    "DrawnBy": "drawn by",
+    "DrawnDate": "drawn date",
+    "Revision": "revision",
+    "COMPANYNAME": "company",
+}
+
+#: The property a sheet-format note shows: ``$PRP:"name"`` or ``$PRPSHEET:"name"``.
+_LINKED_PROPERTY = re.compile(r'\$PRP(?:SHEET)?:"([^"]+)"', re.IGNORECASE)
+
+
+def linked_property(linked: str) -> str | None:
+    """The first property a note's linked text shows, or None."""
+    match = _LINKED_PROPERTY.search(linked)
+    return match.group(1) if match else None
+
 
 #: A fitted field's text is never made smaller than this.
 MIN_FIELD_HEIGHT = 0.002
@@ -444,6 +467,7 @@ class _Sheet:
         title_block: Field name -> how it was fitted to its box.
         format_links: The property links the sheet format's notes show.
         field_height: The caller's cap on the fitted fields' text height.
+        subtitle: The supplementary title, shown under the TITLE.
     """
 
     path: str
@@ -467,6 +491,12 @@ class _Sheet:
     title_block: dict[str, dict[str, Any]] = field(default_factory=dict)
     format_links: list[str] = field(default_factory=list)
     field_height: float | None = None
+    subtitle: str | None = None
+
+
+#: A TITLE with a subtitle line is set at this share of the format's height,
+#: so both lines fit in about the room one line had.
+SUBTITLE_HEIGHT_SHARE = 0.6
 
 
 def _step(steps: list[dict[str, Any]], name: str, result: AdapterResult[Any]) -> None:
@@ -1599,8 +1629,28 @@ class SolidWorksDrawingStandardMixin:
             "room_ends_mm": round(right * 1000, 1),
         }
 
+    def _add_subtitle(
+        self, note: Any, linked: str, subtitle: str, cap: float | None
+    ) -> float | None:
+        """Write ``subtitle`` as the TITLE note's second line.
+
+        Returns:
+            The text-height cap for the two lines: the caller's, or else
+            :data:`SUBTITLE_HEIGHT_SHARE` of the format's height.
+        """
+        text = linked + "\r\n" + subtitle  # SolidWorks notes break lines with CR LF
+        self._attempt(lambda: note.SetText(text), default=None)
+        height = self._attempt(lambda: note.GetTextFormat().CharHeight, default=None)
+        if not isinstance(height, (int, float)) or height <= 0:
+            return cap
+        shared = float(height) * SUBTITLE_HEIGHT_SHARE
+        return shared if cap is None else min(cap, shared)
+
     def _fit_title_block(self, s: _Sheet) -> dict[str, dict[str, Any]]:
-        """Fit the DWG NO. and TITLE fields of the sheet format to their boxes.
+        """Fit the sheet format's title-block fields to their boxes.
+
+        DWG NO. and TITLE first, by name, then every other note linked to a
+        property, each once.
 
         Edits the sheet format (``EditTemplate``), always returning to the
         sheet (``EditSheet``). Run after the drawing is saved: the DWG NO.
@@ -1619,11 +1669,29 @@ class SolidWorksDrawingStandardMixin:
                 if match is None or match[2] is None:
                     s.title_block[name] = {"found": match is not None, "fits": None}
                     continue
+                cap = s.field_height
+                if prop == "Description" and s.subtitle:
+                    cap = self._add_subtitle(match[0], match[1], s.subtitle, cap)
                 others = [n[2] for n in notes if n is not match and n[2] is not None]
                 right = field_room(match[2], others, TITLE_BLOCK[2])
                 s.title_block[name] = {
                     "found": True,
-                    **self._fit_field(match[0], right, s.field_height),
+                    **self._fit_field(match[0], right, cap),
+                }
+            fitted = set(TITLE_BLOCK_FIELDS)
+            for note, linked, box in notes:
+                shown = linked_property(linked)
+                if shown is None or shown in fitted or box is None:
+                    continue
+                fitted.add(shown)
+                name = OTHER_FIELD_NAMES.get(shown, shown)
+                if name in s.title_block:  # a property named "title", say
+                    name = linked
+                others = [n[2] for n in notes if n[0] is not note and n[2] is not None]
+                right = field_room(box, others, TITLE_BLOCK[2])
+                s.title_block[name] = {
+                    "found": True,
+                    **self._fit_field(note, right, s.field_height),
                 }
         finally:
             self._attempt(lambda: drawing.EditSheet(), default=None)
@@ -1751,7 +1819,7 @@ class SolidWorksDrawingStandardMixin:
             model_path: Part (.SLDPRT) or assembly (.SLDASM) to draw.
             output_dir: Folder for the .SLDDRW and PDF; the model's folder by default.
             title: Title block TITLE; the model file name by default.
-            subtitle: Company field when ``company`` is empty.
+            subtitle: The supplementary title, the TITLE's second line.
             drawing_number: DWG NO.; also the drawing file name. Default
                 ``<MODEL>-Rev<revision>-01``.
             author: DRAWN name.
@@ -1877,6 +1945,7 @@ class SolidWorksDrawingStandardMixin:
             include_bom=include_bom,
             material=material,
             extra_notes=list(notes or []),
+            subtitle=(subtitle or "").strip() or None,
             field_height=(
                 title_block_text_height_mm / 1000.0
                 if title_block_text_height_mm

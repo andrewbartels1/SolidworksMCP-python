@@ -39,6 +39,7 @@ Last updated 2026-11-16.
 | 26 | `execute_macro` runs VBA source text (a `generate_vba_*` result, or the agent's own), saved as a `.swb` and run with the dialog watchdog. Opt-in (`SOLIDWORKS_MCP_ALLOW_VBA_SOURCE`), the user's choice 2026-11-17 | #96 | `macro-from-vba-source` (archived) | Done 2026-11-17 (#246), checked live |
 | 27 | `save_body_as_part` leaves an extra unsaved assembly open (the Save Bodies feature's create-assembly option) | #101 | `save-body-no-stray-assembly` (archived) | Done 2026-11-17 (#247), checked live: the stray `Assem<N>` is closed |
 | 28 | Restricted VBA source: `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE` = off / restricted / full; `restricted` checks the source against the SolidWorks type library and a blocklist before it runs, with every default and option disclosed in the docs (the user's choice 2026-11-17) | none | `vba-source-restricted` (archived) | Done 2026-11-17 (#248), checked live: restricted source runs, a `Shell` line is refused, `off` refuses |
+| 31 | `generate_drawing_package` fits every title-block field the sheet format fills from a property, not just DWG NO. and TITLE | #158 (part) | `title-block-fit-every-field` | Built, unit-tested; checked live 2026-11-18 (`test_live_sw_drawing_package_tools.py::test_generate_drawing_package_on_a_block`) |
 ## Removed tools (item 10, release 2.1.0)
 
 33 tools were registered but never implemented: every call returned

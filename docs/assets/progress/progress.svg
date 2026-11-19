@@ -51,5 +51,5 @@
 <rect x="28" y="156" width="69.6" height="24" fill="url(#gloss)"/>
 </g>
 <rect x="28.5" y="156.5" width="783" height="23" rx="12.0" fill="none" stroke="#fff" stroke-opacity=".08"/>
-<text x="28" y="206" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" fill="#6e7681" font-weight="400" text-anchor="start">Whole API: 277 of 5,985 method names (4.6%), counted by a text scan of the adapters.</text>
+<text x="28" y="206" font-family="-apple-system,'Segoe UI',Helvetica,Arial,sans-serif" font-size="11" fill="#6e7681" font-weight="400" text-anchor="start">Whole API: 278 of 5,985 method names (4.6%), counted by a text scan of the adapters.</text>
 </svg>
