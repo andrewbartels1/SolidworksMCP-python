@@ -32,7 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its area; `sketch_trim` and `sketch_extend` cut back or lengthen an entity
   at a point; `set_construction_geometry` makes entities construction
   geometry, or normal again, by id. `add_arc` takes `kind` (`center`,
-  `three_point`, `tangent`) and `add_rectangle` takes `from_center`.
+  `three_point`, `tangent`) and `add_rectangle` takes `from_center`. Demo:
+  a slotted bracket plate, on the demos page.
 - **Equations and global variables** (queue item 29): `list_equations`,
   `set_equation` and `delete_equation`. One value (`"Width" = 60mm`) can
   drive several dimensions (`"D1@Sketch1" = "Width" / 2`); `set_equation`
