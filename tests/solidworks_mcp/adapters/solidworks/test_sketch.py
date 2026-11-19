@@ -3043,20 +3043,20 @@ def _essentials_adapter(
     corners: tuple[_Corner, ...] = (),
     made: object = "segment",
     picked: bool = True,
-    changed: bool | list[bool] = True,
+    changed: bool = True,
 ) -> tuple[_FakeSketchAdapter, list[tuple[object, ...]]]:
     """An adapter with an open Top-plane sketch; the COM calls made, in order.
 
     Sketch ``[x, y]`` is model ``(x, 0, -y)``: the inverse transform the
     tools use is checked by the coordinates ``SelectByID2`` receives.
     ``made`` is what every create call returns, ``picked`` what
-    ``SelectByID2`` returns, ``changed`` what trim and extend return (a
-    list: one answer per call); a trim or extend that works removes one
-    segment.
+    ``SelectByID2`` returns, ``changed`` whether trim and extend change the
+    sketch (their return value is ignored, as on SolidWorks): a trim
+    removes a 10 mm segment, an extension adds one.
     """
     adapter = _FakeSketchAdapter()
     calls: list[tuple[object, ...]] = []
-    segments = [object(), object(), object()]
+    segments = [SimpleNamespace(GetLength=lambda: 0.01) for _ in range(3)]
 
     def call(name: str, result: object = None) -> object:
         def run(*args: object) -> object:
@@ -3068,10 +3068,11 @@ def _essentials_adapter(
     def change(name: str) -> object:
         def run(*args: object) -> bool:
             calls.append((name, *args))
-            done = changed.pop(0) if isinstance(changed, list) else changed
-            if done:
+            if changed and name == "SketchTrim":
                 segments.pop()
-            return done
+            elif changed:
+                segments.append(SimpleNamespace(GetLength=lambda: 0.01))
+            return False  # SolidWorks returned False even when it trimmed
 
         return run
 
@@ -3244,7 +3245,7 @@ def test_trim_picks_in_model_space_and_counts_segments() -> None:
         "point": [0, 2],
         "segments_before": 3,
         "segments_after": 2,
-        "how": "selected, model point",
+        "length_change_mm": -10.0,
     }
     assert calls == [
         ("SelectByID2", "", "SKETCHSEGMENT", 0.0, 0.0, -0.002),
@@ -3252,29 +3253,13 @@ def test_trim_picks_in_model_space_and_counts_segments() -> None:
     ]
 
 
-def test_trim_tries_the_next_way_when_refused() -> None:
-    """Refused with the arc selected, the trim is tried with nothing selected."""
-    adapter, calls = _essentials_adapter(changed=[False, True])
-
-    result = sketch._sketch_trim_impl(adapter, [0, 2])
-
-    assert result.data["how"] == "nothing selected, model point"
-    assert calls == [
-        ("SelectByID2", "", "SKETCHSEGMENT", 0.0, 0.0, -0.002),
-        ("SketchTrim", 0, 0.0, 0.0, -0.002),
-        ("SketchTrim", 0, 0.0, 0.0, -0.002),
-    ]
-
-
-def test_a_trim_every_way_refuses_changes_nothing() -> None:
-    """The last way passes the point in sketch space, the entity selected."""
-    adapter, calls = _essentials_adapter(changed=[False, False, False])
+def test_a_trim_that_changes_nothing_is_refused() -> None:
+    adapter, calls = _essentials_adapter(changed=False)
 
     result = sketch._sketch_trim_impl(adapter, [0, 2])
 
     assert "SolidWorks refused to trim at [0, 2] mm" in (result.error or "")
-    assert calls[-1] == ("SketchTrim", 0, 0.0, 0.002, 0.0)
-    assert [c[0] for c in calls].count("SelectByID2") == 2
+    assert [c[0] for c in calls] == ["SelectByID2", "SketchTrim"]
 
 
 def test_extend_lengthens_the_entity_at_the_point() -> None:
@@ -3282,7 +3267,8 @@ def test_extend_lengthens_the_entity_at_the_point() -> None:
 
     result = sketch._sketch_extend_impl(adapter, [-3, -0.5])
 
-    assert result.data["segments_after"] == 2
+    assert result.data["segments_after"] == 4
+    assert result.data["length_change_mm"] == 10.0
     assert calls[-1] == ("SketchExtend", -0.003, 0.0, 0.0005)
 
 

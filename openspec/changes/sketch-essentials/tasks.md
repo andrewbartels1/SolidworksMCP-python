@@ -28,6 +28,6 @@
 
 ## 5. Live demo and sign-off
 
-- [x] 5.1 `tests/live/test_live_sw_sketch_essentials.py`: a slotted bracket plate. A centre rectangle, two corners filleted and two chamfered, extruded 8 mm; straight and arc slots, a keyhole (lines extended to a circle, the inner arc trimmed), and a stadium window (tangent and three-point arcs) cut through, with a construction line in the cut sketch; the volume checked against the hand calculation after each step, and one refused call (a corner that isn't there)
+- [x] 5.1 `tests/live/test_live_sw_sketch_essentials.py`: a slotted bracket plate, built sharp: a centre rectangle extruded 8 mm (a sketch fillet at its centre point refused); straight and arc slots cut with two construction lines in the sketch; a keyhole (lines extended to a circle, the arc between trimmed, the neck's corners rounded and bevelled in the sketch); a stadium window (tangent and three-point arcs); then, last in the tree (the user's rule), the plate's corner edges filleted and chamfered. The volume checked against the hand calculation after each step. Live finds so far: a centre rectangle has a centre point (a refused corner is now `invalid_input`); `SketchTrim` returns False after trimming, so trim and extend are judged by the sketch's segment length
 - [ ] 5.2 The user runs the demo; fix anything it finds; record the GIF; demos page section and README tile if the user wants one
 - [ ] 5.3 Promote the six tools to stable; commit; ask before pushing

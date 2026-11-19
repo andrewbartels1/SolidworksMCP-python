@@ -24,6 +24,7 @@ SolidWorks MCP server: drive SolidWorks parts, assemblies and drawings.
 `add_circle`, ...), `exit_sketch`, then the feature (`create_extrusion`, \
 `create_cut_extrude`, `create_revolve`). Features use the sketch `sketch_name` \
 names, or the one you closed last.
+- Fillets and chamfers on a solid go last: `add_fillet` and `add_chamfer` after every boss and cut, at the end of the feature tree.
 - Inputs are millimetres and degrees unless a field says metres.
 - A tool's success does not prove the geometry is right: finish a build with \
 `verify_model`, giving the size, volume or counts you expect.

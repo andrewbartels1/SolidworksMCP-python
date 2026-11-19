@@ -1468,7 +1468,8 @@ async def register_sketching_tools(
     async def add_sketch_fillet(input_data: AddSketchFilletInput) -> dict[str, Any]:
         """Round corners of the open sketch to a radius, picking each corner by its point.
 
-        Use it for rounded corners on a plate or a profile, before extruding it. Give
+        Use it for rounded corners of a 2D profile, such as a cut's outline; round a
+        solid's edges with `add_fillet` instead, last in the feature tree. Give
         each corner's `[x, y]` in sketch mm, where two entities meet (for a rectangle,
         its corners). Needs: an open sketch (`create_sketch`) with entities meeting at
         each corner. Changes: each corner becomes an arc and the entities either side
@@ -1498,7 +1499,8 @@ async def register_sketching_tools(
     async def add_sketch_chamfer(input_data: AddSketchChamferInput) -> dict[str, Any]:
         """Bevel corners of the open sketch, picking each corner by its point.
 
-        Use it for chamfered corners on a profile. `distance` alone cuts the same
+        Use it for bevelled corners of a 2D profile; bevel a solid's edges with
+        `add_chamfer` instead, last in the feature tree. `distance` alone cuts the same
         distance along both sides; add `distance2` for a different second side, or
         `angle` (degrees) for a distance and an angle. Needs: an open sketch with
         entities meeting at each corner (`[x, y]` in sketch mm). Changes: each corner

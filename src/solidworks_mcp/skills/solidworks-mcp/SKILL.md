@@ -43,8 +43,13 @@ A solid feature always comes from a closed sketch:
    Each takes `sketch_name`; without it, the sketch you closed last is
    used. `create_revolve` turns about the sketch's centreline, or about
    the reference axis `axis_entity` names.
-6. Then edge treatments: `select_face_edges`, then `add_fillet` or
-   `add_chamfer` with empty `edge_names`.
+6. Last, once every boss and cut is in: edge treatments,
+   `select_face_edges`, then `add_fillet` or `add_chamfer` with empty
+   `edge_names`. Fillets and chamfers belong at the end of the feature
+   tree: a later cut or boss can break them, and rounded edges are harder
+   to pick. `add_sketch_fillet` and `add_sketch_chamfer` round or bevel a
+   2D profile's corners inside a sketch; a solid's edges get `add_fillet`
+   and `add_chamfer`, last.
 7. Finish with `verify_model` (see "Check the result").
 8. `set_material`, then `save_file` with a `file_path`.
 
