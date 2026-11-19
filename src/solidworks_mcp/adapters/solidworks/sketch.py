@@ -3235,18 +3235,36 @@ def _add_slot_impl(
     return cast(AdapterResult[str], adapter._handle_com_operation("add_slot", run))
 
 
+#: How a pick point reaches ``SketchTrim`` / ``SketchExtend``: whether the
+#: entity is selected first, and the point's space. ``SketchExtend`` worked
+#: the first way live (2026-11-19); ``SketchTrim`` refused it, so trim tries
+#: each in turn and the reply says which worked (to keep only that one).
+_PICK_WAYS = {
+    "selected, model point": (True, "model"),
+    "nothing selected, model point": (False, "model"),
+    "selected, sketch point": (True, "sketch"),
+}
+
+
 def _change_at_point(
-    adapter: Any, operation: str, point: list[float], verb: str, change: Any
+    adapter: Any,
+    operation: str,
+    point: list[float],
+    verb: str,
+    change: Any,
+    ways: tuple[str, ...] = ("selected, model point",),
 ) -> AdapterResult[dict[str, Any]]:
-    """Select the sketch entity at ``point`` and trim or extend it there.
+    """Trim or extend the sketch entity at ``point``, trying ``ways`` in order.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
         operation: The operation name.
         point: ``[x, y]`` sketch mm on the entity.
         verb: ``trim`` or ``extend``, for the messages.
-        change: Called with the sketch manager and the model-space point
-            (metres); returns ``True`` when SolidWorks made the change.
+        change: Called with the sketch manager and the pick point (metres);
+            returns ``True`` when SolidWorks made the change. A refusal
+            changes nothing, so the next way can be tried.
+        ways: Names from ``_PICK_WAYS``.
     """
     if not adapter.currentSketchManager:
         return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
@@ -3255,22 +3273,32 @@ def _change_at_point(
         where = f"[{point[0]:g}, {point[1]:g}] mm"
         before = _segment_count(adapter)
         model_point = _to_model_space(adapter, point)
+        points = {
+            "model": model_point,
+            "sketch": [point[0] / 1000.0, point[1] / 1000.0, 0.0],
+        }
         manager = _sw_type_info.flagged(adapter.currentSketchManager, "ISketchManager")
-        adapter.currentModel.ClearSelection2(True)
+        worked = None
         try:
-            picked = adapter.currentModel.Extension.SelectByID2(
-                "", "SKETCHSEGMENT", *model_point, False, 0, _null_callout(), 0
-            )
-            if not picked:
-                raise Exception(f"No sketch entity at {where} in the open sketch")
-            if not change(manager, model_point):
-                raise Exception(f"SolidWorks refused to {verb} at {where}")
+            for way in ways:
+                select, space = _PICK_WAYS[way]
+                adapter.currentModel.ClearSelection2(True)
+                if select and not adapter.currentModel.Extension.SelectByID2(
+                    "", "SKETCHSEGMENT", *model_point, False, 0, _null_callout(), 0
+                ):
+                    raise Exception(f"No sketch entity at {where} in the open sketch")
+                if change(manager, points[space]):
+                    worked = way
+                    break
         finally:
             adapter.currentModel.ClearSelection2(True)
+        if worked is None:
+            raise Exception(f"SolidWorks refused to {verb} at {where}")
         return {
             "point": point,
             "segments_before": before,
             "segments_after": _segment_count(adapter),
+            "how": worked,
         }
 
     return cast(
@@ -3288,6 +3316,7 @@ def _sketch_trim_impl(
         point,
         "trim",
         lambda manager, at: manager.SketchTrim(_TRIM_CLOSEST, *at),
+        tuple(_PICK_WAYS),
     )
 
 
