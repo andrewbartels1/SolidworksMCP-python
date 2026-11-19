@@ -100,6 +100,10 @@ DEBOSS_MM = 0.3
 #: shows whole millimetres, so the lettering's linked size reads "13 mm",
 #: not "13.00 mm" (display only; every value stays exact).
 _LINEAR_DECIMAL_PLACES = 49
+#: ``swUserPreferenceToggle_e.swAutoNormalToSketchMode``: SolidWorks turns the
+#: view square-on to every sketch it opens. Off for the demo (and set back
+#: after), so the camera stays put while the lettering is cut and re-lettered.
+_AUTO_NORMAL_TO_SKETCH = 477
 
 #: The handle's visible middle as a multiple of Size: between the open
 #: end's rim (x = Size) and the ring's near edge (x = 11.95 x Size).
@@ -825,6 +829,25 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     rebuilds the part, and rebuilding the lettering's text cuts each time
     made the run 3 minutes longer, with nothing moving on screen.
     """
+    app = scratch.adapter.swApp
+    was = scratch.adapter._attempt(
+        lambda: app.GetUserPreferenceToggle(_AUTO_NORMAL_TO_SKETCH), None
+    )
+    scratch.adapter._attempt(
+        lambda: app.SetUserPreferenceToggle(_AUTO_NORMAL_TO_SKETCH, False), None
+    )
+    try:
+        await _demo(scratch)
+    finally:
+        if was is not None:
+            scratch.adapter._attempt(
+                lambda: app.SetUserPreferenceToggle(_AUTO_NORMAL_TO_SKETCH, was),
+                None,
+            )
+
+
+async def _demo(scratch: Any) -> None:
+    """The demo's steps (the test around it keeps the camera still)."""
     tools = await _tools(scratch.adapter)
     relief, ring, x_axis, size_dimension = await build_wrench(tools, scratch.adapter)
     listed = await tools["list_model_dimensions"]({})
@@ -888,6 +911,12 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     )
     assert all(a["status"] == "success" for a in added), added
 
+    # The camera is set on the wrench alone before the spare block exists,
+    # so the lettering is never seen on it, only on the handle.
+    _frame(
+        scratch.adapter,
+        room_for=wrench_box(19, ring)[0] / wrench_box(SIZE_MM, ring)[0],
+    )
     lettering, letters = await _lettering(
         tools, scratch.adapter, x_axis, size_dimension
     )
@@ -1006,3 +1035,12 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     )
     assert refused["error_type"] == "equation_refused", refused
     assert unchanged["verdict"] == "pass", unchanged
+    evidence(
+        "Equations demo done",
+        {
+            "Size_mm": [13, 19, 8, 19],
+            "one variable drives": f"{len(added) + len(tied)} equations",
+            "handle_reads": back["after"],
+        },
+        call="Size 13 mm -> 19 mm -> 8 mm (its own configuration) -> 19 mm",
+    )
