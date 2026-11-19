@@ -1,8 +1,8 @@
 {
  "tools": {
-  "total": 144,
+  "total": 145,
   "by_level": {
-   "stable": 136,
+   "stable": 137,
    "beta": 0,
    "experimental": 0,
    "planned": 0,
@@ -934,6 +934,13 @@
     "summary": "Set the active drawing sheet's scale, e.g. 1:2; views that use the sheet scale follow it."
    },
    {
+    "name": "set_sketch_text",
+    "family": "sketching",
+    "level": "stable",
+    "reason": "",
+    "summary": "Rewrite the text in a sketch and rebuild, so debossed lettering shows it."
+   },
+   {
     "name": "set_units",
     "family": "modeling",
     "level": "stable",
@@ -1022,11 +1029,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 254,
+   "covered": 255,
    "total": 2838
   },
   "api": {
-   "covered": 296,
+   "covered": 297,
    "total": 5985
   },
   "interfaces": [
@@ -1352,7 +1359,8 @@
      "GetLineCount",
      "GetSketchContours",
      "GetSketchPoints2",
-     "GetSketchSegments"
+     "GetSketchSegments",
+     "GetSketchTextSegments"
     ],
     "total": 102
    }

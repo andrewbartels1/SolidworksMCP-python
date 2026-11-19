@@ -312,6 +312,29 @@ Then `create_cut_extrude` on the sketch with a small `depth` debosses it.
 
 ---
 
+### `set_sketch_text`
+
+Rewrite the text in a sketch and rebuild, so debossed lettering shows it.
+
+**Prerequisite:** A part with a sketch holding text from `add_sketch_text`
+
+**SolidWorks automation note:** SolidWorks doesn't redraw sketch text when the model rebuilds, not even a `$PRP:` link to a dimension an equation changed (SolidWorks 2026: four rebuild modes, saving, and writing `ISketchText.Text` outside the sketch all left the old lettering). The tool opens the sketch (`EditSketch`), writes `Text`, closes it and rebuilds; written that way, a `$PRP:` link is read again.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `sketch_name` | `str` | ✅ | | The sketch, e.g. `Sketch12` |
+| `text` | `str` | ✅ | | The new text; the same `$PRP:"name"` text re-reads the link |
+
+**Sample call:**
+
+```json
+{"sketch_name": "Sketch12", "text": "solidworksmcp-python  $PRP:\"WrenchSize\" mm"}
+```
+
+---
+
 ### `add_sketch_constraint`
 
 Add a geometric relation between sketch entities: horizontal, vertical, parallel, perpendicular, tangent, coincident, concentric, equal, symmetric, collinear or fix.

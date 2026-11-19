@@ -28,8 +28,11 @@ user's direction, 2026-11-17).
   the open sketch at a letter height, from a point or centred on a model
   point; cut or extruded, it debosses or embosses. A `$PRP:` link to a custom
   property that names a dimension makes the text follow that dimension,
-  so the wrench's handle reads its own size after an equation changes it.
-- Tool count 140 to 144.
+  so the wrench's handle reads its own size once re-lettered.
+- **`set_sketch_text`**: rewrites a sketch's text with the sketch open,
+  then rebuilds; SolidWorks doesn't redraw sketch text on rebuild, so
+  this is the re-letter step after a size change.
+- Tool count 140 to 145.
 
 ## Capabilities
 

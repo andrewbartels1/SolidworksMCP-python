@@ -2011,6 +2011,28 @@ class MockSolidWorksAdapter(
             execution_time=self._delays["sketch_operation"] / 2,
         )
 
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock rewriting a sketch's text: the text given, before and after.
+
+        Args:
+            sketch_name (str): The sketch.
+            text (str): The new text.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``sketch``, ``before`` and ``after``.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"sketch": sketch_name, "before": [], "after": [text]},
+        )
+
     async def add_polygon(
         self,
         center_x: float,

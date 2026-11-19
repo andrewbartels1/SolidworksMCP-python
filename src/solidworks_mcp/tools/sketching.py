@@ -310,6 +310,22 @@ class AddSketchTextInput(CompatInput):
     )
 
 
+class SetSketchTextInput(CompatInput):
+    """Input schema for rewriting the text in a sketch.
+
+    Attributes:
+        sketch_name (str): The sketch whose text to rewrite.
+        text (str): The new text.
+    """
+
+    sketch_name: str = Field(min_length=1, description="The sketch, e.g. Sketch12")
+    text: str = Field(
+        min_length=1,
+        description='The new text; give the same $PRP:"name" text to re-read a '
+        "linked property after the model changed",
+    )
+
+
 class CheckSketchDefinitionInput(CompatInput):
     """Input schema for checking sketch definition status.
 
@@ -912,6 +928,35 @@ async def register_sketching_tools(
                 **added,
                 "center_at": input_data.center_at,
             },
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def set_sketch_text(input_data: SetSketchTextInput) -> dict[str, Any]:
+        """Rewrite the text in a sketch and rebuild, so debossed lettering shows it.
+
+        Use it after a change the text should follow: SolidWorks doesn't redraw sketch
+        text on rebuild, not even a `$PRP:` link to a dimension an equation changed.
+        Give the same `$PRP:"name"` text to re-read the link, or new text. The sketch
+        is opened, its text rewritten, closed, and the model rebuilt, so a cut made
+        from it changes too. Needs: a part with that sketch, holding text from
+        `add_sketch_text`. Changes: the sketch's text. Returns: the `sketch`, each
+        text `before` and `after` (links resolved).
+
+        Args:
+            input_data: `sketch_name` and `text`, both required.
+
+        Returns:
+            dict[str, Any]: The text before and after.
+        """
+        input_data = normalize_input(input_data, SetSketchTextInput)
+        result = await adapter.set_sketch_text(input_data.sketch_name, input_data.text)
+        require_success(result, context="Failed to rewrite the sketch text")
+        changed: dict[str, Any] = result.data or {}
+        return {
+            "status": "success",
+            "message": f"{input_data.sketch_name} now reads {changed.get('after')}",
+            "sketch_text": changed,
             "execution_time": result.execution_time,
         }
 

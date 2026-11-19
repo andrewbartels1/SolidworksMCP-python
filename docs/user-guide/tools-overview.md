@@ -69,7 +69,7 @@ These read SolidWorks' installed files and never start it
 
     Sketches on a plane or a flat face: lines, arcs, circles, rectangles, polygons, splines, relations, dimensions, offsets, mirrors, patterns and edges converted from the model.
 
-    [**20 tools available** :octicons-arrow-right-24:](tool-catalog/sketching.md)
+    [**21 tools available** :octicons-arrow-right-24:](tool-catalog/sketching.md)
 
 - :material-technical-draw:{ .lg .middle } **Drawing Tools**
 
@@ -125,7 +125,7 @@ These read SolidWorks' installed files and never start it
 
     Open, save, switch and inspect documents; the feature tree, configurations and the current selection; Pack and Go.
 
-    [**20 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
+    [**21 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
 
 - :material-code-braces:{ .lg .middle } **VBA Generation**
 
@@ -185,7 +185,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 144 Tools**
+**Total: 145 Tools**
 
 ## Deprecated tools
 

@@ -174,6 +174,11 @@ class SolidWorksSketchMixin:
     ) -> AdapterResult[dict[str, Any]]:
         return _add_sketch_text_impl(self, text, x, y, height, center_at)
 
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        return _set_sketch_text_impl(self, sketch_name, text)
+
     async def add_sketch_constraint(
         self,
         entity1: str,
@@ -1169,6 +1174,71 @@ def _add_sketch_text_impl(
     return cast(
         AdapterResult[dict[str, Any]],
         adapter._handle_com_operation("add_sketch_text", _text_operation),
+    )
+
+
+def _set_sketch_text_impl(
+    adapter: Any, sketch_name: str, text: str
+) -> AdapterResult[dict[str, Any]]:
+    """Rewrite every sketch text in ``sketch_name``, with the sketch open.
+
+    SolidWorks doesn't redraw sketch text when the model rebuilds, not even
+    a ``$PRP:`` link whose dimension changed, and writing
+    ``ISketchText.Text`` outside the sketch changes the string but not the
+    geometry (SolidWorks 2026, 2026-11-18). Written while the sketch is
+    open (``EditSketch``), a link is read again; the sketch is then closed
+    and the model rebuilt.
+
+    Args:
+        adapter: A ``PyWin32Adapter`` with a part open.
+        sketch_name: The sketch, e.g. ``Sketch12``.
+        text: The new text; ``$PRP:"name"`` shows a custom property.
+
+    Returns:
+        AdapterResult with ``sketch``, ``before`` and ``after``: each text
+        as SolidWorks showed it, and shows it now.
+    """
+
+    def _operation() -> dict[str, Any]:
+        model = adapter.currentModel
+        if not model:
+            raise Exception("No active model")
+        feature = model.FeatureByName(sketch_name)
+        if not feature:
+            raise Exception(
+                f"Sketch '{sketch_name}' not found; read the names with list_features."
+            )
+        feature = _sw_type_info.flagged(feature, "IFeature")
+        sketch = _sw_type_info.flagged(feature.GetSpecificFeature2(), "ISketch")
+        texts = [
+            _sw_type_info.flagged(t, "ISketchText")
+            for t in as_list(adapter._attempt(lambda: sketch.GetSketchTextSegments()))
+        ]
+        if not texts:
+            raise Exception(f"Sketch '{sketch_name}' has no text to rewrite.")
+        before = [str(t.Text) for t in texts]
+        model.ClearSelection2(True)
+        feature.Select2(False, 0)
+        model.EditSketch()
+        try:
+            open_sketch = _sw_type_info.flagged(model.GetActiveSketch2(), "ISketch")
+            texts = [
+                _sw_type_info.flagged(t, "ISketchText")
+                for t in as_list(open_sketch.GetSketchTextSegments())
+            ]
+            for sketch_text in texts:
+                sketch_text.Text = text
+            after = [str(t.Text) for t in texts]
+        finally:
+            _sw_type_info.flagged(model.SketchManager, "ISketchManager").InsertSketch(
+                True
+            )
+        model.ForceRebuild3(False)
+        return {"sketch": sketch_name, "before": before, "after": after}
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("set_sketch_text", _operation),
     )
 
 

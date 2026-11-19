@@ -546,6 +546,18 @@ class TestMockAdapterSuccessPaths:
         assert result.data["id"] in adapter._sketch_entity_ids
 
     @pytest.mark.asyncio
+    async def test_set_sketch_text_gives_the_text(self):
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        no_model = await adapter.set_sketch_text("Sketch12", "abc")
+        await adapter.create_part()
+
+        result = await adapter.set_sketch_text("Sketch12", "abc")
+
+        assert no_model.status == AdapterResultStatus.ERROR
+        assert result.data == {"sketch": "Sketch12", "before": [], "after": ["abc"]}
+
+    @pytest.mark.asyncio
     async def test_add_sketch_text_needs_a_sketch(self):
         adapter = MockSolidWorksAdapter({})
         await adapter.connect()

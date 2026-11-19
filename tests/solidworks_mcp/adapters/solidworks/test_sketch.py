@@ -2878,3 +2878,124 @@ async def test_the_mixin_passes_sketch_text_on() -> None:
 
     assert result.is_success, result.error
     assert calls[0][:2] == (pytest.approx(0.001), pytest.approx(0.002))
+
+
+class _Lettering:
+    """ISketchText whose text resolves a $PRP link to ``value``."""
+
+    def __init__(self, shown: str, value: str) -> None:
+        self._text = shown
+        self._value = value
+
+    @property
+    def Text(self) -> str:
+        return self._text.replace('$PRP:"WrenchSize"', self._value)
+
+    @Text.setter
+    def Text(self, text: str) -> None:
+        self._text = text
+
+
+def _lettered_model(
+    texts: list[_Lettering], feature: object | None = True
+) -> tuple[_FakeSketchAdapter, list[str]]:
+    """A fake part with ``Sketch12`` holding ``texts``; the calls made, in order."""
+    calls: list[str] = []
+    sketch = SimpleNamespace(GetSketchTextSegments=lambda: tuple(texts))
+    found = (
+        SimpleNamespace(
+            GetSpecificFeature2=lambda: sketch,
+            Select2=lambda *_a: calls.append("select") or True,
+        )
+        if feature
+        else None
+    )
+    adapter = _FakeSketchAdapter()
+    adapter.currentModel = SimpleNamespace(
+        FeatureByName=lambda name: found if name == "Sketch12" else None,
+        ClearSelection2=lambda *_a: True,
+        EditSketch=lambda: calls.append("edit"),
+        GetActiveSketch2=lambda: sketch,
+        SketchManager=SimpleNamespace(
+            InsertSketch=lambda _rebuild: calls.append("close")
+        ),
+        ForceRebuild3=lambda _top: calls.append("rebuild"),
+    )
+    return adapter, calls
+
+
+def test_sketch_text_is_rewritten_with_the_sketch_open() -> None:
+    """Open, write, close, rebuild; the link reads the new size."""
+    text = _Lettering("size 13.00 mm", "19.00")
+    adapter, calls = _lettered_model([text])
+
+    result = sketch._set_sketch_text_impl(
+        adapter, "Sketch12", 'size $PRP:"WrenchSize" mm'
+    )
+
+    assert result.is_success, result.error
+    assert result.data == {
+        "sketch": "Sketch12",
+        "before": ["size 13.00 mm"],
+        "after": ["size 19.00 mm"],
+    }
+    assert calls == ["select", "edit", "close", "rebuild"]
+
+
+def test_rewriting_text_in_a_missing_sketch_changes_nothing() -> None:
+    adapter, calls = _lettered_model([], feature=None)
+
+    result = sketch._set_sketch_text_impl(adapter, "Sketch12", "abc")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Sketch 'Sketch12' not found" in (result.error or "")
+    assert calls == []
+
+
+def test_a_sketch_with_no_text_is_an_error() -> None:
+    adapter, calls = _lettered_model([])
+
+    result = sketch._set_sketch_text_impl(adapter, "Sketch12", "abc")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "has no text to rewrite" in (result.error or "")
+    assert calls == []
+
+
+def test_the_sketch_is_closed_even_when_writing_fails() -> None:
+    class _Stuck(_Lettering):
+        @property
+        def Text(self) -> str:
+            return "abc"
+
+        @Text.setter
+        def Text(self, _text: str) -> None:
+            raise RuntimeError("read only")
+
+    adapter, calls = _lettered_model([_Stuck("abc", "")])
+
+    result = sketch._set_sketch_text_impl(adapter, "Sketch12", "xyz")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert calls == ["select", "edit", "close"]
+
+
+def test_rewriting_sketch_text_needs_a_model() -> None:
+    adapter = _FakeSketchAdapter()
+
+    result = sketch._set_sketch_text_impl(adapter, "Sketch12", "abc")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No active model" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_the_mixin_passes_set_sketch_text_on() -> None:
+    adapter, _calls = _lettered_model([_Lettering("a", "")])
+    adapter.set_sketch_text = sketch.SolidWorksSketchMixin.set_sketch_text.__get__(
+        adapter
+    )
+
+    result = await adapter.set_sketch_text("Sketch12", "b")
+
+    assert result.data["after"] == ["b"]

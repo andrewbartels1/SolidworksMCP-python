@@ -1487,6 +1487,14 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             lambda: self.adapter.add_sketch_text(text, x, y, height, center_at),
         )
 
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Rewrite sketch text through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_sketch_text", lambda: self.adapter.set_sketch_text(sketch_name, text)
+        )
+
     async def sketch_linear_pattern(
         self,
         entities: list[str],

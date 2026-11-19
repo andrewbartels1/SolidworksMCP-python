@@ -560,7 +560,7 @@ async def _lettering(
     Size).
 
     Returns:
-        The two sketch texts, to read what they show after each change.
+        The two lettering sketches, and what each read when written.
     """
     linked = await tools["set_custom_property"](
         {"name": "WrenchSize", "value": f'"{size_dimension}"'}
@@ -572,7 +572,7 @@ async def _lettering(
         {"sketch_name": spare, "depth": _mm("HandleT"), "both_directions": True}
     )
     assert block["status"] == "success", block
-    texts, cuts = [], []
+    sketches, reads, cuts = [], [], []
     for y in (_mm("HandleT") / 2, -_mm("HandleT") / 2):
         face = [SPARE_CENTRE_MM, y, 0.0]
         made = await tools["create_sketch"]({"face_point": face})
@@ -581,7 +581,8 @@ async def _lettering(
             {"text": LETTERING, "height": LETTER_HEIGHT_MM, "center_at": face}
         )
         assert text["status"] == "success", text
-        texts.append(adapter._sketch_entities[text["sketch_text"]["id"]])
+        sketches.append(str(made["sketch"]["name"]))
+        reads.append(str(text["sketch_text"]["text"]))
         closed = await tools["exit_sketch"]()
         assert closed["status"] == "success", closed
         cut = await tools["create_cut_extrude"](
@@ -616,26 +617,41 @@ async def _lettering(
     )
     assert gone["status"] == "success", gone
     assert await _one_body(tools), "the spare block is still there"
-    return texts
+    return sketches, reads
 
 
-def _reads(adapter: Any, texts: list[Any]) -> list[str]:
-    """What each sketch text shows now (its $PRP link resolved)."""
-    return [
-        str(adapter._attempt(lambda t=t: sw_type_info.flagged(t, "ISketchText").Text))
-        for t in texts
-    ]
+async def _reletter(tools: dict[str, Any], sketches: list[str]) -> dict[str, Any]:
+    """Re-letter the handle: each lettering sketch's text written again.
+
+    SolidWorks doesn't redraw sketch text when an equation changes the
+    model, so the lettering keeps the size it was written at until
+    ``set_sketch_text`` writes the same ``$PRP:`` text again, which reads
+    the linked Size dimension now (the user's choice: a visible re-letter
+    step after each size change).
+
+    Returns:
+        The lettering ``before`` and ``after``, both faces.
+    """
+    before, after = [], []
+    for sketch in sketches:
+        rewritten = await tools["set_sketch_text"](
+            {"sketch_name": sketch, "text": LETTERING}
+        )
+        assert rewritten["status"] == "success", rewritten
+        before += rewritten["sketch_text"]["before"]
+        after += rewritten["sketch_text"]["after"]
+    return {"before": before, "after": after}
 
 
 async def build_wrench(
     tools: dict[str, Any], adapter: Any
-) -> tuple[str, Ring, list[Any]]:
+) -> tuple[str, Ring, tuple[list[str], list[str]]]:
     """The 13 mm combination wrench, at fixed sizes.
 
     Returns:
         The sketch of the jaw's curved bottom (its two dimensions are
         picked by that sketch, not by value), the box end's ring, and the
-        handle's two sketch texts.
+        lettering: its two sketches and what they read when written.
     """
     assert (await tools["create_part"]({"name": "wrench"}))["status"] == "success"
     bar = await _sized_sketch(
@@ -709,10 +725,10 @@ async def build_wrench(
         if abs(float(row["value"]) - SIZE_MM) < 1e-3
         and not str(row["full_name"]).endswith(f"@{relief}")
     )
-    texts = await _lettering(
+    lettering = await _lettering(
         tools, adapter, str(x_axis["axis"]["name"]), size_dimension
     )
-    return relief, ring, texts
+    return relief, ring, lettering
 
 
 def drivers(dimensions: list[dict[str, Any]], relief: str) -> dict[str, str]:
@@ -779,7 +795,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
        wrench is unchanged.
     """
     tools = await _tools(scratch.adapter)
-    relief, ring, texts = await build_wrench(tools, scratch.adapter)
+    relief, ring, (lettering, letters) = await build_wrench(tools, scratch.adapter)
     listed = await tools["list_model_dimensions"]({})
     found = drivers(listed["data"], relief)
     built = await _size(tools, SIZE_MM, ring)
@@ -792,7 +808,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
         {
             "dimensions_to_drive": found,
             "size": built,
-            "handle_reads": _reads(scratch.adapter, texts),
+            "handle_reads": letters,
         },
         call="create_part, 14 sketches, 4 extrusions, 10 cuts, 2 linear patterns, "
         "2 fillets, set_material, set_custom_property, add_sketch_text x 2",
@@ -844,12 +860,9 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
     )
     assert all(a["status"] == "success" for a in added), added
 
-    before = {
-        "box_mm": built["measured_mm"],
-        "handle_reads": _reads(scratch.adapter, texts),
-    }
     grown = await tools["set_equation"]({"name": "Size", "expression": "19mm"})
     at_19 = await _size(tools, 19, ring)
+    relettered_19 = await _reletter(tools, lettering)
     _hide_references(scratch.adapter)
     evidence(
         "Size = 19mm: one edit, the whole wrench regrows",
@@ -857,18 +870,17 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
             "equation": '"Size" = 19mm',
             "change": {
                 "Size_mm": [13, grown.get("equation", {}).get("value")],
-                "box_mm": [before["box_mm"], at_19["measured_mm"]],
-                "handle_reads": [
-                    before["handle_reads"],
-                    _reads(scratch.adapter, texts),
-                ],
+                "box_mm": [built["measured_mm"], at_19["measured_mm"]],
+                "handle_reads": relettered_19,
             },
             "size": at_19,
         },
-        call='set_equation({"name": "Size", "expression": "19mm"})',
+        call='set_equation({"name": "Size", "expression": "19mm"}), then '
+        "set_sketch_text on both lettering sketches (re-letter)",
     )
     assert grown["status"] == "success", grown
     assert at_19["verdict"] == "pass", at_19
+    assert all("19.00" in t for t in relettered_19["after"]), relettered_19
 
     made = await tools["create_configuration"]({"name": "8 mm"})
     assert made["status"] == "success", made
@@ -876,9 +888,9 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
         {"name": "Size", "expression": "8mm", "configurations": ["8 mm"]}
     )
     default_size = await _size(tools, 19, ring)
-    default_reads = _reads(scratch.adapter, texts)
     await tools["activate_configuration"]({"name": "8 mm"})
     small_size = await _size(tools, 8, ring)
+    relettered_8 = await _reletter(tools, lettering)
     _hide_references(scratch.adapter)
     evidence(
         'Size = 8mm in configuration "8 mm" only',
@@ -893,23 +905,22 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
                     "Default": default_size["measured_mm"],
                     "8 mm": small_size["measured_mm"],
                 },
-                "handle_reads": {
-                    "Default": default_reads,
-                    "8 mm": _reads(scratch.adapter, texts),
-                },
+                "handle_reads": relettered_8,
             },
             "8 mm": small_size,
             "Default": default_size,
         },
         call='set_equation({"name": "Size", "expression": "8mm", '
-        '"configurations": ["8 mm"]})',
+        '"configurations": ["8 mm"]}), activate_configuration, re-letter',
     )
     assert small["status"] == "success", small
     assert small["equation"]["values"] == {"8 mm": pytest.approx(8.0)}, small
     assert small_size["verdict"] == "pass", small_size
     assert default_size["verdict"] == "pass", default_size
+    assert all("8.00" in t for t in relettered_8["after"]), relettered_8
 
     await tools["activate_configuration"]({"name": "Default"})
+    back = await _reletter(tools, lettering)
     refused = await tools["set_equation"]({"name": "Size", "expression": '"Nut" * 2'})
     unchanged = await _size(tools, 19, ring)
     _hide_references(scratch.adapter)
@@ -920,7 +931,7 @@ async def test_a_combination_wrench_sized_by_one_variable(scratch: Any) -> None:
             "refused": [refused["status"], refused.get("error_type")],
             "change": {
                 "box_mm": [at_19["measured_mm"], unchanged["measured_mm"]],
-                "handle_reads": _reads(scratch.adapter, texts),
+                "handle_reads": back["after"],
             },
             "size": unchanged,
         },

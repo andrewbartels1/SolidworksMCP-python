@@ -957,6 +957,27 @@ async def test_add_sketch_text_failure_is_an_error(mcp_server, mock_config):
 
 
 @pytest.mark.asyncio
+async def test_set_sketch_text_gives_before_and_after(mcp_server, mock_config):
+    adapter = _SketchAdapterStub()
+    adapter.set_sketch_text = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"sketch": "Sketch12", "before": ["13.00"], "after": ["19.00"]},
+        )
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "set_sketch_text")
+
+    reply = await tool(input_data={"sketch_name": "Sketch12", "text": "x"})
+    bad = await tool(input_data={"sketch_name": "", "text": "x"})
+
+    adapter.set_sketch_text.assert_awaited_once_with("Sketch12", "x")
+    assert reply["sketch_text"]["after"] == ["19.00"]
+    assert "Sketch12 now reads ['19.00']" in reply["message"]
+    assert bad["error_type"] == "invalid_input"
+
+
+@pytest.mark.asyncio
 async def test_add_ellipse_passes_its_angle_on(mcp_server, mock_config):
     """The angle reaches the adapter and comes back in the reply (0 by default)."""
     adapter = _SketchAdapterStub()

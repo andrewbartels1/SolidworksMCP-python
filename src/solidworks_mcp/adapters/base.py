@@ -888,6 +888,23 @@ class SolidWorksAdapter(ABC):
             error="add_sketch_text is not implemented by this adapter",
         )
 
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Rewrite the text in a sketch, with the sketch open, then rebuild.
+
+        Args:
+            sketch_name (str): The sketch, e.g. ``Sketch12``.
+            text (str): The new text.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``sketch``, ``before`` and ``after``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_sketch_text is not implemented by this adapter",
+        )
+
     async def add_sketch_constraint(
         self,
         entity1: str,

@@ -37,13 +37,34 @@ projected onto the sketch.
   and the text centred at `[60, -2, 0]`
 - **THEN** seen from below the text reads left to right, centred
 
-### Requirement: A linked property follows its dimension
+### Requirement: A linked property shows its dimension when written
 Text containing `$PRP:"name"`, where the custom property `name` holds a
 dimension's name in quotes (`"D1@Sketch3"`), SHALL show that dimension's
-value, and show the new value after the dimension changes and the model
-rebuilds (for example through an equation).
+value at the moment the text is written. SolidWorks doesn't redraw sketch
+text when the model rebuilds, so the text keeps that value until it is
+written again (`set_sketch_text`).
 
-#### Scenario: The size changes
-- **WHEN** the text is `size $PRP:"WrenchSize" mm`, `WrenchSize` is
-  `"D1@Sketch3"` at 13 mm, and an equation changes `D1@Sketch3` to 19 mm
-- **THEN** the text reads `size 19.00 mm`
+#### Scenario: Written at 13 mm
+- **WHEN** the text is `size $PRP:"WrenchSize" mm` and `WrenchSize` is
+  `"D1@Sketch3"`, which is 13 mm
+- **THEN** the text reads `size 13.00 mm`, and still does after an
+  equation changes `D1@Sketch3` to 19 mm and the model rebuilds
+
+### Requirement: Re-letter a sketch's text
+`set_sketch_text` SHALL replace the text of every sketch text in the
+named sketch with `text`, with the sketch open for editing (the only way
+SolidWorks redraws it), close the sketch, rebuild, and reply with the
+sketch, the text each showed before and what it shows now (links
+resolved). A sketch that doesn't exist, or has no text, SHALL fail and
+change nothing.
+
+#### Scenario: The size changed
+- **WHEN** the lettering above is in `Sketch12`, `D1@Sketch3` is now 19 mm,
+  and `set_sketch_text` is called with `Sketch12` and the same
+  `size $PRP:"WrenchSize" mm`
+- **THEN** the reply gives `before` `size 13.00 mm` and `after`
+  `size 19.00 mm`, and the cut from that sketch reads 19.00
+
+#### Scenario: No such sketch
+- **WHEN** `set_sketch_text` is called with `Sketch99`
+- **THEN** it fails as not found and nothing changes

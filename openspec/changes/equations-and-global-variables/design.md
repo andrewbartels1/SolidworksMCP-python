@@ -155,6 +155,19 @@ equations. Probed on SolidWorks 2026 (2026-11-18, scratch parts):
 
 The tool is `add_sketch_text(text, x, y, height, center_at)`.
 
+A linked text does NOT redraw when the model rebuilds. On the wrench at
+Size 19 the lettering still read 13.00 after `ForceRebuild3`,
+`EditRebuild3`, `Extension.Rebuild` (all, forced), with the link written
+with the part's name, after saving, with a plain value in the property,
+and after opening and closing the sketch. Writing `ISketchText.Text`
+outside edit mode changed the string but not the geometry. What works:
+open the sketch (`EditSketch`), write `Text` (the same `$PRP:` string
+re-reads the link: 19.00), close it, rebuild. That is
+`set_sketch_text(sketch_name, text)`; the demo calls it after each size
+change, a visible re-letter step (the user's choice, 2026-11-18). The
+lettering is one sketch text in every configuration, so it shows the
+size it was last re-lettered at.
+
 A sketch text's position can't be driven by an equation, but the
 wrench's handle middle moves with Size (x = 6.51 x Size). So the
 lettering is cut, centred, into the faces of a spare block off the open
