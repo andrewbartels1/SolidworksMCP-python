@@ -1878,6 +1878,8 @@ class MockSolidWorksAdapter(
         start_y: float,
         end_x: float,
         end_y: float,
+        kind: str = "center",
+        through: tuple[float, float] | None = None,
     ) -> AdapterResult[str]:
         """Mock adding a circular arc to sketch.
 
@@ -1888,6 +1890,8 @@ class MockSolidWorksAdapter(
             start_y (float): Arc start point Y.
             end_x (float): Arc end point X.
             end_y (float): Arc end point Y.
+            kind (str): ``center``, ``three_point`` or ``tangent``.
+            through (tuple[float, float] | None): A point on a three-point arc.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -1895,6 +1899,11 @@ class MockSolidWorksAdapter(
         if not self._current_sketch:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+        if kind == "three_point" and through is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="A three_point arc needs a through point",
             )
 
         await asyncio.sleep(self._delays["sketch_operation"] / 2)
@@ -1910,7 +1919,7 @@ class MockSolidWorksAdapter(
         )
 
     async def add_rectangle(
-        self, x1: float, y1: float, x2: float, y2: float
+        self, x1: float, y1: float, x2: float, y2: float, from_center: bool = False
     ) -> AdapterResult[str]:
         """Mock adding a rectangle to sketch.
 
@@ -1919,6 +1928,7 @@ class MockSolidWorksAdapter(
             y1 (float): The y1 value.
             x2 (float): The x2 value.
             y2 (float): The y2 value.
+            from_center (bool): ``x1``/``y1`` is the centre.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -2031,6 +2041,159 @@ class MockSolidWorksAdapter(
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
             data={"sketch": sketch_name, "before": [], "after": [text]},
+        )
+
+    def _no_sketch(self) -> AdapterResult[Any] | None:
+        """The "No active sketch" error, or ``None`` with a sketch open."""
+        if self._current_sketch:
+            return None
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
+
+    def _corner_ids(self, prefix: str, corners: list[list[float]]) -> list[str]:
+        """One new registered id per corner."""
+        ids = [f"{prefix}_{random.randint(1000, 9999)}" for _ in corners]
+        self._sketch_entity_ids.update(ids)
+        self._operation_count += 1
+        return ids
+
+    async def add_sketch_fillet(
+        self, corners: list[list[float]], radius: float
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock rounding sketch corners: one id per corner.
+
+        Args:
+            corners (list[list[float]]): ``[x, y]`` sketch mm.
+            radius (float): Fillet radius in mm.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``ids`` and ``corners``.
+        """
+        if error := self._no_sketch():
+            return error
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"ids": self._corner_ids("Fillet", corners), "corners": corners},
+        )
+
+    async def add_sketch_chamfer(
+        self,
+        corners: list[list[float]],
+        distance: float,
+        distance2: float | None = None,
+        angle: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock bevelling sketch corners: one id per corner.
+
+        Args:
+            corners (list[list[float]]): ``[x, y]`` sketch mm.
+            distance (float): Distance along the first side, mm.
+            distance2 (float | None): Distance along the second side, mm.
+            angle (float | None): Angle from the first side, degrees.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``ids`` and ``corners``.
+        """
+        if error := self._no_sketch():
+            return error
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"ids": self._corner_ids("Chamfer", corners), "corners": corners},
+        )
+
+    async def add_slot(
+        self,
+        kind: str,
+        width: float,
+        start: list[float],
+        end: list[float],
+        center: list[float] | None = None,
+    ) -> AdapterResult[str]:
+        """Mock drawing a slot: a new id; an arc slot needs its centre.
+
+        Args:
+            kind (str): ``straight`` or ``arc``.
+            width (float): Slot width, mm.
+            start (list[float]): First centre (straight) or start (arc).
+            end (list[float]): Second centre (straight) or end (arc).
+            center (list[float] | None): The arc's centre (arc).
+
+        Returns:
+            AdapterResult[str]: The slot's id.
+        """
+        if error := self._no_sketch():
+            return error
+        if kind == "arc" and center is None:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="An arc slot needs its center"
+            )
+        slot_id = f"Slot_{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(slot_id)
+        self._operation_count += 1
+        return AdapterResult(status=AdapterResultStatus.SUCCESS, data=slot_id)
+
+    async def _change_at(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        """Mock trim or extend: the segment count, unchanged."""
+        if error := self._no_sketch():
+            return error
+        self._operation_count += 1
+        count = len(self._sketch_entity_ids)
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"point": point, "segments_before": count, "segments_after": count},
+        )
+
+    async def sketch_trim(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        """Mock trimming at a point.
+
+        Args:
+            point (list[float]): ``[x, y]`` sketch mm.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``point`` and the segment counts.
+        """
+        return await self._change_at(point)
+
+    async def sketch_extend(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        """Mock extending at a point.
+
+        Args:
+            point (list[float]): ``[x, y]`` sketch mm.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``point`` and the segment counts.
+        """
+        return await self._change_at(point)
+
+    async def set_construction_geometry(
+        self, entities: list[str], construction: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock setting construction geometry: known ids only.
+
+        Args:
+            entities (list[str]): Sketch entity ids.
+            construction (bool): Construction or normal.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``entities`` and ``construction``.
+        """
+        if error := self._no_sketch():
+            return error
+        unknown = [e for e in entities if e not in self._sketch_entity_ids]
+        if unknown:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"Unknown sketch entity '{unknown[0]}'. Use the ids the "
+                    "sketch tools returned."
+                ),
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "entities": dict.fromkeys(entities, construction),
+                "construction": construction,
+            },
         )
 
     async def add_polygon(

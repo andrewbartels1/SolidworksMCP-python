@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 145,
+  "total": 151,
   "by_level": {
    "stable": 137,
-   "beta": 0,
+   "beta": 6,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -28,7 +28,7 @@
     "family": "sketching",
     "level": "stable",
     "reason": "",
-    "summary": "Draw a circular arc in the open sketch from its centre, start point and end point, in mm."
+    "summary": "Draw a circular arc in the open sketch: from its centre, through three points, or tangent."
    },
    {
     "name": "add_centerline",
@@ -150,6 +150,13 @@
     "summary": "Draw a closed, axis-aligned rectangle in the open sketch from two opposite corners, in mm."
    },
    {
+    "name": "add_sketch_chamfer",
+    "family": "sketching",
+    "level": "beta",
+    "reason": "new in sketch essentials; its live demo hasn't run yet.",
+    "summary": "Bevel corners of the open sketch, picking each corner by its point."
+   },
+   {
     "name": "add_sketch_constraint",
     "family": "sketching",
     "level": "stable",
@@ -164,11 +171,25 @@
     "summary": "Add a driving dimension to sketch entities: linear, angular, radial, diameter or an ellipse axis."
    },
    {
+    "name": "add_sketch_fillet",
+    "family": "sketching",
+    "level": "beta",
+    "reason": "new in sketch essentials; its live demo hasn't run yet.",
+    "summary": "Round corners of the open sketch to a radius, picking each corner by its point."
+   },
+   {
     "name": "add_sketch_text",
     "family": "sketching",
     "level": "stable",
     "reason": "",
     "summary": "Write text in the open sketch, at a point or centred on one, to deboss or emboss it."
+   },
+   {
+    "name": "add_slot",
+    "family": "sketching",
+    "level": "beta",
+    "reason": "new in sketch essentials; its live demo hasn't run yet.",
+    "summary": "Draw a slot in the open sketch: straight between two centres, or along an arc."
    },
    {
     "name": "add_spline",
@@ -892,6 +913,13 @@
     "summary": "Fix or float a component of the active assembly, or make a sub-assembly rigid or flexible."
    },
    {
+    "name": "set_construction_geometry",
+    "family": "sketching",
+    "level": "beta",
+    "reason": "new in sketch essentials; its live demo hasn't run yet.",
+    "summary": "Make sketch entities construction geometry, or normal again, by id."
+   },
+   {
     "name": "set_custom_property",
     "family": "engineering_data",
     "level": "stable",
@@ -962,6 +990,13 @@
     "summary": "Copy model edges, or a face's whole outline, into the open sketch (Convert Entities)."
    },
    {
+    "name": "sketch_extend",
+    "family": "sketching",
+    "level": "beta",
+    "reason": "new in sketch essentials; its live demo hasn't run yet.",
+    "summary": "Lengthen a sketch entity from its end nearest a point until it meets the next entity."
+   },
+   {
     "name": "sketch_linear_pattern",
     "family": "sketching",
     "level": "stable",
@@ -981,6 +1016,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Offset sketch entities by a distance in mm, outward or inward, e.g. for a wall or a clearance."
+   },
+   {
+    "name": "sketch_trim",
+    "family": "sketching",
+    "level": "beta",
+    "reason": "new in sketch essentials; its live demo hasn't run yet.",
+    "summary": "Trim away the piece of a sketch entity at a point, back to where it meets others."
    },
    {
     "name": "sketch_tutorial_simple_hole",
@@ -1029,11 +1071,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 255,
+   "covered": 266,
    "total": 2838
   },
   "api": {
-   "covered": 298,
+   "covered": 307,
    "total": 5985
   },
   "interfaces": [
@@ -1078,6 +1120,7 @@
      "AddRelation",
      "AddVerticalDimension2",
      "ClearSelection2",
+     "Create3PointArc",
      "CreateArc",
      "CreateCenterLine",
      "CreateCircleByRadius",
@@ -1086,6 +1129,7 @@
      "CreateLine",
      "CreateLinearSketchStepAndRepeat",
      "CreatePoint",
+     "CreateTangentArc",
      "DeleteConfiguration2",
      "EditDelete",
      "EditRebuild3",
@@ -1147,6 +1191,7 @@
      "SketchAddConstraints",
      "SketchMirror",
      "SketchOffset2",
+     "SketchTrim",
      "SketchUseEdge",
      "ViewZoomtofit",
      "ViewZoomtofit2"
@@ -1270,19 +1315,27 @@
    {
     "name": "ISketchManager",
     "covered": [
+     "Create3PointArc",
      "CreateArc",
      "CreateCenterLine",
+     "CreateCenterRectangle",
+     "CreateChamfer",
      "CreateCircleByRadius",
      "CreateCircularSketchStepAndRepeat",
      "CreateCornerRectangle",
      "CreateEllipse",
+     "CreateFillet",
      "CreateLine",
      "CreateLinearSketchStepAndRepeat",
      "CreatePoint",
      "CreatePolygon",
+     "CreateSketchSlot",
      "CreateSpline2",
+     "CreateTangentArc",
      "InsertSketch",
+     "SketchExtend",
      "SketchOffset2",
+     "SketchTrim",
      "SketchUseEdge",
      "SketchUseEdge3"
     ],

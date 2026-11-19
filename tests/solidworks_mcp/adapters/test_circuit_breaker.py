@@ -70,6 +70,24 @@ def cb_with_mock():
     inner.set_sketch_text = AsyncMock(
         return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
     )
+    inner.add_sketch_fillet = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.add_sketch_chamfer = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.add_slot = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.sketch_trim = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.sketch_extend = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.set_construction_geometry = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
     inner.sketch_linear_pattern = AsyncMock(
         return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
     )
@@ -619,7 +637,9 @@ class _DummyAdapter(SolidWorksAdapter):
         """Test helper for add circle."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data="C1")
 
-    async def add_rectangle(self, x1: float, y1: float, x2: float, y2: float):
+    async def add_rectangle(
+        self, x1: float, y1: float, x2: float, y2: float, from_center: bool = False
+    ):
         """Test helper for add rectangle."""
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data="R1")
 
@@ -1163,3 +1183,40 @@ async def test_circuit_breaker_set_sketch_text(cb_with_mock):
     result = await cb.set_sketch_text("Sketch12", "abc")
     assert result.status == AdapterResultStatus.SUCCESS
     inner.set_sketch_text.assert_awaited_once_with("Sketch12", "abc")
+
+
+_ESSENTIALS = [
+    ("add_sketch_fillet", ([[1.0, 2.0]], 3.0)),
+    ("add_sketch_chamfer", ([[1.0, 2.0]], 3.0, 4.0, None)),
+    ("add_slot", ("arc", 8.0, [45.0, 0.0], [25.0, 20.0], [25.0, 0.0])),
+    ("sketch_trim", ([0.0, 2.0],)),
+    ("sketch_extend", ([-3.0, -0.5],)),
+    ("set_construction_geometry", (["Line_1"], False)),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "args"), _ESSENTIALS)
+async def test_circuit_breaker_passes_sketch_essentials_on(cb_with_mock, method, args):
+    """Each sketch-essentials call routes through the breaker unchanged."""
+    cb, inner = cb_with_mock
+    result = await getattr(cb, method)(*args)
+    assert result.status == AdapterResultStatus.SUCCESS
+    getattr(inner, method).assert_awaited_once_with(*args)
+
+
+@pytest.mark.asyncio
+async def test_circuit_breaker_passes_arc_kind_and_centre_rectangle_on(cb_with_mock):
+    cb, inner = cb_with_mock
+    inner.add_arc = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="Arc_1")
+    )
+    inner.add_rectangle = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="R_1")
+    )
+
+    await cb.add_arc(0, 0, 1, 0, 0, 1, "three_point", (2.0, 2.0))
+    await cb.add_rectangle(0, 0, 5, 5, True)
+
+    inner.add_arc.assert_awaited_once_with(0, 0, 1, 0, 0, 1, "three_point", (2.0, 2.0))
+    inner.add_rectangle.assert_awaited_once_with(0, 0, 5, 5, True)

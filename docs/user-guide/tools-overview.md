@@ -67,9 +67,9 @@ These read SolidWorks' installed files and never start it
 
     ---
 
-    Sketches on a plane or a flat face: lines, arcs, circles, rectangles, polygons, splines, relations, dimensions, offsets, mirrors, patterns and edges converted from the model.
+    Sketches on a plane or a flat face: lines, arcs, circles, rectangles, slots, polygons, splines, fillets, chamfers, trim and extend, construction geometry, relations, dimensions, offsets, mirrors, patterns and edges converted from the model.
 
-    [**21 tools available** :octicons-arrow-right-24:](tool-catalog/sketching.md)
+    [**27 tools available** :octicons-arrow-right-24:](tool-catalog/sketching.md)
 
 - :material-technical-draw:{ .lg .middle } **Drawing Tools**
 
@@ -185,7 +185,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 145 Tools**
+**Total: 151 Tools**
 
 ## Deprecated tools
 

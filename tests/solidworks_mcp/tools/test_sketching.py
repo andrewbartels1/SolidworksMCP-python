@@ -1,5 +1,6 @@
 """Tests for SolidWorks sketching tools."""
 
+import math
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -137,6 +138,11 @@ class TestSketchingTools:
                 is_success=True, data={"entity_id": "Line2"}, execution_time=0.2
             )
         )
+        # The drawing call draws normal geometry on SolidWorks; the tool then
+        # makes the new line construction geometry by id.
+        mock_adapter.set_construction_geometry = AsyncMock(
+            return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+        )
 
         tool_func = None
         for tool in await mcp_server.list_tools():
@@ -151,6 +157,7 @@ class TestSketchingTools:
 
         assert result["status"] == "success"
         assert result["line"]["construction"] is True
+        mock_adapter.set_construction_geometry.assert_awaited_once_with(["Line2"], True)
 
     @pytest.mark.asyncio
     async def test_add_circle_center_radius(
@@ -1391,3 +1398,248 @@ async def test_create_sketch_point_in_the_air_is_invalid_input(mcp_server, mock_
     assert reply["error_type"] == "invalid_input"
     assert "[5.0, 60.0, 5.0]" in reply["message"]
     assert adapter._current_sketch is None
+
+
+# --- Sketch essentials ------------------------------------------------------
+
+
+def _essentials_stub(**results: object) -> _SketchAdapterStub:
+    """A sketch stub whose new methods answer with ``results`` (success by default)."""
+    adapter = _SketchAdapterStub()
+    for name in (
+        "add_sketch_fillet",
+        "add_sketch_chamfer",
+        "add_slot",
+        "sketch_trim",
+        "sketch_extend",
+        "set_construction_geometry",
+        "add_arc",
+        "add_rectangle",
+        "add_circle",
+    ):
+        setattr(
+            adapter,
+            name,
+            AsyncMock(return_value=results.get(name, _ok({"ids": ["X_1"]}))),
+        )
+    return adapter
+
+
+@pytest.mark.asyncio
+async def test_corners_are_rounded_and_bevelled(mcp_server, mock_config):
+    adapter = _essentials_stub()
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    fillet = await _tool(mcp_server, "add_sketch_fillet")
+    chamfer = await _tool(mcp_server, "add_sketch_chamfer")
+
+    rounded = await fillet(input_data={"corners": [[-60, -40]], "radius": 10})
+    bevelled = await chamfer(
+        input_data={"corners": [[60, 40]], "distance": 10, "angle": 30}
+    )
+    both = await chamfer(
+        input_data={"corners": [[60, 40]], "distance": 10, "distance2": 5, "angle": 30}
+    )
+    no_corner = await fillet(input_data={"corners": [[1, 2, 3]], "radius": 1})
+
+    adapter.add_sketch_fillet.assert_awaited_once_with([[-60, -40]], 10)
+    adapter.add_sketch_chamfer.assert_awaited_once_with([[60, 40]], 10, None, 30)
+    assert rounded["fillet"] == {"ids": ["X_1"], "radius": 10}
+    assert bevelled["chamfer"]["angle"] == 30
+    assert "Rounded 1 corner(s) to R10 mm" == rounded["message"]
+    assert both["error_type"] == "invalid_input"
+    assert no_corner["error_type"] == "invalid_input"
+
+
+@pytest.mark.asyncio
+async def test_a_corner_that_isnt_there_is_invalid_input(mcp_server, mock_config):
+    adapter = _essentials_stub(
+        add_sketch_fillet=AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="No sketch point at corner [0, 0] mm in the open sketch",
+        )
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    reply = await (await _tool(mcp_server, "add_sketch_fillet"))(
+        input_data={"corners": [[0, 0]], "radius": 1}
+    )
+
+    assert reply["error_type"] == "invalid_input"
+    assert "sketch mm" in reply["hint"]
+
+
+@pytest.mark.asyncio
+async def test_slots_give_their_area(mcp_server, mock_config):
+    adapter = _essentials_stub(add_slot=_ok("Slot_1"))
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "add_slot")
+
+    straight = await tool(
+        input_data={"start": [-40, -15], "end": [-40, 15], "width": 10}
+    )
+    arc = await tool(
+        input_data={
+            "kind": "arc",
+            "center": [25, 0],
+            "start": [45, 0],
+            "end": [25, 20],
+            "width": 8,
+        }
+    )
+    no_centre = await tool(
+        input_data={"kind": "arc", "start": [1, 0], "end": [0, 1], "width": 1}
+    )
+    same = await tool(input_data={"start": [1, 1], "end": [1, 1], "width": 1})
+
+    assert straight["slot"]["id"] == "Slot_1"
+    assert straight["slot"]["area"] == pytest.approx(30 * 10 + math.pi * 25, abs=1e-4)
+    assert arc["slot"]["area"] == pytest.approx(
+        20 * math.pi / 2 * 8 + math.pi * 16, abs=1e-4
+    )
+    assert adapter.add_slot.await_args_list[1].args == (
+        "arc",
+        8,
+        [45, 0],
+        [25, 20],
+        [25, 0],
+    )
+    assert no_centre["error_type"] == "invalid_input"
+    assert same["error_type"] == "invalid_input"
+
+
+@pytest.mark.asyncio
+async def test_trim_and_extend_at_a_point(mcp_server, mock_config):
+    counts = {"point": [0, 2], "segments_before": 4, "segments_after": 4}
+    adapter = _essentials_stub(sketch_trim=_ok(counts), sketch_extend=_ok(counts))
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    trim = await (await _tool(mcp_server, "sketch_trim"))(input_data={"point": [0, 2]})
+    extend = await (await _tool(mcp_server, "sketch_extend"))(
+        input_data={"point": [-3, -0.5]}
+    )
+
+    assert trim["trim"] == counts
+    assert extend["extend"] == counts
+    adapter.sketch_extend.assert_awaited_once_with([-3, -0.5])
+
+
+@pytest.mark.asyncio
+async def test_construction_geometry_by_id(mcp_server, mock_config):
+    adapter = _essentials_stub(
+        set_construction_geometry=_ok(
+            {"entities": {"Line_1": False}, "construction": False}
+        )
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "set_construction_geometry")
+
+    reply = await tool(input_data={"entities": ["Line_1"], "construction": False})
+    empty = await tool(input_data={"entities": []})
+
+    adapter.set_construction_geometry.assert_awaited_once_with(["Line_1"], False)
+    assert reply["message"] == "1 entity(ies) now normal geometry"
+    assert empty["error_type"] == "invalid_input"
+
+
+@pytest.mark.asyncio
+async def test_arcs_of_each_kind(mcp_server, mock_config):
+    adapter = _essentials_stub(add_arc=_ok("Arc_1"))
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "add_arc")
+    ends = {"start_x": -20, "start_y": 35, "end_x": -20, "end_y": 25}
+
+    three = await tool(
+        input_data={"kind": "three_point", "through_x": -25, "through_y": 30, **ends}
+    )
+    tangent = await tool(input_data={"kind": "tangent", **ends})
+    missing = await tool(input_data={"kind": "three_point", "through_y": 30, **ends})
+    no_centre = await tool(input_data=ends)
+
+    assert three["arc"]["through"] == {"x": -25, "y": 30}
+    assert three["arc"]["center"] is None
+    assert tangent["arc"]["kind"] == "tangent"
+    assert adapter.add_arc.await_args_list[0].args == (
+        0.0,
+        0.0,
+        -20,
+        35,
+        -20,
+        25,
+        "three_point",
+        (-25, 30),
+    )
+    assert adapter.add_arc.await_args_list[1].args[6:] == ("tangent", None)
+    assert missing["error_type"] == "invalid_input"
+    assert "through_x" in missing["message"]
+    assert no_centre["error_type"] == "invalid_input"
+
+
+@pytest.mark.asyncio
+async def test_a_rectangle_from_its_centre_gives_its_real_corners(
+    mcp_server, mock_config
+):
+    adapter = _essentials_stub(add_rectangle=_ok("Rectangle_1"))
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    reply = await (await _tool(mcp_server, "add_rectangle"))(
+        input_data={"x1": 0, "y1": 0, "x2": 60, "y2": 40, "from_center": True}
+    )
+
+    adapter.add_rectangle.assert_awaited_once_with(0, 0, 60, 40, True)
+    assert reply["rectangle"]["corner1"] == {"x": -60, "y": -40}
+    assert reply["rectangle"]["corner2"] == {"x": 60, "y": 40}
+    assert (reply["rectangle"]["width"], reply["rectangle"]["height"]) == (120, 80)
+
+
+@pytest.mark.asyncio
+async def test_construction_is_honoured_for_circles_and_rectangles(
+    mcp_server, mock_config
+):
+    adapter = _essentials_stub(
+        add_rectangle=_ok("Rectangle_1"), add_circle=_ok("Circle_1")
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    await (await _tool(mcp_server, "add_rectangle"))(
+        input_data={
+            "x1": 0,
+            "y1": 0,
+            "x2": 6,
+            "y2": 4,
+            "from_center": True,
+            "construction": True,
+        }
+    )
+    plain = await (await _tool(mcp_server, "add_circle"))(
+        input_data={"center_x": 0, "center_y": 0, "radius": 5}
+    )
+
+    adapter.set_construction_geometry.assert_awaited_once_with(["Rectangle_1"], True)
+    assert plain["circle"]["construction"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_construction_setting_that_fails_fails_the_drawing(
+    mcp_server, mock_config
+):
+    adapter = _essentials_stub(
+        add_rectangle=_ok("Rectangle_1"),
+        set_construction_geometry=AdapterResult(
+            status=AdapterResultStatus.ERROR, error="Unknown sketch entity 'R'"
+        ),
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    reply = await (await _tool(mcp_server, "add_rectangle"))(
+        input_data={
+            "x1": 0,
+            "y1": 0,
+            "x2": 6,
+            "y2": 4,
+            "from_center": True,
+            "construction": True,
+        }
+    )
+
+    assert reply["status"] == "error"
+    assert "construction geometry" in reply["message"]

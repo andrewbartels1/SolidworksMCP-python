@@ -4,10 +4,11 @@ Provides tools for creating and editing sketches, including geometric entities l
 lines, circles, rectangles, arcs, and constraints.
 """
 
-from typing import Any, TypeVar
+import math
+from typing import Annotated, Any, Literal, TypeVar
 
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ..adapters.base import SolidWorksAdapter
 from .input_compat import CompatInput
@@ -149,6 +150,7 @@ class AddRectangleInput(CompatInput):
 
     Attributes:
         construction (bool): The construction value.
+        from_center (bool): ``x1``/``y1`` is the centre, ``x2``/``y2`` a corner.
         corner1_x (float | None): The corner1 x value.
         corner1_y (float | None): The corner1 y value.
         corner2_x (float | None): The corner2 x value.
@@ -176,6 +178,11 @@ class AddRectangleInput(CompatInput):
     corner2_x: float | None = Field(default=None, description="Corner 2 X alias")
     corner2_y: float | None = Field(default=None, description="Corner 2 Y alias")
     construction: bool = Field(default=False, description="Construction geometry flag")
+    from_center: bool = Field(
+        default=False,
+        description="x1, y1 is the centre and x2, y2 a corner (a rectangle centred "
+        "there)",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         """Provide model post init support for the add rectangle input.
@@ -205,20 +212,52 @@ class AddArcInput(BaseModel):
     """Input schema for adding an arc to sketch.
 
     Attributes:
-        center_x (float): The center x value.
-        center_y (float): The center y value.
+        kind (str): ``center``, ``three_point`` or ``tangent``.
+        center_x (float | None): The center x value (``center``).
+        center_y (float | None): The center y value (``center``).
         end_x (float): The end x value.
         end_y (float): The end y value.
         start_x (float): The start x value.
         start_y (float): The start y value.
+        through_x (float | None): A point on the arc, x (``three_point``).
+        through_y (float | None): A point on the arc, y (``three_point``).
     """
 
-    center_x: float = Field(description="Arc center X coordinate in mm")
-    center_y: float = Field(description="Arc center Y coordinate in mm")
+    kind: Literal["center", "three_point", "tangent"] = Field(
+        default="center",
+        description="center: centre, start and end; three_point: start, end and a "
+        "point it passes through; tangent: from the end of an existing entity, "
+        "tangent to it",
+    )
+    center_x: float | None = Field(
+        default=None, description="Arc center X in mm (kind center)"
+    )
+    center_y: float | None = Field(
+        default=None, description="Arc center Y in mm (kind center)"
+    )
     start_x: float = Field(description="Arc start point X coordinate in mm")
     start_y: float = Field(description="Arc start point Y coordinate in mm")
     end_x: float = Field(description="Arc end point X coordinate in mm")
     end_y: float = Field(description="Arc end point Y coordinate in mm")
+    through_x: float | None = Field(
+        default=None, description="X of a point the arc passes through (three_point)"
+    )
+    through_y: float | None = Field(
+        default=None, description="Y of a point the arc passes through (three_point)"
+    )
+
+    @model_validator(mode="after")
+    def _points_for_kind(self) -> "AddArcInput":
+        """Each kind needs its own points."""
+        needed = {
+            "center": ("center_x", "center_y"),
+            "three_point": ("through_x", "through_y"),
+            "tangent": (),
+        }[self.kind]
+        missing = [name for name in needed if getattr(self, name) is None]
+        if missing:
+            raise ValueError(f"a {self.kind} arc needs {' and '.join(missing)}")
+        return self
 
 
 class AddSplineInput(BaseModel):
@@ -371,6 +410,150 @@ class SketchConvertEntitiesInput(CompatInput):
                 raise ValueError("each point must be [x, y, z] in mm")
 
 
+#: A point in the open sketch, ``[x, y]`` in mm.
+SketchPoint = Annotated[list[float], Field(min_length=2, max_length=2)]
+
+
+class AddSketchFilletInput(CompatInput):
+    """Input schema for rounding sketch corners.
+
+    Attributes:
+        corners (list[list[float]]): Corners, ``[x, y]`` sketch mm.
+        radius (float): Fillet radius in mm.
+    """
+
+    corners: list[SketchPoint] = Field(
+        min_length=1,
+        description="Corners to round, each [x, y] in sketch mm where two "
+        "entities meet, e.g. a rectangle's corner",
+    )
+    radius: float = Field(gt=0, description="Fillet radius in mm")
+
+
+class AddSketchChamferInput(CompatInput):
+    """Input schema for bevelling sketch corners.
+
+    Attributes:
+        corners (list[list[float]]): Corners, ``[x, y]`` sketch mm.
+        distance (float): Distance along the first side, mm.
+        distance2 (float | None): Distance along the second side, mm.
+        angle (float | None): Angle from the first side, degrees.
+    """
+
+    corners: list[SketchPoint] = Field(
+        min_length=1,
+        description="Corners to bevel, each [x, y] in sketch mm where two entities meet",
+    )
+    distance: float = Field(gt=0, description="Distance along each side in mm")
+    distance2: float | None = Field(
+        default=None, gt=0, description="A different distance along the second side"
+    )
+    angle: float | None = Field(
+        default=None,
+        gt=0,
+        lt=90,
+        description="Angle in degrees from the first side, with `distance`",
+    )
+
+    @model_validator(mode="after")
+    def _one_way(self) -> "AddSketchChamferInput":
+        """``distance2`` and ``angle`` are two different chamfers: one at most."""
+        if self.distance2 is not None and self.angle is not None:
+            raise ValueError("give distance2 or angle, not both")
+        return self
+
+
+class AddSlotInput(CompatInput):
+    """Input schema for drawing a slot.
+
+    Attributes:
+        kind (str): ``straight`` or ``arc``.
+        width (float): Slot width in mm.
+        start (list[float]): Straight: first end's centre; arc: start on the arc.
+        end (list[float]): Straight: second end's centre; arc: end on the arc.
+        center (list[float] | None): Arc: the centre of the arc it follows.
+    """
+
+    kind: Literal["straight", "arc"] = Field(
+        default="straight", description="straight, or arc (follows an arc)"
+    )
+    width: float = Field(gt=0, description="Slot width in mm")
+    start: SketchPoint = Field(
+        description="[x, y] mm: a straight slot's first end centre, or where an "
+        "arc slot starts on its arc"
+    )
+    end: SketchPoint = Field(
+        description="[x, y] mm: a straight slot's second end centre, or where an "
+        "arc slot ends (counter-clockwise from start)"
+    )
+    center: SketchPoint | None = Field(
+        default=None, description="[x, y] mm, an arc slot's arc centre"
+    )
+
+    @model_validator(mode="after")
+    def _points(self) -> "AddSlotInput":
+        """An arc slot needs its centre; the two ends must differ."""
+        if self.kind == "arc" and self.center is None:
+            raise ValueError("an arc slot needs center")
+        if self.start == self.end:
+            raise ValueError("start and end must differ")
+        return self
+
+
+class SketchPointInput(CompatInput):
+    """Input schema for trimming or extending at a point.
+
+    Attributes:
+        point (list[float]): ``[x, y]`` sketch mm on the entity.
+    """
+
+    point: SketchPoint = Field(
+        description="[x, y] in sketch mm on the entity: on the piece to remove "
+        "(trim), or near the end to lengthen (extend)"
+    )
+
+
+class SetConstructionGeometryInput(CompatInput):
+    """Input schema for making entities construction geometry.
+
+    Attributes:
+        entities (list[str]): Sketch entity ids.
+        construction (bool): Construction (``True``) or normal (``False``).
+    """
+
+    entities: list[Annotated[str, Field(min_length=1)]] = Field(
+        min_length=1, description="Entity ids from the sketch tools, e.g. Line_3"
+    )
+    construction: bool = Field(
+        default=True, description="true for construction geometry, false for normal"
+    )
+
+
+def slot_area(
+    kind: str,
+    width: float,
+    start: list[float],
+    end: list[float],
+    center: list[float] | None,
+) -> float:
+    """A slot's area in mm²: its centreline's length times its width, plus
+    the two half-circle ends (one circle of the width's diameter).
+
+    An arc slot's centreline runs counter-clockwise about ``center`` from
+    ``start`` to ``end``.
+    """
+    ends = math.pi * (width / 2.0) ** 2
+    if kind == "arc" and center is not None:
+        radius = math.dist(center, start)
+        turn = math.atan2(end[1] - center[1], end[0] - center[0]) - math.atan2(
+            start[1] - center[1], start[0] - center[0]
+        )
+        length = radius * (turn % (2 * math.pi))
+    else:
+        length = math.dist(start, end)
+    return length * width + ends
+
+
 async def register_sketching_tools(
     mcp: FastMCP, adapter: SolidWorksAdapter, config: dict[str, Any]
 ) -> int:
@@ -402,6 +585,17 @@ async def register_sketching_tools(
     # create_sketch was asked for is given when exit_sketch closes it:
     # SolidWorks' name -> the name asked for.
     names_on_exit: dict[str, str] = {}
+
+    async def _honour_construction(entity_id: Any, construction: bool) -> None:
+        """Make a new entity construction geometry when ``construction`` asks.
+
+        The drawing calls themselves draw normal geometry on SolidWorks, so a
+        tool's ``construction`` flag is applied afterwards, by id.
+        """
+        if not construction or not entity_id:
+            return
+        made = await adapter.set_construction_geometry([str(entity_id)], True)
+        require_success(made, context="Failed to make it construction geometry")
 
     @mcp.tool()
     async def create_sketch(input_data: CreateSketchInput) -> dict[str, Any]:
@@ -506,6 +700,7 @@ async def register_sketching_tools(
             if isinstance(result.data, dict)
             else result.data
         )
+        await _honour_construction(line_id, input_data.construction)
         x1, y1 = input_data.x1 or 0.0, input_data.y1 or 0.0
         x2, y2 = input_data.x2 or 0.0, input_data.y2 or 0.0
         return {
@@ -556,6 +751,7 @@ async def register_sketching_tools(
             if isinstance(result.data, dict)
             else result.data
         )
+        await _honour_construction(circle_id, input_data.construction)
         return {
             "status": "success",
             "message": f"Added circle at ({input_data.center_x}, {input_data.center_y}) with radius {input_data.radius}mm",
@@ -586,7 +782,15 @@ async def register_sketching_tools(
             dict[str, Any]: The rectangle added.
         """
         input_data = normalize_input(input_data, AddRectangleInput)
-        if hasattr(adapter, "add_sketch_rectangle"):
+        if input_data.from_center:
+            result = await adapter.add_rectangle(
+                input_data.x1,  # type: ignore[arg-type]
+                input_data.y1,  # type: ignore[arg-type]
+                input_data.x2,  # type: ignore[arg-type]
+                input_data.y2,  # type: ignore[arg-type]
+                True,
+            )
+        elif hasattr(adapter, "add_sketch_rectangle"):
             result = await adapter.add_sketch_rectangle(
                 input_data.x1,
                 input_data.y1,
@@ -608,8 +812,12 @@ async def register_sketching_tools(
             if isinstance(result.data, dict)
             else result.data
         )
+        await _honour_construction(rect_id, input_data.construction)
         rx1, ry1 = input_data.x1 or 0.0, input_data.y1 or 0.0
         rx2, ry2 = input_data.x2 or 0.0, input_data.y2 or 0.0
+        if input_data.from_center:
+            # x1, y1 is the centre: the real corners mirror x2, y2 through it.
+            rx1, ry1 = 2 * rx1 - rx2, 2 * ry1 - ry2
         width = abs(rx2 - rx1)
         height = abs(ry2 - ry1)
 
@@ -618,6 +826,7 @@ async def register_sketching_tools(
             "message": f"Added rectangle from ({rx1}, {ry1}) to ({rx2}, {ry2})",
             "rectangle": {
                 "id": rect_id,
+                "from_center": input_data.from_center,
                 "corner1": {"x": rx1, "y": ry1},
                 "corner2": {"x": rx2, "y": ry2},
                 "construction": input_data.construction,
@@ -699,38 +908,61 @@ async def register_sketching_tools(
 
     @mcp.tool()
     async def add_arc(input_data: AddArcInput) -> dict[str, Any]:
-        """Draw a circular arc in the open sketch from its centre, start point and end point, in mm.
+        """Draw a circular arc in the open sketch: from its centre, through three points, or tangent.
 
-        Use it for rounded ends and curved edges of a profile. Needs: an open sketch
-        (`create_sketch`). Changes: adds an arc. Returns: `arc` with `id`, `center`,
-        `start_point` and `end_point`. Its `id` is what `add_sketch_constraint` and
+        Use it for rounded ends and curved edges of a profile. `kind` `center` (the
+        default) takes the centre, start and end, counter-clockwise; `three_point`
+        takes start, end and a point the arc passes through (`through_x`,
+        `through_y`); `tangent` starts at the end of an existing entity (`start`) and
+        leaves tangent to it. Needs: an open sketch (`create_sketch`). Changes: adds an
+        arc. Returns: `arc` with `id`, `kind`, `center`, `start_point` and
+        `end_point`. Its `id` is what `add_sketch_constraint` and
         `add_sketch_dimension` take.
 
         Args:
-            input_data: The arc. `center_x`, `center_y`, `start_x`, `start_y`,
-                `end_x` and `end_y` (mm) are all required.
+            input_data: The arc. `start_x`, `start_y`, `end_x` and `end_y` (mm) are
+                required; `center_x`, `center_y` for `center`; `through_x`,
+                `through_y` for `three_point`.
 
         Returns:
             dict[str, Any]: The arc added.
         """
         input_data = normalize_input(input_data, AddArcInput)
+        through = (
+            (input_data.through_x, input_data.through_y)
+            if input_data.through_x is not None and input_data.through_y is not None
+            else None
+        )
         result = await adapter.add_arc(
-            input_data.center_x,
-            input_data.center_y,
+            input_data.center_x or 0.0,
+            input_data.center_y or 0.0,
             input_data.start_x,
             input_data.start_y,
             input_data.end_x,
             input_data.end_y,
+            input_data.kind,
+            through,
         )
 
         require_success(result, context="Failed to add arc")
         arc_id = result.data
+        center = (
+            {"x": input_data.center_x, "y": input_data.center_y}
+            if input_data.kind == "center"
+            else None
+        )
         return {
             "status": "success",
-            "message": f"Added arc centered at ({input_data.center_x}, {input_data.center_y})",
+            "message": f"Added a {input_data.kind} arc from "
+            f"({input_data.start_x}, {input_data.start_y}) to "
+            f"({input_data.end_x}, {input_data.end_y})",
             "arc": {
                 "id": arc_id,
-                "center": {"x": input_data.center_x, "y": input_data.center_y},
+                "kind": input_data.kind,
+                "center": center,
+                "through": (
+                    {"x": through[0], "y": through[1]} if through is not None else None
+                ),
                 "start_point": {
                     "x": input_data.start_x,
                     "y": input_data.start_y,
@@ -1232,14 +1464,209 @@ async def register_sketching_tools(
             "execution_time": result.execution_time,
         }
 
-    # Additional sketch tools can be added here in the future:
-    # - add_arc (3-point arc, center-point arc)
-    # - add_spline (free-form curves)
-    # - add_dimension (dimensional constraints)
-    # - add_relation (geometric constraints like parallel, perpendicular)
-    # - add_pattern (circular, linear patterns)
-    # - trim_entities (trim overlapping geometry)
-    # - mirror_entities (mirror sketch geometry)
+    @mcp.tool()
+    async def add_sketch_fillet(input_data: AddSketchFilletInput) -> dict[str, Any]:
+        """Round corners of the open sketch to a radius, picking each corner by its point.
+
+        Use it for rounded corners on a plate or a profile, before extruding it. Give
+        each corner's `[x, y]` in sketch mm, where two entities meet (for a rectangle,
+        its corners). Needs: an open sketch (`create_sketch`) with entities meeting at
+        each corner. Changes: each corner becomes an arc and the entities either side
+        are trimmed back to it. Returns: `fillet` with one `id` per corner, the
+        `corners` and the `radius`. A corner with no sketch point fails as
+        `invalid_input` and nothing changes.
+
+        Args:
+            input_data: `corners` (a list of `[x, y]` mm) and `radius` (mm).
+
+        Returns:
+            dict[str, Any]: The fillets added.
+        """
+        input_data = normalize_input(input_data, AddSketchFilletInput)
+        result = await adapter.add_sketch_fillet(input_data.corners, input_data.radius)
+        require_success(result, context="Failed to round the sketch corners")
+        made: dict[str, Any] = result.data or {}
+        return {
+            "status": "success",
+            "message": f"Rounded {len(input_data.corners)} corner(s) to "
+            f"R{input_data.radius:g} mm",
+            "fillet": {**made, "radius": input_data.radius},
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def add_sketch_chamfer(input_data: AddSketchChamferInput) -> dict[str, Any]:
+        """Bevel corners of the open sketch, picking each corner by its point.
+
+        Use it for chamfered corners on a profile. `distance` alone cuts the same
+        distance along both sides; add `distance2` for a different second side, or
+        `angle` (degrees) for a distance and an angle. Needs: an open sketch with
+        entities meeting at each corner (`[x, y]` in sketch mm). Changes: each corner
+        becomes a line and the entities either side are trimmed back to it. Returns:
+        `chamfer` with one `id` per corner, the `corners` and the sizes. A corner
+        with no sketch point fails as `invalid_input` and nothing changes.
+
+        Args:
+            input_data: `corners` and `distance` (mm) are required; `distance2` (mm)
+                or `angle` (degrees), not both.
+
+        Returns:
+            dict[str, Any]: The chamfers added.
+        """
+        input_data = normalize_input(input_data, AddSketchChamferInput)
+        result = await adapter.add_sketch_chamfer(
+            input_data.corners,
+            input_data.distance,
+            input_data.distance2,
+            input_data.angle,
+        )
+        require_success(result, context="Failed to bevel the sketch corners")
+        made: dict[str, Any] = result.data or {}
+        return {
+            "status": "success",
+            "message": f"Bevelled {len(input_data.corners)} corner(s)",
+            "chamfer": {
+                **made,
+                "distance": input_data.distance,
+                "distance2": input_data.distance2,
+                "angle": input_data.angle,
+            },
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def add_slot(input_data: AddSlotInput) -> dict[str, Any]:
+        """Draw a slot in the open sketch: straight between two centres, or along an arc.
+
+        Use it for adjustment slots and keyways, then cut it (`create_cut_extrude`).
+        A straight slot takes its two end centres, `start` and `end`. An arc slot
+        (`kind` `arc`) takes the `center` of the arc it follows and `start` and `end`
+        on that arc, counter-clockwise. Needs: an open sketch (`create_sketch`).
+        Changes: adds one closed slot. Returns: `slot` with its `id`, the points, the
+        `width` and its `area` (mm²).
+
+        Args:
+            input_data: `width` (mm), `start` and `end` (`[x, y]` mm) are required;
+                `kind` is `straight`; `center` for an arc slot.
+
+        Returns:
+            dict[str, Any]: The slot added.
+        """
+        input_data = normalize_input(input_data, AddSlotInput)
+        result = await adapter.add_slot(
+            input_data.kind,
+            input_data.width,
+            input_data.start,
+            input_data.end,
+            input_data.center,
+        )
+        require_success(result, context="Failed to draw the slot")
+        area = slot_area(
+            input_data.kind,
+            input_data.width,
+            input_data.start,
+            input_data.end,
+            input_data.center,
+        )
+        return {
+            "status": "success",
+            "message": f"Drew a {input_data.kind} slot {input_data.width:g} mm wide",
+            "slot": {
+                "id": result.data,
+                "kind": input_data.kind,
+                "start": input_data.start,
+                "end": input_data.end,
+                "center": input_data.center,
+                "width": input_data.width,
+                "area": round(area, 4),
+            },
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def sketch_trim(input_data: SketchPointInput) -> dict[str, Any]:
+        """Trim away the piece of a sketch entity at a point, back to where it meets others.
+
+        Use it to clean up overlapping shapes into one profile, such as the arc inside
+        a keyhole. `point` (`[x, y]` sketch mm) is on the piece to remove; an entity
+        that meets nothing is removed whole. Needs: an open sketch with an entity at
+        the point. Changes: removes that piece. Returns: `trim` with the `point` and
+        the sketch's `segments_before` and `segments_after`. A trimmed entity's id may
+        no longer name a whole segment. Nothing at the point fails as `invalid_input`.
+
+        Args:
+            input_data: `point`, `[x, y]` in sketch mm.
+
+        Returns:
+            dict[str, Any]: The trim.
+        """
+        input_data = normalize_input(input_data, SketchPointInput)
+        result = await adapter.sketch_trim(input_data.point)
+        require_success(result, context="Failed to trim the sketch")
+        return {
+            "status": "success",
+            "message": f"Trimmed at {input_data.point} mm",
+            "trim": result.data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def sketch_extend(input_data: SketchPointInput) -> dict[str, Any]:
+        """Lengthen a sketch entity from its end nearest a point until it meets the next entity.
+
+        Use it to close a gap, such as lines that stop short of a circle. `point`
+        (`[x, y]` sketch mm) is on the entity, near the end to lengthen. Needs: an
+        open sketch with an entity at the point and another in its way. Changes: that
+        end moves to the next entity. Returns: `extend` with the `point` and the
+        segment counts. Nothing at the point, or nothing to reach, fails as
+        `invalid_input`.
+
+        Args:
+            input_data: `point`, `[x, y]` in sketch mm.
+
+        Returns:
+            dict[str, Any]: The extension.
+        """
+        input_data = normalize_input(input_data, SketchPointInput)
+        result = await adapter.sketch_extend(input_data.point)
+        require_success(result, context="Failed to extend the sketch entity")
+        return {
+            "status": "success",
+            "message": f"Extended the entity at {input_data.point} mm",
+            "extend": result.data,
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def set_construction_geometry(
+        input_data: SetConstructionGeometryInput,
+    ) -> dict[str, Any]:
+        """Make sketch entities construction geometry, or normal again, by id.
+
+        Use it for reference lines and circles a feature should ignore, such as a
+        line to dimension from or a bolt circle. Needs: an open sketch and ids the
+        sketch tools returned. Changes: each entity's construction setting (setting it
+        to what it already is changes nothing). Returns: `construction_geometry` with
+        each id's state. An unknown id fails as `invalid_input` and nothing changes.
+
+        Args:
+            input_data: `entities` (ids) is required; `construction` is on.
+
+        Returns:
+            dict[str, Any]: The entities' states.
+        """
+        input_data = normalize_input(input_data, SetConstructionGeometryInput)
+        result = await adapter.set_construction_geometry(
+            input_data.entities, input_data.construction
+        )
+        require_success(result, context="Failed to set construction geometry")
+        kind = "construction" if input_data.construction else "normal"
+        return {
+            "status": "success",
+            "message": f"{len(input_data.entities)} entity(ies) now {kind} geometry",
+            "construction_geometry": result.data,
+            "execution_time": result.execution_time,
+        }
 
     @mcp.tool()
     async def sketch_tutorial_simple_hole() -> dict[str, Any]:
