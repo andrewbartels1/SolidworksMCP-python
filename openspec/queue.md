@@ -41,6 +41,7 @@ Last updated 2026-11-16.
 | 28 | Restricted VBA source: `SOLIDWORKS_MCP_ALLOW_VBA_SOURCE` = off / restricted / full; `restricted` checks the source against the SolidWorks type library and a blocklist before it runs, with every default and option disclosed in the docs (the user's choice 2026-11-17) | none | `vba-source-restricted` (archived) | Done 2026-11-17 (#248), checked live: restricted source runs, a `Shell` line is refused, `off` refuses |
 | 29 | Equations and global variables: `list_equations`, `set_equation` (add or change, in all configurations by default) and `delete_equation`, so one value drives several dimensions. The base for macro-driven parametric features | none | `equations-and-global-variables` | Built, unit-tested; live check pending (`tests/live/test_live_sw_equations.py`) |
 | 30 | Build a part from an engineering drawing (image or PDF): research first, then an OpenSpec change for a first version | #249 | not yet written | Research to do (the user's request 2026-11-17) |
+| 31 | `generate_drawing_package` fits every title-block field the sheet format fills from a property, not just DWG NO. and TITLE | #158 (part) | `title-block-fit-every-field` | Built, unit-tested; checked live 2026-11-18 (`test_live_sw_drawing_package_tools.py::test_generate_drawing_package_on_a_block`) |
 ## Removed tools (item 10, release 2.1.0)
 
 33 tools were registered but never implemented: every call returned

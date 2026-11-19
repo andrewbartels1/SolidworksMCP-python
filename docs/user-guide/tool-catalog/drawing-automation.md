@@ -98,6 +98,8 @@ Set the active drawing sheet's scale, e.g. 1:2; views that use the sheet scale f
 
 Create a complete A3 drawing of a part or assembly in one call, and save it with a PDF.
 
+Every title-block field the sheet format fills from a property (DWG NO., TITLE, material, drawn by and the rest) is shrunk until it fits its box; the reply's `title_block` lists each one with `fits` and its text height before and after.
+
 **Prerequisite:** SolidWorks running
 
 **Parameters:**
@@ -107,7 +109,7 @@ Create a complete A3 drawing of a part or assembly in one call, and save it with
 | `model_path` | `str` | ✅ |  | Full path to the .SLDPRT or .SLDASM |
 | `output_dir` | `str?` | — | `null` | Where to save the drawing; the model's folder when omitted |
 | `title` | `str?` | — | `null` | Short title, e.g. 'Mounting Plate - Rev A'; the file name when omitted |
-| `subtitle` | `str?` | — | `null` | Sheet title, e.g. 'Base support' |
+| `subtitle` | `str?` | — | `null` | A second, smaller line under the TITLE (ISO 7200's supplementary title), e.g. 'Base support' |
 | `drawing_number` | `str?` | — | `null` | DWG NO., also the drawing file name, e.g. 'MP-RevA-01' |
 | `author` | `str` | — | `""` | DRAWN name |
 | `revision` | `str` | — | `"A"` | Revision letter |
@@ -115,7 +117,7 @@ Create a complete A3 drawing of a part or assembly in one call, and save it with
 | `notes` | `list[str]` | — | `[]` | Extra note lines (material, process, connections); 3-7 lines in total |
 | `include_isometric` | `bool` | — | `true` | Add an isometric view |
 | `write_model_properties` | `bool` | — | `true` | Write Description/Material/Weight into the model so the title block shows them, and save it |
-| `title_block_text_height_mm` | `float?` | — | `null` | Largest text height (mm) for the title block's DWG NO. and TITLE, e.g. 3 for smaller text. By default they keep the sheet format's height and are only shrunk to fit their boxes. |
+| `title_block_text_height_mm` | `float?` | — | `null` | Largest text height (mm) for the title block's fields (DWG NO., TITLE and every other field the format fills from a property), e.g. 3 for smaller text. By default they keep the sheet format's height and are only shrunk to fit their boxes. |
 | `include_bom` | `bool` | — | `false` | Assemblies only: put a bill of materials in the top of the isometric view's cell, with the isometric fitted below it |
 
 **Sample call:**
