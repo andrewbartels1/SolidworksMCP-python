@@ -1195,8 +1195,10 @@ def _set_sketch_text_impl(
         text: The new text; ``$PRP:"name"`` shows a custom property.
 
     Returns:
-        AdapterResult with ``sketch``, ``before`` and ``after``: each text
-        as SolidWorks showed it, and shows it now.
+        AdapterResult with ``sketch``, ``before`` and ``after``: each text's
+        string before and after (a ``$PRP:`` link is read when the string
+        is asked for, so ``before`` can already show a new value the
+        lettering doesn't).
     """
 
     def _operation() -> dict[str, Any]:

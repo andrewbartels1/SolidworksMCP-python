@@ -54,16 +54,17 @@ written again (`set_sketch_text`).
 `set_sketch_text` SHALL replace the text of every sketch text in the
 named sketch with `text`, with the sketch open for editing (the only way
 SolidWorks redraws it), close the sketch, rebuild, and reply with the
-sketch, the text each showed before and what it shows now (links
-resolved). A sketch that doesn't exist, or has no text, SHALL fail and
+sketch and each text's string before and after (links read when
+asked, so `before` can already hold a new value the lettering doesn't
+show yet). A sketch that doesn't exist, or has no text, SHALL fail and
 change nothing.
 
 #### Scenario: The size changed
 - **WHEN** the lettering above is in `Sketch12`, `D1@Sketch3` is now 19 mm,
   and `set_sketch_text` is called with `Sketch12` and the same
   `size $PRP:"WrenchSize" mm`
-- **THEN** the reply gives `before` `size 13.00 mm` and `after`
-  `size 19.00 mm`, and the cut from that sketch reads 19.00
+- **THEN** the reply's `after` is `size 19.00 mm`, and the cut from that
+  sketch reads 19.00
 
 #### Scenario: No such sketch
 - **WHEN** `set_sketch_text` is called with `Sketch99`
