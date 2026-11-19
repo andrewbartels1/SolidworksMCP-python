@@ -51,7 +51,7 @@ from typing import Any
 import pytest
 
 from solidworks_mcp.adapters import sw_type_info
-from tests.live.evidence import evidence
+from tests.live.evidence import evidence, starting
 from tests.live.test_live_sw_beta_tools import _sketch
 from tests.live.test_live_sw_equations import _tools
 from tests.live.test_live_sw_ujoint_tool_gaps import _plane
@@ -689,6 +689,9 @@ async def build_wrench(
         axis (the lettering's pattern direction) and a dimension that is
         Size (the lettering's link).
     """
+    starting(
+        "Building a 13 mm wrench: the handle", call="create_part, create_extrusion"
+    )
     assert (await tools["create_part"]({"name": "wrench"}))["status"] == "success"
     bar = await _sized_sketch(
         tools,
@@ -705,6 +708,10 @@ async def build_wrench(
     await _flatten(tools, adapter, flip=False)
     await _flatten(tools, adapter, flip=True)
 
+    starting(
+        "Building: the box end (ring and 12-point socket)",
+        call="create_extrusion, create_cut_extrude, pattern_linear",
+    )
     box_features, ring = await _box_end(tools, adapter)
     x_axis = await tools["create_axis"]({"reference": "x"})
     tried = []
@@ -733,6 +740,10 @@ async def build_wrench(
 
     # The pattern's seed near the origin pokes out of the open end (it's
     # tilted and raised), so it is cut away; the open end then fills the gap.
+    starting(
+        "Building: the open end and its curved jaw",
+        call="create_extrusion, add_ellipse, create_cut_extrude",
+    )
     await _through_circle(tools, round(_mm("BoxHead") * CLEARANCE, 4))
     assert await _one_body(tools), "the box end isn't joined to the handle"
     head = await _sized_sketch(
@@ -749,6 +760,10 @@ async def build_wrench(
     y_axis = await tools["create_axis"]({"reference": "y"})
     across = await _jaw(tools, adapter, str(y_axis["axis"]["name"]), ring)
     relief = await _relief(tools, across)
+    starting(
+        "Building: fillets where the heads meet the handle, then steel",
+        call="add_fillet x 2, set_material",
+    )
     await _necks(tools, ring)
     steel = await tools["set_material"](
         {"material_name": MATERIAL, "database": MATERIAL_LIBRARY}
@@ -885,6 +900,10 @@ async def _demo(scratch: Any) -> None:
         ]
     ), listed
 
+    starting(
+        "Adding Size = 13mm, six variables and an equation per dimension",
+        call="set_equation x 25",
+    )
     added = [await tools["set_equation"]({"name": "Size", "expression": "13mm"})]
     for name, ratio in RATIOS.items():
         added.append(
@@ -916,6 +935,10 @@ async def _demo(scratch: Any) -> None:
     _frame(
         scratch.adapter,
         room_for=wrench_box(19, ring)[0] / wrench_box(SIZE_MM, ring)[0],
+    )
+    starting(
+        "Lettering the handle's middle",
+        call="add_sketch_text x 2, create_cut_extrude, pattern_linear",
     )
     lettering, letters = await _lettering(
         tools, scratch.adapter, x_axis, size_dimension
@@ -956,6 +979,10 @@ async def _demo(scratch: Any) -> None:
     assert all(t["status"] == "success" for t in tied), tied
     assert all("13 mm" in t for t in letters), letters
 
+    starting(
+        "Size = 19mm, then re-letter",
+        call='set_equation({"name": "Size", "expression": "19mm"}), set_sketch_text x 2',
+    )
     grown = await tools["set_equation"]({"name": "Size", "expression": "19mm"})
     at_19 = await _size(tools, 19, ring)
     relettered_19 = await _reletter(tools, lettering, letters)
@@ -978,6 +1005,10 @@ async def _demo(scratch: Any) -> None:
     assert at_19["verdict"] == "pass", at_19
     assert all("19 mm" in t for t in relettered_19["after"]), relettered_19
 
+    starting(
+        'Size = 8mm in configuration "8 mm" only, then re-letter',
+        call="create_configuration, set_equation, activate_configuration, set_sketch_text x 2",
+    )
     made = await tools["create_configuration"]({"name": "8 mm"})
     assert made["status"] == "success", made
     small = await tools["set_equation"](
@@ -1015,6 +1046,10 @@ async def _demo(scratch: Any) -> None:
     assert default_size["verdict"] == "pass", default_size
     assert all("8 mm" in t for t in relettered_8["after"]), relettered_8
 
+    starting(
+        'Back to Default (19 mm), re-letter, then "Size" = "Nut" * 2',
+        call="activate_configuration, set_sketch_text x 2, set_equation",
+    )
     await tools["activate_configuration"]({"name": "Default"})
     back = await _reletter(tools, lettering, relettered_8["after"])
     refused = await tools["set_equation"]({"name": "Size", "expression": '"Nut" * 2'})
