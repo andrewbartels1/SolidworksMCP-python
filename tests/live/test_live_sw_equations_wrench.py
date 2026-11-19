@@ -106,8 +106,10 @@ SPARE_X_MM = (-260.0, -120.0)
 SPARE_CENTRE_MM = -190.0
 _ISO_VIEW = 7  # swStandardViews_e.swIsometricView
 #: ``swUserPreferenceToggle_e``: swDisplayAxes, swDisplayPlanes,
-#: swDisplayOrigins, swDisplayTemporaryAxes.
-_HIDDEN_REFERENCES = (4, 5, 6, 7)
+#: swDisplayOrigins, swDisplayTemporaryAxes, swDisplaySketches. Sketches
+#: too: the lettering's, off the open end, would make zoom-to-fit frame
+#: them and leave the wrench tiny.
+_HIDDEN_REFERENCES = (4, 5, 6, 7, 196)
 
 
 def _hide_references(adapter: Any) -> None:
@@ -591,7 +593,9 @@ async def _lettering(
         assert cut["status"] == "success", cut
         cuts.append(cut["cut_extrude"]["name"])
     tried = []
-    for reverse in (False, True):
+    # Reversed first: from the spare block the handle lies that way on the
+    # x axis (every run so far); the other way is the fallback.
+    for reverse in (True, False):
         moved = await tools["pattern_linear"](
             {
                 "features": cuts,
