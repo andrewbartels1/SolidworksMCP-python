@@ -1148,8 +1148,13 @@ def _add_sketch_text_impl(
     def _text_operation() -> dict[str, Any]:
         model = adapter.currentModel
         model.ClearSelection2(True)
+        # Centred text starts at its target, so it never shows elsewhere
+        # (at the sketch's origin) before it is moved into place.
+        at_x, at_y = x / 1000.0, y / 1000.0
+        if center_at is not None:
+            at_x, at_y, _z = _to_sketch_space(adapter, [c / 1000.0 for c in center_at])
         inserted = model.InsertSketchText(
-            x / 1000.0, y / 1000.0, 0.0, text, 0, 0, 0, _TEXT_NORMAL, _TEXT_NORMAL
+            at_x, at_y, 0.0, text, 0, 0, 0, _TEXT_NORMAL, _TEXT_NORMAL
         )
         model.ClearSelection2(True)
         if not inserted:

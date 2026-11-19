@@ -2827,11 +2827,14 @@ def test_sketch_text_centred_on_a_model_point() -> None:
         _Edge((0.040, 0.002, 0.004), (0.040, 0.002, 0.000)),
     )
     text = _SketchText("abc", edges)
-    adapter, _calls = _text_adapter(text)
+    adapter, calls = _text_adapter(text)
 
     result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 4.0, [60.0, 2.0, 1.0])
 
     assert result.is_success, result.error
+    # Inserted at the point already (mapped into the sketch: 0.060, 0.001),
+    # so it never shows at the sketch's origin first.
+    assert calls[0][:2] == (pytest.approx(0.060), pytest.approx(0.001))
     # Middle (0.020, 0.002) in the sketch; the point maps to (0.060, 0.001).
     assert text.coordinates == (
         pytest.approx(0.040),
