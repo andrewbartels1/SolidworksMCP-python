@@ -45,6 +45,8 @@ from tests.live.test_live_sw_equations_wrench import _frame
 pytestmark = pytest.mark.asyncio
 
 THICKNESS = 8.0
+#: The least a recording's GIF shows each result caption: long enough to read.
+READ_SECONDS = 5.0
 PLATE_MM2 = 120.0 * 80.0
 #: Straight slot, 30 mm centre to centre, 10 wide; arc slot, a quarter turn
 #: on a 20 mm radius, 8 wide. Each: centreline x width + one end circle.
@@ -160,6 +162,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
         },
         call="add_rectangle(from_center), add_sketch_fillet at [0, 0] (refused), "
         "create_extrusion 8",
+        hold=READ_SECONDS,
     )
     assert refused["error_type"] == "invalid_input", refused
     assert built["verdict"] == "pass", built
@@ -208,6 +211,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
         },
         call="add_slot x 2 (straight, arc), add_line(construction), "
         "set_construction_geometry, create_cut_extrude",
+        hold=READ_SECONDS,
     )
     assert straight["slot"]["area"] == pytest.approx(STRAIGHT_SLOT_MM2, abs=1e-3)
     assert arc["slot"]["area"] == pytest.approx(ARC_SLOT_MM2, abs=1e-3)
@@ -253,6 +257,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
         },
         call="add_circle, add_line x 3, sketch_extend x 2, sketch_trim, "
         "add_sketch_fillet, add_sketch_chamfer, create_cut_extrude",
+        hold=READ_SECONDS,
     )
     assert keyed["verdict"] == "pass", keyed
 
@@ -291,6 +296,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
         },
         call="add_line, add_arc(tangent), add_line, add_arc(three_point), "
         "create_cut_extrude",
+        hold=READ_SECONDS,
     )
     assert windowed["verdict"] == "pass", windowed
 
@@ -316,6 +322,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
             "volume": finished,
         },
         call="add_fillet R10 x 2 edges, add_chamfer 10 x 2 edges",
+        hold=READ_SECONDS,
     )
     assert finished["verdict"] == "pass", finished
     evidence(
@@ -333,4 +340,5 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
         },
         call="add_rectangle(from_center), add_arc(tangent, three_point), "
         "add_line(construction); fillets and chamfers last",
+        hold=READ_SECONDS,
     )
