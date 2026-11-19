@@ -1362,7 +1362,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def add_rectangle(
-        self, x1: float, y1: float, x2: float, y2: float
+        self, x1: float, y1: float, x2: float, y2: float, from_center: bool = False
     ) -> AdapterResult[str]:
         """Add rectangle through circuit breaker.
 
@@ -1371,14 +1371,21 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             y1 (float): The y1 value.
             x2 (float): The x2 value.
             y2 (float): The y2 value.
+            from_center (bool): ``x1``/``y1`` is the centre, ``x2``/``y2`` a corner.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_circuit_breaker(
             "add_rectangle",
-            lambda: self.adapter.add_rectangle(x1, y1, x2, y2),
-            input_dict={"x1": x1, "y1": y1, "x2": x2, "y2": y2},
+            lambda: self.adapter.add_rectangle(x1, y1, x2, y2, from_center),
+            input_dict={
+                "x1": x1,
+                "y1": y1,
+                "x2": x2,
+                "y2": y2,
+                "from_center": from_center,
+            },
         )
 
     async def add_arc(
@@ -1389,6 +1396,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         start_y: float,
         end_x: float,
         end_y: float,
+        kind: str = "center",
+        through: tuple[float, float] | None = None,
     ) -> AdapterResult[str]:
         """Add arc through circuit breaker.
 
@@ -1399,6 +1408,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             start_y (float): Arc start Y coordinate.
             end_x (float): Arc end X coordinate.
             end_y (float): Arc end Y coordinate.
+            kind (str): ``center``, ``three_point`` or ``tangent``.
+            through (tuple[float, float] | None): A point on a three-point arc.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -1412,6 +1423,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 start_y,
                 end_x,
                 end_y,
+                kind,
+                through,
             ),
             input_dict={
                 "center_x": center_x,
@@ -1493,6 +1506,63 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         """Rewrite sketch text through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "set_sketch_text", lambda: self.adapter.set_sketch_text(sketch_name, text)
+        )
+
+    async def add_sketch_fillet(
+        self, corners: list[list[float]], radius: float
+    ) -> AdapterResult[dict[str, Any]]:
+        """Round sketch corners through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_sketch_fillet", lambda: self.adapter.add_sketch_fillet(corners, radius)
+        )
+
+    async def add_sketch_chamfer(
+        self,
+        corners: list[list[float]],
+        distance: float,
+        distance2: float | None = None,
+        angle: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bevel sketch corners through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_sketch_chamfer",
+            lambda: self.adapter.add_sketch_chamfer(
+                corners, distance, distance2, angle
+            ),
+        )
+
+    async def add_slot(
+        self,
+        kind: str,
+        width: float,
+        start: list[float],
+        end: list[float],
+        center: list[float] | None = None,
+    ) -> AdapterResult[str]:
+        """Draw a slot through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_slot", lambda: self.adapter.add_slot(kind, width, start, end, center)
+        )
+
+    async def sketch_trim(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        """Trim a sketch entity through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "sketch_trim", lambda: self.adapter.sketch_trim(point)
+        )
+
+    async def sketch_extend(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        """Extend a sketch entity through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "sketch_extend", lambda: self.adapter.sketch_extend(point)
+        )
+
+    async def set_construction_geometry(
+        self, entities: list[str], construction: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Set construction geometry through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_construction_geometry",
+            lambda: self.adapter.set_construction_geometry(entities, construction),
         )
 
     async def sketch_linear_pattern(

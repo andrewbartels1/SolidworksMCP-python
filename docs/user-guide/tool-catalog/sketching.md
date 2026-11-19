@@ -126,6 +126,7 @@ Draw a closed, axis-aligned rectangle in the open sketch from two opposite corne
 | `corner2_x` | `float?` | — | `None` | Corner 2 X alias |
 | `corner2_y` | `float?` | — | `None` | Corner 2 Y alias |
 | `construction` | `bool` | — | `False` | Construction geometry flag |
+| `from_center` | `bool` | — | `False` | `x1`, `y1` is the centre and `x2`, `y2` a corner (`CreateCenterRectangle`) |
 
 **Sample call:**
 
@@ -156,20 +157,25 @@ Close the open sketch so a feature can use it.
 
 ### `add_arc`
 
-Draw a circular arc in the open sketch from its centre, start point and end point, in mm.
+Draw a circular arc in the open sketch: from its centre, through three points, or tangent.
 
 **Prerequisite:** Active sketch edit mode
+
+**SolidWorks automation note:** `kind` picks the call: `center` is `ISketchManager.CreateArc`, counter-clockwise from start to end; `three_point` is `Create3PointArc` from start to end through `through_x`, `through_y`; `tangent` is `CreateTangentArc` (`swForward`), which starts at the end of an existing entity and leaves tangent to it.
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `center_x` | `float` | ✅ | `` | Arc center X coordinate in mm |
-| `center_y` | `float` | ✅ | `` | Arc center Y coordinate in mm |
+| `kind` | `str` | — | `center` | `center`, `three_point` or `tangent` |
+| `center_x` | `float?` | for `center` | `None` | Arc center X coordinate in mm |
+| `center_y` | `float?` | for `center` | `None` | Arc center Y coordinate in mm |
 | `start_x` | `float` | ✅ | `` | Arc start point X coordinate in mm |
 | `start_y` | `float` | ✅ | `` | Arc start point Y coordinate in mm |
 | `end_x` | `float` | ✅ | `` | Arc end point X coordinate in mm |
 | `end_y` | `float` | ✅ | `` | Arc end point Y coordinate in mm |
+| `through_x` | `float?` | for `three_point` | `None` | X of a point the arc passes through |
+| `through_y` | `float?` | for `three_point` | `None` | Y of a point the arc passes through |
 
 **Sample call:**
 
@@ -331,6 +337,147 @@ Rewrite the text in a sketch and rebuild, so debossed lettering shows it.
 
 ```json
 {"sketch_name": "Sketch12", "text": "solidworksmcp-python  $PRP:\"WrenchSize\" mm"}
+```
+
+---
+
+### `add_sketch_fillet`
+
+Round corners of the open sketch to a radius, picking each corner by its point.
+
+**Prerequisite:** Active sketch edit mode, with entities meeting at each corner
+
+**SolidWorks automation note:** Each corner is found among the open sketch's points (`ISketch.GetSketchPoints2`, within 0.01 mm), selected alone, and rounded with `ISketchManager.CreateFillet` (constrained corners kept, so no dialog opens). The lines either side are trimmed back to the arc, as in SolidWorks. Corners are points, not ids, because a rectangle or polygon registers as one id with no id per corner. Every corner is found before any is rounded: a corner with no sketch point fails as `invalid_input` and nothing changes. A sketch point that isn't where two entities meet (a centre rectangle's centre point) is refused by SolidWorks, also as `invalid_input`.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `corners` | `list[list[float]]` | ✅ | | Corners, each `[x, y]` in sketch mm |
+| `radius` | `float` | ✅ | | Fillet radius in mm |
+
+**Sample call:**
+
+```json
+{"corners": [[-60, -40], [-60, 40]], "radius": 10}
+```
+
+---
+
+### `add_sketch_chamfer`
+
+Bevel corners of the open sketch, picking each corner by its point.
+
+**Prerequisite:** Active sketch edit mode, with entities meeting at each corner
+
+**SolidWorks automation note:** Corners are found as for `add_sketch_fillet`, then `ISketchManager.CreateChamfer`: `distance` alone is equal distances (`swSketchChamfer_DistanceEqual`), `distance2` two distances, `angle` a distance and an angle. Giving both `distance2` and `angle` is `invalid_input`.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `corners` | `list[list[float]]` | ✅ | | Corners, each `[x, y]` in sketch mm |
+| `distance` | `float` | ✅ | | Distance along each side in mm |
+| `distance2` | `float?` | — | `None` | A different distance along the second side, mm |
+| `angle` | `float?` | — | `None` | Angle from the first side in degrees, with `distance` |
+
+**Sample call:**
+
+```json
+{"corners": [[60, -40], [60, 40]], "distance": 10}
+```
+
+---
+
+### `add_slot`
+
+Draw a slot in the open sketch: straight between two centres, or along an arc.
+
+**Prerequisite:** Active sketch edit mode
+
+**SolidWorks automation note:** `ISketchManager.CreateSketchSlot`, length centre to centre, no dimensions added. A straight slot (`swSketchSlotCreationType_line`) runs between its end centres `start` and `end`. An arc slot (`swSketchSlotCreationType_arc`) follows the arc about `center` from `start` to `end`, counter-clockwise. The reply's `area` is the centreline's length times the width plus one circle of the width's diameter (the two rounded ends).
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `kind` | `str` | — | `straight` | `straight`, or `arc` |
+| `width` | `float` | ✅ | | Slot width in mm |
+| `start` | `list[float]` | ✅ | | `[x, y]` mm: first end centre (straight), or start on the arc (arc) |
+| `end` | `list[float]` | ✅ | | `[x, y]` mm: second end centre (straight), or end on the arc (arc) |
+| `center` | `list[float]?` | — | `None` | `[x, y]` mm: the arc's centre (arc) |
+
+**Sample call:**
+
+```json
+{"start": [-40, -15], "end": [-40, 15], "width": 10}
+```
+
+---
+
+### `sketch_trim`
+
+Trim away the piece of a sketch entity at a point, back to where it meets others.
+
+**Prerequisite:** Active sketch edit mode, with an entity at the point
+
+**SolidWorks automation note:** The point is mapped from the sketch into model space (the inverse of `ISketch.ModelToSketchTransform`), the entity there is selected (`SelectByID2`, `SKETCHSEGMENT`), and `ISketchManager.SketchTrim` with `swSketchTrimClosest` removes the piece nearest the point. An entity that meets nothing is removed whole. The reply gives the sketch's segment count before and after; a trimmed entity's id may no longer name a whole segment.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `point` | `list[float]` | ✅ | | `[x, y]` in sketch mm on the piece to remove |
+
+**Sample call:**
+
+```json
+{"point": [0, 2]}
+```
+
+---
+
+### `sketch_extend`
+
+Lengthen a sketch entity from its end nearest a point until it meets the next entity.
+
+**Prerequisite:** Active sketch edit mode, with an entity at the point and another in its way
+
+**SolidWorks automation note:** The entity at the point is selected as for `sketch_trim`, then `ISketchManager.SketchExtend` lengthens it from the end nearer the point. Nothing at the point, or nothing to reach, fails as `invalid_input` and the sketch is unchanged.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `point` | `list[float]` | ✅ | | `[x, y]` in sketch mm on the entity, near the end to lengthen |
+
+**Sample call:**
+
+```json
+{"point": [-3, -0.5]}
+```
+
+---
+
+### `set_construction_geometry`
+
+Make sketch entities construction geometry, or normal again, by id.
+
+**Prerequisite:** Active sketch edit mode, with ids from the sketch tools
+
+**SolidWorks automation note:** Sets `ISketchSegment.ConstructionGeometry` on every segment of each id (a rectangle's or polygon's id holds four or more) and reads it back. The property is set, not toggled (`CreateConstructionGeometry` toggles), so a repeated call changes nothing. `construction` on `add_line`, `add_circle` and `add_rectangle` uses this after drawing.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `entities` | `list[str]` | ✅ | | Entity ids, e.g. `Line_3` |
+| `construction` | `bool` | — | `True` | `true` for construction geometry, `false` for normal |
+
+**Sample call:**
+
+```json
+{"entities": ["Line_3"]}
 ```
 
 ---

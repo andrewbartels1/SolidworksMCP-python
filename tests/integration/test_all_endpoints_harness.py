@@ -304,6 +304,12 @@ _SMOKE_PAYLOADS: dict[str, dict[str, Any]] = {
     },
     "sketch_mirror": {"entity": "Line1", "mirror_line": "Line2"},
     "sketch_offset": {"entity": "Line1", "distance": 5.0},
+    "add_sketch_fillet": {"corners": [[-10.0, -10.0]], "radius": 2.0},
+    "add_sketch_chamfer": {"corners": [[10.0, 10.0]], "distance": 2.0},
+    "add_slot": {"start": [0.0, 0.0], "end": [20.0, 0.0], "width": 6.0},
+    "sketch_trim": {"point": [0.0, 5.0]},
+    "sketch_extend": {"point": [0.0, 5.0]},
+    "set_construction_geometry": {"entities": ["Line1"]},
     "sketch_tutorial_simple_hole": {
         "plane": "Front",
         "center_x": 0.0,

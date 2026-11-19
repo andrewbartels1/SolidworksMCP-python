@@ -138,6 +138,28 @@ async def test_base_default_sketch_helpers_return_error() -> None:
     result = await adapter.set_sketch_text("Sketch1", "abc")
     assert result.status == AdapterResultStatus.ERROR
 
+    result = await adapter.add_sketch_fillet([[1.0, 2.0]], 3.0)
+    assert "add_sketch_fillet is not implemented" in (result.error or "")
+
+    result = await adapter.add_sketch_chamfer([[1.0, 2.0]], 3.0, 4.0, None)
+    assert "add_sketch_chamfer is not implemented" in (result.error or "")
+
+    result = await adapter.add_slot("arc", 8.0, [45.0, 0.0], [25.0, 20.0], [25.0, 0.0])
+    assert "add_slot is not implemented" in (result.error or "")
+
+    result = await adapter.sketch_trim(
+        [0.0, 2.0],
+    )
+    assert "sketch_trim is not implemented" in (result.error or "")
+
+    result = await adapter.sketch_extend(
+        [-3.0, -0.5],
+    )
+    assert "sketch_extend is not implemented" in (result.error or "")
+
+    result = await adapter.set_construction_geometry(["Line_1"], False)
+    assert "set_construction_geometry is not implemented" in (result.error or "")
+
     result = await adapter.add_sketch_constraint("e1", None, "coincident")
     assert result.status == AdapterResultStatus.ERROR
 

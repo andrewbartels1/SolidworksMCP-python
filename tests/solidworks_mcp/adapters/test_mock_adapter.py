@@ -546,6 +546,53 @@ class TestMockAdapterSuccessPaths:
         assert result.data["id"] in adapter._sketch_entity_ids
 
     @pytest.mark.asyncio
+    async def test_sketch_essentials_need_an_open_sketch(self):
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        results = [
+            await adapter.add_sketch_fillet([[0, 0]], 1),
+            await adapter.add_sketch_chamfer([[0, 0]], 1),
+            await adapter.add_slot("straight", 1, [0, 0], [1, 0]),
+            await adapter.sketch_trim([0, 0]),
+            await adapter.sketch_extend([0, 0]),
+            await adapter.set_construction_geometry(["Line1"]),
+        ]
+
+        assert {r.error for r in results} == {"No active sketch"}
+
+    @pytest.mark.asyncio
+    async def test_sketch_essentials_in_an_open_sketch(self):
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Top")
+        line = (await adapter.add_line(0, 0, 10, 0)).data
+
+        fillet = await adapter.add_sketch_fillet([[0, 0], [10, 0]], 2)
+        chamfer = await adapter.add_sketch_chamfer([[0, 0]], 2, angle=30)
+        slot = await adapter.add_slot("straight", 4, [0, 0], [10, 0])
+        no_centre = await adapter.add_slot("arc", 4, [0, 0], [10, 0])
+        trim = await adapter.sketch_trim([5, 0])
+        extend = await adapter.sketch_extend([5, 0])
+        made = await adapter.set_construction_geometry([line])
+        unknown = await adapter.set_construction_geometry(["Nope_1"])
+        arc = await adapter.add_arc(0, 0, 1, 0, 0, 1, "three_point")
+        centred = await adapter.add_rectangle(0, 0, 5, 5, True)
+
+        assert len(fillet.data["ids"]) == 2
+        assert chamfer.data["corners"] == [[0, 0]]
+        assert slot.data.startswith("Slot_")
+        assert no_centre.error == "An arc slot needs its center"
+        assert trim.data["segments_before"] == trim.data["segments_after"]
+        assert extend.data["point"] == [5, 0]
+        assert made.data == {"entities": {line: True}, "construction": True}
+        assert "Unknown sketch entity 'Nope_1'" in (unknown.error or "")
+        assert arc.error == "A three_point arc needs a through point"
+        assert centred.is_success
+
+    @pytest.mark.asyncio
     async def test_set_sketch_text_gives_the_text(self):
         adapter = MockSolidWorksAdapter({})
         await adapter.connect()

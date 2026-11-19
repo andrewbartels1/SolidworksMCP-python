@@ -995,6 +995,53 @@ keeps its old text and the wrench stays at 19 mm.
 11. `create_configuration({"name": "8 mm"})`, `set_equation({"name": "Size", "expression": "8mm", "configurations": ["8 mm"]})`, `activate_configuration({"name": "8 mm"})`, `verify_model`, `set_sketch_text`
 12. `activate_configuration({"name": "Default"})`, `set_sketch_text`, then `set_equation({"name": "Size", "expression": "\"Nut\" * 2"})`, refused on purpose
 
+## Sketching {#sketching}
+
+Source: [`tests/live/test_live_sw_sketch_essentials.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_sketch_essentials.py).
+
+### A slotted bracket plate {#bracket-plate}
+
+![A bracket plate drawn from its centre, then a straight slot, an arc slot, a keyhole made by extending and trimming, and a window from a tangent and a three-point arc are cut; its corners are filleted and chamfered last](assets/demos/sketch-essentials/test_a_slotted_bracket_plate-motion.gif)
+
+> *Example prompt:* Make a 120 x 80 mm bracket plate, 8 mm thick, centred on
+> the origin. Cut a straight adjustment slot and an arc slot, a keyhole, and
+> a rounded window. Round the left corners R10 and chamfer the right ones
+> 10 mm, as the last features.
+
+**What it shows.** Every new sketch operation in one part, with the
+volume checked against the hand calculation after each step:
+
+| Step | Tools | Expected, mm³ | Measured, mm³ |
+| --- | --- | --- | --- |
+| A 120 x 80 plate drawn from its centre, extruded 8 mm | `add_rectangle` `from_center` | 76,800.00 | 76,800.00 |
+| A straight slot and an arc slot, with two construction lines across them | `add_slot`, `add_line` `construction`, `set_construction_geometry` | 71,358.94 | 71,359.18 |
+| A keyhole: two lines extended up to a circle, the arc between them trimmed, the neck's corners rounded and bevelled | `sketch_extend`, `sketch_trim`, `add_sketch_fillet`, `add_sketch_chamfer` | 68,938.11 | 68,938.53 |
+| A window from a line, a tangent arc, a line and a three-point arc | `add_arc` `kind` | 65,909.79 | 65,910.22 |
+| Last: two corners filleted R10, two chamfered 10 mm | `add_fillet`, `add_chamfer` | 64,766.42 | 64,766.85 |
+
+The plate is built sharp and its corners are treated last: fillets and
+chamfers on a solid belong at the end of the feature tree, where a later cut
+can't break them. The sketch fillet and chamfer round and bevel corners of a
+2D outline, here the keyhole's neck.
+
+The construction lines cross both slots; had either been normal geometry,
+the cut would have removed a different volume. The first call fails **on
+purpose**: a rectangle drawn from its centre has a centre point, and a
+fillet there is refused as `invalid_input` ("it isn't where two entities
+meet").
+
+**Tool calls**
+
+1. `create_part`, `create_sketch({"plane": "Top"})`, `add_rectangle({"x1": 0, "y1": 0, "x2": 60, "y2": 40, "from_center": true})`
+2. `add_sketch_fillet({"corners": [[0, 0]], "radius": 5})`, refused on purpose
+3. `exit_sketch`, `create_extrusion({"depth": 8})`
+4. `add_slot({"start": [-40, -15], "end": [-40, 15], "width": 10})` and `add_slot({"kind": "arc", "center": [25, 0], "start": [39.142, -14.142], "end": [39.142, 14.142], "width": 8})`
+5. `add_line({..., "construction": true})`, `add_line`, `set_construction_geometry({"entities": ["Line_4"]})`, then `create_cut_extrude({"end_condition": "ThroughAllBoth"})`
+6. `add_circle`, three `add_line`, `sketch_extend({"point": [-3, -0.5]})` and at `[3, -0.5]`, `sketch_trim({"point": [0, 2]})`, `add_sketch_fillet({"corners": [[-3, -15]], "radius": 1.5})`, `add_sketch_chamfer({"corners": [[3, -15]], "distance": 1.5})`, cut through
+7. `add_line`, `add_arc({"kind": "tangent", ...})`, `add_line`, `add_arc({"kind": "three_point", ..., "through_x": -25, "through_y": 30})`, cut through
+8. `add_fillet({"radius": 10, "edge_names": [two corner edges]})`, `add_chamfer({"distance": 10, "edge_names": [two corner edges]})`
+9. `verify_model({"volume_mm3": ...})` after each step
+
 ## Run a demo yourself
 
 The demos need Windows, SolidWorks open and idle, and the project's `.venv`.

@@ -10,6 +10,7 @@ from typing import Any, cast
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
 from .com_utils import as_list, double_array
+from .features import _null_callout
 
 # swConstraintType_e values per the official SolidWorks API enum docs
 # (SolidWorks.Interop.swconst). The legacy IModelDoc2.SketchAddConstraints
@@ -29,6 +30,10 @@ RELATION_NAME_MAP: dict[str, int] = {
     "fix": 17,  # swConstraintType_FIXED
     "collinear": 27,  # swConstraintType_COLINEAR (single-l spelling)
 }
+
+#: ``swTangentArcTypes_e.swForward``: a tangent arc that carries on in the
+#: direction the entity it starts from was going.
+_TANGENT_FORWARD = 1
 
 # Relations that take a third entity (the centerline of symmetry for now).
 # All other relations reject a non-null ``entity3``.
@@ -119,9 +124,9 @@ class SolidWorksSketchMixin:
         return _add_circle_impl(self, center_x, center_y, radius)
 
     async def add_rectangle(
-        self, x1: float, y1: float, x2: float, y2: float
+        self, x1: float, y1: float, x2: float, y2: float, from_center: bool = False
     ) -> AdapterResult[str]:
-        return _add_rectangle_impl(self, x1, y1, x2, y2)
+        return _add_rectangle_impl(self, x1, y1, x2, y2, from_center)
 
     async def add_arc(
         self,
@@ -131,8 +136,12 @@ class SolidWorksSketchMixin:
         start_y: float,
         end_x: float,
         end_y: float,
+        kind: str = "center",
+        through: tuple[float, float] | None = None,
     ) -> AdapterResult[str]:
-        return _add_arc_impl(self, center_x, center_y, start_x, start_y, end_x, end_y)
+        return _add_arc_impl(
+            self, center_x, center_y, start_x, start_y, end_x, end_y, kind, through
+        )
 
     async def add_spline(self, points: list[dict[str, float]]) -> AdapterResult[str]:
         return _add_spline_impl(self, points)
@@ -232,6 +241,41 @@ class SolidWorksSketchMixin:
         self, sketch_name: str | None = None
     ) -> AdapterResult[dict[str, Any]]:
         return _check_sketch_fully_defined_impl(self, sketch_name)
+
+    async def add_sketch_fillet(
+        self, corners: list[list[float]], radius: float
+    ) -> AdapterResult[dict[str, Any]]:
+        return _add_sketch_fillet_impl(self, corners, radius)
+
+    async def add_sketch_chamfer(
+        self,
+        corners: list[list[float]],
+        distance: float,
+        distance2: float | None = None,
+        angle: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        return _add_sketch_chamfer_impl(self, corners, distance, distance2, angle)
+
+    async def add_slot(
+        self,
+        kind: str,
+        width: float,
+        start: list[float],
+        end: list[float],
+        center: list[float] | None = None,
+    ) -> AdapterResult[str]:
+        return _add_slot_impl(self, kind, width, start, end, center)
+
+    async def sketch_trim(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        return _sketch_trim_impl(self, point)
+
+    async def sketch_extend(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        return _sketch_extend_impl(self, point)
+
+    async def set_construction_geometry(
+        self, entities: list[str], construction: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        return _set_construction_geometry_impl(self, entities, construction)
 
 
 def _select_sketch_plane(adapter: Any, plane: str) -> None:
@@ -596,12 +640,18 @@ def _add_circle_impl(
 
 
 def _add_rectangle_impl(
-    adapter: Any, x1: float, y1: float, x2: float, y2: float
+    adapter: Any,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    from_center: bool = False,
 ) -> AdapterResult[str]:
-    """Add a corner-defined rectangle to the active sketch.
+    """Add a rectangle to the active sketch, from two corners or its centre.
 
-    Calls ``SketchManager.CreateCornerRectangle`` which returns an array of
-    four line entities.  The array is registered as a single composite entity.
+    Calls ``SketchManager.CreateCornerRectangle`` (or, with ``from_center``,
+    ``CreateCenterRectangle``), which returns an array of four line
+    entities.  The array is registered as a single composite entity.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
@@ -609,6 +659,8 @@ def _add_rectangle_impl(
         y1: First corner Y coordinate in **millimetres**.
         x2: Opposite corner X coordinate in **millimetres**.
         y2: Opposite corner Y coordinate in **millimetres**.
+        from_center: When true, ``x1``/``y1`` is the centre and ``x2``/``y2``
+            a corner.
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the composite entity ID
@@ -635,9 +687,12 @@ def _add_rectangle_impl(
         Raises:
             Exception: If ``CreateCornerRectangle`` returns ``None``.
         """
-        lines = adapter.currentSketchManager.CreateCornerRectangle(
-            x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0
+        create = (
+            adapter.currentSketchManager.CreateCenterRectangle
+            if from_center
+            else adapter.currentSketchManager.CreateCornerRectangle
         )
+        lines = create(x1 / 1000.0, y1 / 1000.0, 0, x2 / 1000.0, y2 / 1000.0, 0)
         if not lines:
             raise Exception("Failed to create rectangle")
         entity_id = cast(str, adapter._register_sketch_entity("Rectangle", lines))
@@ -646,8 +701,7 @@ def _add_rectangle_impl(
         # geometric centre from later. Stash it now so the rectangle ID is a
         # valid seed for ``sketch_circular_pattern``.
         adapter._sketch_entity_centers[entity_id] = (
-            (x1 + x2) / 2.0,
-            (y1 + y2) / 2.0,
+            (x1, y1) if from_center else ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
         )
         return entity_id
 
@@ -665,12 +719,17 @@ def _add_arc_impl(
     start_y: float,
     end_x: float,
     end_y: float,
+    kind: str = "center",
+    through: tuple[float, float] | None = None,
 ) -> AdapterResult[str]:
     """Add a circular arc to the active sketch.
 
-    Calls ``SketchManager.CreateArc`` with a counter-clockwise direction
-    flag (``1``).  All coordinates must lie in the sketch plane; the Z
-    component is always forced to ``0``.
+    ``kind`` picks the call: ``center`` is ``SketchManager.CreateArc`` with a
+    counter-clockwise direction flag (``1``); ``three_point`` is
+    ``Create3PointArc`` from start to end through ``through``; ``tangent``
+    is ``CreateTangentArc`` from ``start`` (the end of an existing entity)
+    to ``end``, leaving tangent to that entity (``swForward``, 1). All
+    coordinates lie in the sketch plane; the Z component is always ``0``.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
@@ -680,6 +739,8 @@ def _add_arc_impl(
         start_y: Arc start point Y in **millimetres**.
         end_x: Arc end point X in **millimetres**.
         end_y: Arc end point Y in **millimetres**.
+        kind: ``center`` (the default), ``three_point`` or ``tangent``.
+        through: For ``three_point``, a point on the arc, ``(x, y)`` mm.
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the registered entity ID
@@ -711,18 +772,21 @@ def _add_arc_impl(
         Raises:
             Exception: If ``CreateArc`` returns ``None``.
         """
-        arc = adapter.currentSketchManager.CreateArc(
-            center_x / 1000.0,
-            center_y / 1000.0,
-            0,
-            start_x / 1000.0,
-            start_y / 1000.0,
-            0,
-            end_x / 1000.0,
-            end_y / 1000.0,
-            0,
-            1,
-        )
+        manager = adapter.currentSketchManager
+        start = (start_x / 1000.0, start_y / 1000.0, 0)
+        end = (end_x / 1000.0, end_y / 1000.0, 0)
+        if kind == "three_point":
+            if through is None:
+                raise Exception("A three_point arc needs a through point")
+            arc = manager.Create3PointArc(
+                *start, *end, through[0] / 1000.0, through[1] / 1000.0, 0
+            )
+        elif kind == "tangent":
+            arc = manager.CreateTangentArc(*start, *end, _TANGENT_FORWARD)
+        else:
+            arc = manager.CreateArc(
+                center_x / 1000.0, center_y / 1000.0, 0, *start, *end, 1
+            )
         if not arc:
             raise Exception("Failed to create arc")
         return adapter._register_sketch_entity("Arc", arc)  # type: ignore[no-any-return]
@@ -2941,4 +3005,370 @@ def _check_sketch_fully_defined_impl(
         adapter._handle_com_operation(
             "check_sketch_fully_defined", _get_sketch_payload
         ),
+    )
+
+
+# --- Sketch essentials (queue item 32) ---------------------------------------
+# Corners, slots, trim and extend, and construction geometry. Coordinates are
+# sketch mm, as for every other sketch tool.
+
+#: How close (mm) a corner given by the agent must be to a sketch point.
+_CORNER_TOLERANCE_MM = 0.01
+#: ``swConstrainedCornerAction_e.swConstrainedCornerKeepGeometry``: never ask.
+#: ``swConstrainedCornerInteract`` (0) can open a dialog and stall the run.
+_KEEP_CONSTRAINED_CORNERS = 1
+#: ``swSketchChamferType_e``.
+_CHAMFER_DISTANCE_ANGLE = 0
+_CHAMFER_DISTANCE_DISTANCE = 1
+_CHAMFER_DISTANCE_EQUAL = 2
+#: ``swSketchSlotCreationType_e`` by our ``kind``.
+_SLOT_CREATION = {"straight": 0, "arc": 2}
+#: ``swSketchSlotLengthType_e.swSketchSlotLengthType_CenterCenter``.
+_SLOT_CENTER_TO_CENTER = 0
+#: ``CreateSketchSlot``'s ``CenterArcDirection``: counter-clockwise.
+_SLOT_COUNTER_CLOCKWISE = 1
+#: ``swSketchTrimChoice_e.swSketchTrimClosest``.
+_TRIM_CLOSEST = 0
+
+
+def _active_sketch(adapter: Any) -> Any:
+    """The open sketch, flagged so its zero-argument methods are methods."""
+    return _sw_type_info.flagged(adapter.currentSketchManager.ActiveSketch, "ISketch")
+
+
+def _segment_count(adapter: Any) -> int:
+    """How many segments the open sketch has."""
+    sketch = _active_sketch(adapter)
+    return len(as_list(adapter._attempt(lambda: sketch.GetSketchSegments(), None)))
+
+
+def _to_model_space(adapter: Any, point_mm: list[float]) -> list[float]:
+    """A point in the open sketch (mm) in model space (metres).
+
+    The inverse of ``ModelToSketchTransform``: ``SketchTrim``,
+    ``SketchExtend`` and ``SelectByID2`` take model coordinates.
+    """
+    app = _sw_type_info.flagged(adapter.swApp, "ISldWorks")
+    math_utility = _sw_type_info.flagged(app.GetMathUtility(), "IMathUtility")
+    point = _sw_type_info.flagged(
+        math_utility.CreatePoint(
+            double_array([point_mm[0] / 1000.0, point_mm[1] / 1000.0, 0.0])
+        ),
+        "IMathPoint",
+    )
+    sketch = _active_sketch(adapter)
+    to_sketch = _sw_type_info.flagged(sketch.ModelToSketchTransform, "IMathTransform")
+    moved = _sw_type_info.flagged(
+        point.MultiplyTransform(to_sketch.Inverse()), "IMathPoint"
+    )
+    return [float(v) for v in as_list(moved.ArrayData)[:3]]
+
+
+def _corner_points(adapter: Any, corners: list[list[float]]) -> list[Any]:
+    """The open sketch's point at each corner, every one found before any change.
+
+    Raises:
+        Exception: Naming the first corner with no sketch point within
+            ``_CORNER_TOLERANCE_MM``.
+    """
+    sketch = _active_sketch(adapter)
+    points = as_list(adapter._attempt(lambda: sketch.GetSketchPoints2(), None))
+    found = []
+    for corner in corners:
+        match = next(
+            (
+                point
+                for point in points
+                if abs(float(point.X) * 1000.0 - corner[0]) <= _CORNER_TOLERANCE_MM
+                and abs(float(point.Y) * 1000.0 - corner[1]) <= _CORNER_TOLERANCE_MM
+            ),
+            None,
+        )
+        if match is None:
+            raise Exception(
+                f"No sketch point at corner [{corner[0]:g}, {corner[1]:g}] mm in "
+                "the open sketch"
+            )
+        found.append(match)
+    return found
+
+
+def _select_data(adapter: Any, mark: int = 0) -> Any:
+    """An ``ISelectData`` carrying ``mark``, for ``Select4``."""
+    sel_mgr = adapter.currentModel.SelectionManager
+    adapter._attempt(
+        lambda: _sw_type_info.flag_methods(sel_mgr, "ISelectionMgr"), default=0
+    )
+    data = sel_mgr.CreateSelectData()
+    data.Mark = mark
+    return data
+
+
+def _treat_corners(
+    adapter: Any,
+    operation: str,
+    corners: list[list[float]],
+    prefix: str,
+    make: Any,
+) -> AdapterResult[dict[str, Any]]:
+    """Fillet or chamfer each corner on its own; one registered id per corner.
+
+    Args:
+        adapter: A ``PyWin32Adapter`` with an open sketch.
+        operation: The operation name, for the error boundary and the pause.
+        corners: ``[x, y]`` sketch mm, each where two entities meet.
+        prefix: The id prefix, ``Fillet`` or ``Chamfer``.
+        make: Called with the sketch manager once a corner is selected;
+            returns the new segment, or nothing when SolidWorks refused.
+    """
+    if not adapter.currentSketchManager:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
+
+    def run() -> dict[str, Any]:
+        points = _corner_points(adapter, corners)
+        manager = _sw_type_info.flagged(adapter.currentSketchManager, "ISketchManager")
+        ids = []
+        try:
+            for corner, point in zip(corners, points, strict=True):
+                adapter.currentModel.ClearSelection2(True)
+                where = f"[{corner[0]:g}, {corner[1]:g}] mm"
+                if not point.Select4(False, _select_data(adapter)):
+                    raise Exception(f"Couldn't select the corner at {where}")
+                segment = make(manager)
+                if not segment:
+                    # A point need not be a corner: a centre rectangle's
+                    # centre point is a sketch point (seen live, 2026-11-19).
+                    raise Exception(
+                        f"SolidWorks refused the {prefix.lower()} at corner {where}: "
+                        "it isn't where two entities meet"
+                    )
+                ids.append(adapter._register_sketch_entity(prefix, segment))
+        finally:
+            adapter.currentModel.ClearSelection2(True)
+        return {"ids": ids, "corners": corners}
+
+    return cast(
+        AdapterResult[dict[str, Any]], adapter._handle_com_operation(operation, run)
+    )
+
+
+def _add_sketch_fillet_impl(
+    adapter: Any, corners: list[list[float]], radius: float
+) -> AdapterResult[dict[str, Any]]:
+    """Round each corner to ``radius`` mm (``ISketchManager.CreateFillet``)."""
+    return _treat_corners(
+        adapter,
+        "add_sketch_fillet",
+        corners,
+        "Fillet",
+        lambda manager: manager.CreateFillet(
+            radius / 1000.0, _KEEP_CONSTRAINED_CORNERS
+        ),
+    )
+
+
+def _add_sketch_chamfer_impl(
+    adapter: Any,
+    corners: list[list[float]],
+    distance: float,
+    distance2: float | None = None,
+    angle: float | None = None,
+) -> AdapterResult[dict[str, Any]]:
+    """Bevel each corner (``ISketchManager.CreateChamfer``).
+
+    ``distance`` alone is equal distances; with ``distance2``, two
+    distances; with ``angle`` (degrees), a distance and an angle.
+    """
+    if angle is not None:
+        kind, second = _CHAMFER_DISTANCE_ANGLE, math.radians(angle)
+    elif distance2 is not None:
+        kind, second = _CHAMFER_DISTANCE_DISTANCE, distance2 / 1000.0
+    else:
+        kind, second = _CHAMFER_DISTANCE_EQUAL, distance / 1000.0
+    return _treat_corners(
+        adapter,
+        "add_sketch_chamfer",
+        corners,
+        "Chamfer",
+        lambda manager: manager.CreateChamfer(kind, distance / 1000.0, second),
+    )
+
+
+def _add_slot_impl(
+    adapter: Any,
+    kind: str,
+    width: float,
+    start: list[float],
+    end: list[float],
+    center: list[float] | None = None,
+) -> AdapterResult[str]:
+    """Draw a straight or arc slot (``ISketchManager.CreateSketchSlot``).
+
+    A straight slot runs between its two arc centres, ``start`` and ``end``.
+    An arc slot follows the arc about ``center`` from ``start`` to ``end``,
+    counter-clockwise. Length is centre to centre; no dimensions are added.
+    """
+    if not adapter.currentSketchManager:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
+
+    def run() -> str:
+        if kind == "arc":
+            if center is None:
+                raise Exception("An arc slot needs its center")
+            points = (center, start, end)
+        else:
+            points = (start, end, end)
+        manager = _sw_type_info.flagged(adapter.currentSketchManager, "ISketchManager")
+        coordinates = [c for p in points for c in (p[0] / 1000.0, p[1] / 1000.0, 0.0)]
+        slot = manager.CreateSketchSlot(
+            _SLOT_CREATION[kind],
+            _SLOT_CENTER_TO_CENTER,
+            width / 1000.0,
+            *coordinates,
+            _SLOT_COUNTER_CLOCKWISE,
+            False,
+        )
+        if not slot:
+            raise Exception("SolidWorks refused the slot")
+        return cast(str, adapter._register_sketch_entity("Slot", slot))
+
+    return cast(AdapterResult[str], adapter._handle_com_operation("add_slot", run))
+
+
+def _segment_lengths(adapter: Any) -> float:
+    """The total length (mm) of the open sketch's segments."""
+    sketch = _active_sketch(adapter)
+    segments = as_list(adapter._attempt(lambda: sketch.GetSketchSegments(), None))
+    return sum(
+        float(_sw_type_info.flagged(segment, "ISketchSegment").GetLength()) * 1000.0
+        for segment in segments
+    )
+
+
+def _change_at_point(
+    adapter: Any,
+    operation: str,
+    point: list[float],
+    verb: str,
+    change: Any,
+    grows: bool,
+) -> AdapterResult[dict[str, Any]]:
+    """Select the sketch entity at ``point`` and trim or extend it there.
+
+    Whether it worked is measured, not read from the call: ``SketchTrim``
+    returned ``False`` live (2026-11-19) after trimming correctly, and a
+    retry then trimmed the next entity too. A trim always shortens the
+    sketch's total segment length and an extension always lengthens it.
+
+    Args:
+        adapter: A ``PyWin32Adapter`` with an open sketch.
+        operation: The operation name.
+        point: ``[x, y]`` sketch mm on the entity.
+        verb: ``trim`` or ``extend``, for the messages.
+        change: Called with the sketch manager and the model-space point
+            (metres), with the entity selected.
+        grows: ``True`` when the change adds length (extend).
+    """
+    if not adapter.currentSketchManager:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
+
+    def run() -> dict[str, Any]:
+        where = f"[{point[0]:g}, {point[1]:g}] mm"
+        before = _segment_count(adapter)
+        length_before = _segment_lengths(adapter)
+        model_point = _to_model_space(adapter, point)
+        manager = _sw_type_info.flagged(adapter.currentSketchManager, "ISketchManager")
+        adapter.currentModel.ClearSelection2(True)
+        try:
+            picked = adapter.currentModel.Extension.SelectByID2(
+                "", "SKETCHSEGMENT", *model_point, False, 0, _null_callout(), 0
+            )
+            if not picked:
+                raise Exception(f"No sketch entity at {where} in the open sketch")
+            change(manager, model_point)
+        finally:
+            adapter.currentModel.ClearSelection2(True)
+        length_change = _segment_lengths(adapter) - length_before
+        worked = length_change > 1e-6 if grows else length_change < -1e-6
+        if not worked:
+            raise Exception(f"SolidWorks refused to {verb} at {where}")
+        return {
+            "point": point,
+            "segments_before": before,
+            "segments_after": _segment_count(adapter),
+            "length_change_mm": round(length_change, 4),
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]], adapter._handle_com_operation(operation, run)
+    )
+
+
+def _sketch_trim_impl(
+    adapter: Any, point: list[float]
+) -> AdapterResult[dict[str, Any]]:
+    """Remove the piece of an entity nearest ``point`` (``SketchTrim``, closest)."""
+    return _change_at_point(
+        adapter,
+        "sketch_trim",
+        point,
+        "trim",
+        lambda manager, at: manager.SketchTrim(_TRIM_CLOSEST, *at),
+        grows=False,
+    )
+
+
+def _sketch_extend_impl(
+    adapter: Any, point: list[float]
+) -> AdapterResult[dict[str, Any]]:
+    """Lengthen the entity at ``point`` from its nearer end (``SketchExtend``)."""
+    return _change_at_point(
+        adapter,
+        "sketch_extend",
+        point,
+        "extend",
+        lambda manager, at: manager.SketchExtend(*at),
+        grows=True,
+    )
+
+
+def _set_construction_geometry_impl(
+    adapter: Any, entities: list[str], construction: bool = True
+) -> AdapterResult[dict[str, Any]]:
+    """Make entities construction geometry, or normal again, and read it back.
+
+    Sets ``ISketchSegment.ConstructionGeometry`` on every segment of every
+    id (a rectangle's or polygon's id holds several). Setting a property is
+    idempotent, unlike ``CreateConstructionGeometry``, which toggles.
+    """
+    if not adapter.currentSketchManager:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
+
+    def run() -> dict[str, Any]:
+        for entity_id in entities:
+            if entity_id not in adapter._sketch_entities:
+                raise Exception(
+                    f"Unknown sketch entity '{entity_id}'. Use the ids the "
+                    "sketch tools returned."
+                )
+        states = {}
+        for entity_id in entities:
+            entity = adapter._sketch_entities[entity_id]
+            segments = entity if isinstance(entity, (list, tuple)) else [entity]
+            read = []
+            for segment in segments:
+                segment.ConstructionGeometry = construction
+                read.append(bool(segment.ConstructionGeometry))
+            states[entity_id] = all(read) if construction else any(read)
+        wrong = [e for e, state in states.items() if state != construction]
+        if wrong:
+            kind = "construction" if construction else "normal"
+            raise Exception(
+                f"SolidWorks didn't change {', '.join(wrong)} to {kind} geometry"
+            )
+        return {"entities": states, "construction": construction}
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("set_construction_geometry", run),
     )

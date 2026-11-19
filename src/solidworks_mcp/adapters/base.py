@@ -737,15 +737,16 @@ class SolidWorksAdapter(ABC):
 
     @abstractmethod
     async def add_rectangle(
-        self, x1: float, y1: float, x2: float, y2: float
+        self, x1: float, y1: float, x2: float, y2: float, from_center: bool = False
     ) -> AdapterResult[str]:
         """Add a rectangle to the current sketch.
 
         Args:
-            x1 (float): The x1 value.
-            y1 (float): The y1 value.
+            x1 (float): The x1 value (the centre's, with ``from_center``).
+            y1 (float): The y1 value (the centre's, with ``from_center``).
             x2 (float): The x2 value.
             y2 (float): The y2 value.
+            from_center (bool): ``x1``/``y1`` is the centre, ``x2``/``y2`` a corner.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -760,6 +761,8 @@ class SolidWorksAdapter(ABC):
         start_y: float,
         end_x: float,
         end_y: float,
+        kind: str = "center",
+        through: tuple[float, float] | None = None,
     ) -> AdapterResult[str]:
         """Add an arc to the current sketch.
 
@@ -770,6 +773,8 @@ class SolidWorksAdapter(ABC):
             start_y (float): The start y value.
             end_x (float): The end x value.
             end_y (float): The end y value.
+            kind (str): ``center``, ``three_point`` or ``tangent``.
+            through (tuple[float, float] | None): A point on a three-point arc.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -903,6 +908,119 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="set_sketch_text is not implemented by this adapter",
+        )
+
+    async def add_sketch_fillet(
+        self, corners: list[list[float]], radius: float
+    ) -> AdapterResult[dict[str, Any]]:
+        """Round sketch corners picked by point.
+
+        Args:
+            corners (list[list[float]]): ``[x, y]`` sketch mm, one per corner.
+            radius (float): Fillet radius in mm.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``ids`` (one per corner) and ``corners``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_sketch_fillet is not implemented by this adapter",
+        )
+
+    async def add_sketch_chamfer(
+        self,
+        corners: list[list[float]],
+        distance: float,
+        distance2: float | None = None,
+        angle: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Bevel sketch corners picked by point.
+
+        Args:
+            corners (list[list[float]]): ``[x, y]`` sketch mm, one per corner.
+            distance (float): Distance along the first side, mm.
+            distance2 (float | None): Distance along the second side, mm.
+            angle (float | None): Angle from the first side, degrees.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``ids`` (one per corner) and ``corners``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_sketch_chamfer is not implemented by this adapter",
+        )
+
+    async def add_slot(
+        self,
+        kind: str,
+        width: float,
+        start: list[float],
+        end: list[float],
+        center: list[float] | None = None,
+    ) -> AdapterResult[str]:
+        """Draw a straight or arc slot.
+
+        Args:
+            kind (str): ``straight`` or ``arc``.
+            width (float): Slot width, mm.
+            start (list[float]): Straight: first arc centre; arc: start on the arc.
+            end (list[float]): Straight: second arc centre; arc: end on the arc.
+            center (list[float] | None): Arc slot: the arc's centre.
+
+        Returns:
+            AdapterResult[str]: The slot's id.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_slot is not implemented by this adapter",
+        )
+
+    async def sketch_trim(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        """Trim the piece of a sketch entity nearest a point.
+
+        Args:
+            point (list[float]): ``[x, y]`` sketch mm on the piece to remove.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``point``, ``segments_before`` and
+            ``segments_after``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="sketch_trim is not implemented by this adapter",
+        )
+
+    async def sketch_extend(self, point: list[float]) -> AdapterResult[dict[str, Any]]:
+        """Extend a sketch entity from its end nearest a point.
+
+        Args:
+            point (list[float]): ``[x, y]`` sketch mm near the end to extend.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``point``, ``segments_before`` and
+            ``segments_after``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="sketch_extend is not implemented by this adapter",
+        )
+
+    async def set_construction_geometry(
+        self, entities: list[str], construction: bool = True
+    ) -> AdapterResult[dict[str, Any]]:
+        """Make sketch entities construction geometry, or normal again.
+
+        Args:
+            entities (list[str]): Sketch entity ids.
+            construction (bool): ``True`` for construction, ``False`` for normal.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``entities`` (id to state) and
+            ``construction``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_construction_geometry is not implemented by this adapter",
         )
 
     async def add_sketch_constraint(

@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sketch essentials** (queue item 32): six sketch tools agents reach
+  for next, 151 tools in all. `add_sketch_fillet` and `add_sketch_chamfer`
+  round or bevel corners picked by their points (a rectangle's corners have
+  no ids of their own); `add_slot` draws a straight or arc slot and gives
+  its area; `sketch_trim` and `sketch_extend` cut back or lengthen an entity
+  at a point; `set_construction_geometry` makes entities construction
+  geometry, or normal again, by id. `add_arc` takes `kind` (`center`,
+  `three_point`, `tangent`) and `add_rectangle` takes `from_center`. Demo:
+  a slotted bracket plate, on the demos page.
 - **Equations and global variables** (queue item 29): `list_equations`,
   `set_equation` and `delete_equation`. One value (`"Width" = 60mm`) can
   drive several dimensions (`"D1@Sketch1" = "Width" / 2`); `set_equation`
@@ -219,6 +228,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`construction` is honoured on SolidWorks**: `add_line`, `add_circle`
+  and `add_rectangle` accepted `construction` but drew normal geometry, while
+  the reply said `"construction": true`. The tools now set it on the new
+  entity.
 - **`create_cut_extrude` with `both_directions` on a Blind cut** cut one way
   only, so a slot meant to straddle its sketch plane came out beside it. It
   is now a mid-plane cut, `depth` in total, as `create_extrusion` does.

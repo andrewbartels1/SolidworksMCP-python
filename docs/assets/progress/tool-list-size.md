@@ -1,11 +1,11 @@
 | `SOLIDWORKS_MCP_TOOLSETS` | `SOLIDWORKS_MCP_TOOL_MODE` | Tools listed | Size | Tokens (estimate) | Of the full list |
 | --- | --- | ---: | ---: | ---: | ---: |
-| `all` | `list` | 145 | 235 KB | 60,126 | 100% |
-| `core` | `list` | 105 | 159 KB | 40,683 | 68% |
-| `drawing` | `list` | 21 | 38 KB | 9,616 | 16% |
-| `automation` | `list` | 3 | 6 KB | 1,556 | 3% |
+| `all` | `list` | 151 | 245 KB | 62,704 | 100% |
+| `core` | `list` | 111 | 169 KB | 43,262 | 69% |
+| `drawing` | `list` | 21 | 38 KB | 9,616 | 15% |
+| `automation` | `list` | 3 | 6 KB | 1,556 | 2% |
 | `vba` | `list` | 10 | 17 KB | 4,356 | 7% |
-| `docs` | `list` | 6 | 15 KB | 3,914 | 7% |
-| `core,drawing` | `list` | 126 | 196 KB | 50,299 | 84% |
-| `all` | `search` | 4 | 4 KB | 908 | 2% |
-| `core` | `search` | 4 | 4 KB | 908 | 2% |
+| `docs` | `list` | 6 | 15 KB | 3,914 | 6% |
+| `core,drawing` | `list` | 132 | 207 KB | 52,877 | 84% |
+| `all` | `search` | 4 | 4 KB | 908 | 1% |
+| `core` | `search` | 4 | 4 KB | 908 | 1% |

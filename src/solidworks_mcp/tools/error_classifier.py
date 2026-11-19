@@ -241,6 +241,21 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
     ),
     ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
+            "Points are [x, y] in sketch mm: a corner where two entities meet "
+            "(fillet, chamfer), or a point on an entity (trim, extend). Ids are "
+            "the ones the sketch tools returned in this sketch."
+        ),
+        patterns=(
+            r"No sketch point at corner",
+            r"SolidWorks refused the (fillet|chamfer) at corner",
+            r"No sketch entity at \[",
+            r"SolidWorks refused to (trim|extend) at",
+            r"Unknown sketch entity '",
+        ),
+    ),
+    ErrorRule(
         error_type="not_found",
         hint=(
             "Check the name or path - list what exists first (list_features, "

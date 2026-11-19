@@ -3002,3 +3002,389 @@ async def test_the_mixin_passes_set_sketch_text_on() -> None:
     result = await adapter.set_sketch_text("Sketch12", "b")
 
     assert result.data["after"] == ["b"]
+
+
+# --- Sketch essentials: corners, slots, trim and extend, construction ------
+
+
+class _Corner:
+    """An ISketchPoint at ``x``, ``y`` mm whose ``Select4`` answers ``ok``."""
+
+    def __init__(self, x: float, y: float, ok: bool = True) -> None:
+        self.X = x / 1000.0
+        self.Y = y / 1000.0
+        self.Z = 0.0
+        self._ok = ok
+        self.selected = 0
+
+    def Select4(self, _append: bool, _data: object) -> bool:
+        self.selected += 1
+        return self._ok
+
+
+class _Segment:
+    """An ISketchSegment whose construction setting sticks, unless ``stuck``."""
+
+    def __init__(self, stuck: bool = False) -> None:
+        self._value = False
+        self._stuck = stuck
+
+    @property
+    def ConstructionGeometry(self) -> bool:
+        return self._value
+
+    @ConstructionGeometry.setter
+    def ConstructionGeometry(self, value: bool) -> None:
+        if not self._stuck:
+            self._value = value
+
+
+def _essentials_adapter(
+    corners: tuple[_Corner, ...] = (),
+    made: object = "segment",
+    picked: bool = True,
+    changed: bool = True,
+) -> tuple[_FakeSketchAdapter, list[tuple[object, ...]]]:
+    """An adapter with an open Top-plane sketch; the COM calls made, in order.
+
+    Sketch ``[x, y]`` is model ``(x, 0, -y)``: the inverse transform the
+    tools use is checked by the coordinates ``SelectByID2`` receives.
+    ``made`` is what every create call returns, ``picked`` what
+    ``SelectByID2`` returns, ``changed`` whether trim and extend change the
+    sketch (their return value is ignored, as on SolidWorks): a trim
+    removes a 10 mm segment, an extension adds one.
+    """
+    adapter = _FakeSketchAdapter()
+    calls: list[tuple[object, ...]] = []
+    segments = [SimpleNamespace(GetLength=lambda: 0.01) for _ in range(3)]
+
+    def call(name: str, result: object = None) -> object:
+        def run(*args: object) -> object:
+            calls.append((name, *args))
+            return made if result is None else result
+
+        return run
+
+    def change(name: str) -> object:
+        def run(*args: object) -> bool:
+            calls.append((name, *args))
+            if changed and name == "SketchTrim":
+                segments.pop()
+            elif changed:
+                segments.append(SimpleNamespace(GetLength=lambda: 0.01))
+            return False  # SolidWorks returned False even when it trimmed
+
+        return run
+
+    sketch = SimpleNamespace(
+        GetSketchPoints2=lambda: corners,
+        GetSketchSegments=lambda: tuple(segments),
+        ModelToSketchTransform=SimpleNamespace(Inverse=lambda: "to-model"),
+    )
+    adapter.currentSketchManager = SimpleNamespace(
+        ActiveSketch=sketch,
+        CreateFillet=call("CreateFillet"),
+        CreateChamfer=call("CreateChamfer"),
+        CreateSketchSlot=call("CreateSketchSlot"),
+        Create3PointArc=call("Create3PointArc"),
+        CreateTangentArc=call("CreateTangentArc"),
+        CreateCenterRectangle=call("CreateCenterRectangle", (1, 2, 3, 4)),
+        SketchTrim=change("SketchTrim"),
+        SketchExtend=change("SketchExtend"),
+    )
+
+    def _select(*args: object) -> bool:
+        calls.append(("SelectByID2", *args[:5]))
+        return picked
+
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_a: True,
+        SelectionManager=SimpleNamespace(
+            CreateSelectData=lambda: SimpleNamespace(Mark=None)
+        ),
+        Extension=SimpleNamespace(SelectByID2=_select),
+    )
+
+    def _point(data: object) -> SimpleNamespace:
+        x, y, _z = (float(v) for v in getattr(data, "value", data))
+        return SimpleNamespace(
+            MultiplyTransform=lambda t: SimpleNamespace(
+                ArrayData=(x, 0.0, -y) if t == "to-model" else (x, y, 0.0)
+            )
+        )
+
+    adapter.swApp = SimpleNamespace(
+        GetMathUtility=lambda: SimpleNamespace(CreatePoint=_point)
+    )
+    return adapter, calls
+
+
+def test_each_corner_is_rounded_on_its_own() -> None:
+    """Every corner is found, then filleted alone, with no dialog asked for."""
+    left, top = _Corner(-60, -40), _Corner(-60, 40)
+    adapter, calls = _essentials_adapter((_Corner(60, 40), left, top))
+
+    result = sketch._add_sketch_fillet_impl(adapter, [[-60, -40], [-60, 40]], 10)
+
+    assert result.is_success, result.error
+    assert result.data == {
+        "ids": ["Fillet_1", "Fillet_2"],
+        "corners": [[-60, -40], [-60, 40]],
+    }
+    assert calls == [("CreateFillet", 0.01, 1), ("CreateFillet", 0.01, 1)]
+    assert (left.selected, top.selected) == (1, 1)
+
+
+def test_a_corner_that_isnt_there_changes_nothing() -> None:
+    adapter, calls = _essentials_adapter((_Corner(-60, -40),))
+
+    result = sketch._add_sketch_fillet_impl(adapter, [[-60, -40], [0, 0]], 10)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No sketch point at corner [0, 0] mm" in (result.error or "")
+    assert calls == []
+
+
+def test_a_corner_that_wont_select_is_an_error() -> None:
+    adapter, calls = _essentials_adapter((_Corner(5, 5, ok=False),))
+
+    result = sketch._add_sketch_fillet_impl(adapter, [[5, 5]], 1)
+
+    assert "Couldn't select the corner at [5, 5] mm" in (result.error or "")
+    assert calls == []
+
+
+def test_a_refused_fillet_names_the_corner() -> None:
+    adapter, _calls = _essentials_adapter((_Corner(5, 5),), made=None)
+
+    result = sketch._add_sketch_fillet_impl(adapter, [[5, 5]], 1)
+
+    assert "SolidWorks refused the fillet at corner [5, 5] mm" in (result.error or "")
+
+
+@pytest.mark.parametrize(
+    ("distance2", "angle", "expected"),
+    [
+        (None, None, (2, 0.01, 0.01)),
+        (4.0, None, (1, 0.01, 0.004)),
+        (None, 30.0, (0, 0.01, math.radians(30))),
+    ],
+)
+def test_a_chamfer_is_equal_two_distances_or_an_angle(
+    distance2: float | None, angle: float | None, expected: tuple[float, ...]
+) -> None:
+    adapter, calls = _essentials_adapter((_Corner(60, 40),))
+
+    result = sketch._add_sketch_chamfer_impl(adapter, [[60, 40]], 10, distance2, angle)
+
+    assert result.data["ids"] == ["Chamfer_1"]
+    assert calls == [("CreateChamfer", *expected)]
+
+
+def test_a_straight_slot_runs_between_its_centres() -> None:
+    adapter, calls = _essentials_adapter()
+
+    result = sketch._add_slot_impl(adapter, "straight", 10, [-40, -15], [-40, 15])
+
+    assert result.data == "Slot_1"
+    assert calls == [
+        (
+            "CreateSketchSlot",
+            0,
+            0,
+            0.01,
+            -0.04,
+            -0.015,
+            0.0,
+            -0.04,
+            0.015,
+            0.0,
+            -0.04,
+            0.015,
+            0.0,
+            1,
+            False,
+        )
+    ]
+
+
+def test_an_arc_slot_follows_its_arc_counter_clockwise() -> None:
+    adapter, calls = _essentials_adapter()
+
+    result = sketch._add_slot_impl(adapter, "arc", 8, [45, 0], [25, 20], [25, 0])
+
+    assert result.is_success, result.error
+    assert calls[0][:2] == ("CreateSketchSlot", 2)
+    assert calls[0][4:13] == (0.025, 0.0, 0.0, 0.045, 0.0, 0.0, 0.025, 0.02, 0.0)
+
+
+def test_an_arc_slot_needs_its_centre() -> None:
+    adapter, calls = _essentials_adapter()
+
+    result = sketch._add_slot_impl(adapter, "arc", 8, [45, 0], [25, 20])
+
+    assert "An arc slot needs its center" in (result.error or "")
+    assert calls == []
+
+
+def test_a_refused_slot_is_an_error() -> None:
+    adapter, _calls = _essentials_adapter(made=None)
+
+    result = sketch._add_slot_impl(adapter, "straight", 8, [0, 0], [10, 0])
+
+    assert "SolidWorks refused the slot" in (result.error or "")
+
+
+def test_trim_picks_in_model_space_and_counts_segments() -> None:
+    """Sketch [0, 2] on the Top plane is model (0, 0, -2) mm."""
+    adapter, calls = _essentials_adapter()
+
+    result = sketch._sketch_trim_impl(adapter, [0, 2])
+
+    assert result.data == {
+        "point": [0, 2],
+        "segments_before": 3,
+        "segments_after": 2,
+        "length_change_mm": -10.0,
+    }
+    assert calls == [
+        ("SelectByID2", "", "SKETCHSEGMENT", 0.0, 0.0, -0.002),
+        ("SketchTrim", 0, 0.0, 0.0, -0.002),
+    ]
+
+
+def test_a_trim_that_changes_nothing_is_refused() -> None:
+    adapter, calls = _essentials_adapter(changed=False)
+
+    result = sketch._sketch_trim_impl(adapter, [0, 2])
+
+    assert "SolidWorks refused to trim at [0, 2] mm" in (result.error or "")
+    assert [c[0] for c in calls] == ["SelectByID2", "SketchTrim"]
+
+
+def test_extend_lengthens_the_entity_at_the_point() -> None:
+    adapter, calls = _essentials_adapter()
+
+    result = sketch._sketch_extend_impl(adapter, [-3, -0.5])
+
+    assert result.data["segments_after"] == 4
+    assert result.data["length_change_mm"] == 10.0
+    assert calls[-1] == ("SketchExtend", -0.003, 0.0, 0.0005)
+
+
+def test_nothing_at_the_point_changes_nothing() -> None:
+    adapter, calls = _essentials_adapter(picked=False)
+
+    result = sketch._sketch_trim_impl(adapter, [9, 9])
+
+    assert "No sketch entity at [9, 9] mm" in (result.error or "")
+    assert [c[0] for c in calls] == ["SelectByID2"]
+
+
+def test_a_refused_extension_names_the_point() -> None:
+    adapter, _calls = _essentials_adapter(changed=False)
+
+    result = sketch._sketch_extend_impl(adapter, [1, 2])
+
+    assert "SolidWorks refused to extend at [1, 2] mm" in (result.error or "")
+
+
+def test_construction_is_set_on_every_segment_and_read_back() -> None:
+    adapter, _calls = _essentials_adapter()
+    line, sides = _Segment(), (_Segment(), _Segment())
+    adapter._sketch_entities = {"Line_1": line, "Rectangle_2": sides}
+
+    made = sketch._set_construction_geometry_impl(adapter, ["Line_1", "Rectangle_2"])
+    again = sketch._set_construction_geometry_impl(adapter, ["Line_1"])
+    back = sketch._set_construction_geometry_impl(adapter, ["Rectangle_2"], False)
+
+    assert made.data == {
+        "entities": {"Line_1": True, "Rectangle_2": True},
+        "construction": True,
+    }
+    assert again.data["entities"] == {"Line_1": True}
+    assert back.data == {"entities": {"Rectangle_2": False}, "construction": False}
+    assert line.ConstructionGeometry and not any(s.ConstructionGeometry for s in sides)
+
+
+def test_an_unknown_id_changes_no_entity() -> None:
+    adapter, _calls = _essentials_adapter()
+    line = _Segment()
+    adapter._sketch_entities = {"Line_1": line}
+
+    result = sketch._set_construction_geometry_impl(adapter, ["Line_1", "Line_9"])
+
+    assert "Unknown sketch entity 'Line_9'" in (result.error or "")
+    assert line.ConstructionGeometry is False
+
+
+def test_a_setting_solidworks_ignores_is_an_error() -> None:
+    adapter, _calls = _essentials_adapter()
+    adapter._sketch_entities = {"Line_1": _Segment(stuck=True)}
+
+    result = sketch._set_construction_geometry_impl(adapter, ["Line_1"])
+
+    assert "didn't change Line_1 to construction geometry" in (result.error or "")
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda a: sketch._add_sketch_fillet_impl(a, [[0, 0]], 1),
+        lambda a: sketch._add_sketch_chamfer_impl(a, [[0, 0]], 1),
+        lambda a: sketch._add_slot_impl(a, "straight", 1, [0, 0], [1, 0]),
+        lambda a: sketch._sketch_trim_impl(a, [0, 0]),
+        lambda a: sketch._sketch_extend_impl(a, [0, 0]),
+        lambda a: sketch._set_construction_geometry_impl(a, ["Line_1"]),
+    ],
+)
+def test_each_needs_an_open_sketch(operation: object) -> None:
+    result = operation(_FakeSketchAdapter())  # type: ignore[operator]
+
+    assert result.error == "No active sketch"
+
+
+def test_three_point_and_tangent_arcs() -> None:
+    adapter, calls = _essentials_adapter()
+
+    three = sketch._add_arc_impl(
+        adapter, 0, 0, -20, 35, -20, 25, "three_point", (-25, 30)
+    )
+    tangent = sketch._add_arc_impl(adapter, 0, 0, 10, 25, 10, 35, "tangent")
+    missing = sketch._add_arc_impl(adapter, 0, 0, 1, 1, 2, 2, "three_point")
+
+    assert three.is_success and tangent.is_success
+    assert calls == [
+        ("Create3PointArc", -0.02, 0.035, 0, -0.02, 0.025, 0, -0.025, 0.03, 0),
+        ("CreateTangentArc", 0.01, 0.025, 0, 0.01, 0.035, 0, 1),
+    ]
+    assert "needs a through point" in (missing.error or "")
+
+
+def test_a_rectangle_from_its_centre() -> None:
+    adapter, calls = _essentials_adapter()
+
+    result = sketch._add_rectangle_impl(adapter, 0, 0, 60, 40, from_center=True)
+
+    assert result.data == "Rectangle_1"
+    assert calls == [("CreateCenterRectangle", 0.0, 0.0, 0, 0.06, 0.04, 0)]
+    assert adapter._sketch_entity_centers["Rectangle_1"] == (0, 0)
+
+
+@pytest.mark.asyncio
+async def test_the_mixin_passes_sketch_essentials_on() -> None:
+    adapter, _calls = _essentials_adapter((_Corner(1, 1),))
+    adapter._sketch_entities = {"Line_1": _Segment()}
+    mixin = SolidWorksSketchMixin
+
+    def bound(name: str) -> object:
+        return getattr(mixin, name).__get__(adapter)
+
+    assert (await bound("add_sketch_fillet")([[1, 1]], 1)).is_success
+    assert (await bound("add_sketch_chamfer")([[1, 1]], 1)).is_success
+    assert (await bound("add_slot")("straight", 2, [0, 0], [5, 0])).is_success
+    assert (await bound("sketch_trim")([0, 0])).is_success
+    assert (await bound("sketch_extend")([0, 0])).is_success
+    assert (await bound("set_construction_geometry")(["Line_1"])).is_success
+    assert (await bound("add_rectangle")(0, 0, 1, 1, True)).is_success
+    assert (await bound("add_arc")(0, 0, 1, 0, 0, 1, "tangent")).is_success

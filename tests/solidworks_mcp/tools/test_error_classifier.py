@@ -80,6 +80,12 @@ def classifier() -> ErrorClassifier:
             "invalid_input",
         ),
         ("The active part has no solid body faces.", "not_found"),
+        (
+            "Error in add_sketch_fillet: SolidWorks refused the fillet at corner "
+            "[0, 0] mm: it isn't where two entities meet",
+            "invalid_input",
+        ),
+        ("No sketch point at corner [9, 9] mm in the open sketch", "invalid_input"),
         ("No view named 'Side'. Views: Front, Top", "not_found"),
         ("No drawing views found to dimension (pictorial ...)", "not_found"),
         (
