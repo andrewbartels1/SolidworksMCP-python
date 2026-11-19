@@ -9,6 +9,7 @@ from typing import Any, cast
 
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
+from .com_utils import as_list, double_array
 
 # swConstraintType_e values per the official SolidWorks API enum docs
 # (SolidWorks.Interop.swconst). The legacy IModelDoc2.SketchAddConstraints
@@ -142,14 +143,41 @@ class SolidWorksSketchMixin:
         return _add_centerline_impl(self, x1, y1, x2, y2)
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
-        return _add_polygon_impl(self, center_x, center_y, radius, sides)
+        return _add_polygon_impl(self, center_x, center_y, radius, sides, angle)
 
     async def add_ellipse(
-        self, center_x: float, center_y: float, major_axis: float, minor_axis: float
+        self,
+        center_x: float,
+        center_y: float,
+        major_axis: float,
+        minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
-        return _add_ellipse_impl(self, center_x, center_y, major_axis, minor_axis)
+        return _add_ellipse_impl(
+            self, center_x, center_y, major_axis, minor_axis, angle
+        )
+
+    async def add_sketch_text(
+        self,
+        text: str,
+        x: float = 0.0,
+        y: float = 0.0,
+        height: float = 3.5,
+        center_at: list[float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        return _add_sketch_text_impl(self, text, x, y, height, center_at)
+
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        return _set_sketch_text_impl(self, sketch_name, text)
 
     async def add_sketch_constraint(
         self,
@@ -862,6 +890,7 @@ def _add_polygon_impl(
     center_y: float,
     radius: float,
     sides: int,
+    angle: float = 0.0,
 ) -> AdapterResult[str]:
     """Add a regular polygon inscribed in a circle to the active sketch.
 
@@ -869,8 +898,8 @@ def _add_polygon_impl(
     Inscribed)``.  All eight arguments are required by the COM API — passing
     fewer arguments surfaces a pywin32 ``"Parameter not optional."`` error at
     the SOLIDWORKS boundary.  The vertex point ``(Xp, Yp, Zp)`` is placed on
-    the positive X axis at ``radius`` from centre, which fixes the polygon's
-    rotation reproducibly.
+    positive X axis at ``radius`` from centre, turned by ``angle`` degrees,
+    which fixes the polygon's rotation reproducibly.
 
     Args:
         adapter: A ``PyWin32Adapter`` with an open sketch.
@@ -880,6 +909,7 @@ def _add_polygon_impl(
             vertex). Corresponds to ``CreatePolygon(..., Inscribed=True)``,
             i.e. the polygon is inscribed in a circle of this radius.
         sides: Number of polygon sides.  SolidWorks accepts 3–40.
+        angle: Degrees the vertex point is turned from +X (0 by default).
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the registered entity ID
@@ -916,8 +946,8 @@ def _add_polygon_impl(
             center_x / 1000.0,
             center_y / 1000.0,
             0,
-            (center_x + radius) / 1000.0,
-            center_y / 1000.0,
+            (center_x + radius * math.cos(math.radians(angle))) / 1000.0,
+            (center_y + radius * math.sin(math.radians(angle))) / 1000.0,
             0,
             sides,
             True,
@@ -948,13 +978,13 @@ def _add_ellipse_impl(
     center_y: float,
     major_axis: float,
     minor_axis: float,
+    angle: float = 0.0,
 ) -> AdapterResult[str]:
-    """Add an axis-aligned ellipse to the active sketch.
+    """Add an ellipse to the active sketch, its major axis turned by ``angle``.
 
-    Calls ``SketchManager.CreateEllipse`` with the major-axis endpoint on the
-    positive X direction from the centre and the minor-axis endpoint on the
-    positive Y direction.  The ellipse is therefore axis-aligned and cannot
-    be rotated via this function.
+    Calls ``SketchManager.CreateEllipse`` with the major-axis endpoint
+    ``angle`` degrees anticlockwise from the sketch's +X and the minor-axis
+    endpoint a quarter turn further.
 
     The created ellipse is registered in the adapter's sketch-entity
     registry so subsequent constraint and dimension calls can reference it
@@ -969,6 +999,7 @@ def _add_ellipse_impl(
             as the offset from centre).
         minor_axis: Full minor-axis length in **millimetres** (half is used
             as the offset from centre).
+        angle: The major axis's turn from +X, in degrees.
 
     Returns:
         AdapterResult[str]: On success, ``data`` is the registered entity ID
@@ -997,15 +1028,18 @@ def _add_ellipse_impl(
         Raises:
             Exception: If ``CreateEllipse`` returns ``None``.
         """
+        turn = math.radians(angle)
+        cos, sin = math.cos(turn), math.sin(turn)
+        major, minor = major_axis / 2, minor_axis / 2
         ellipse = adapter.currentSketchManager.CreateEllipse(
             center_x / 1000.0,
             center_y / 1000.0,
             0,
-            (center_x + major_axis / 2) / 1000.0,
-            center_y / 1000.0,
+            (center_x + major * cos) / 1000.0,
+            (center_y + major * sin) / 1000.0,
             0,
-            center_x / 1000.0,
-            (center_y + minor_axis / 2) / 1000.0,
+            (center_x - minor * sin) / 1000.0,
+            (center_y + minor * cos) / 1000.0,
             0,
         )
         if not ellipse:
@@ -1015,6 +1049,203 @@ def _add_ellipse_impl(
     return cast(
         AdapterResult[str],
         adapter._handle_com_operation("add_ellipse", _ellipse_operation),
+    )
+
+
+#: ``InsertSketchText``'s width factor and spacing between letters, in per
+#: cent; a spacing of 0 stacked every letter on the first (SolidWorks 2026).
+_TEXT_NORMAL = 100
+
+
+def _text_middle(sketch_text: Any) -> list[float]:
+    """The middle of a sketch text's extent, model metres, from its edges.
+
+    ``ISketchText.GetEdges2`` gives the letters' outline edges; their start
+    and end points bound the text closely enough to centre it.
+
+    Raises:
+        Exception: If the text has no edges to measure.
+    """
+    xs: list[float] = []
+    ys: list[float] = []
+    zs: list[float] = []
+    for edge in as_list(sketch_text.GetEdges2()):
+        params = _sw_type_info.flagged(
+            _sw_type_info.flagged(edge, "IEdge").GetCurveParams3(), "ICurveParamData"
+        )
+        for point in (params.StartPoint, params.EndPoint):
+            xs.append(float(point[0]))
+            ys.append(float(point[1]))
+            zs.append(float(point[2]))
+    if not xs:
+        raise Exception("The sketch text has no edges to centre it by")
+    return [(min(v) + max(v)) / 2 for v in (xs, ys, zs)]
+
+
+def _to_sketch_space(adapter: Any, point_m: list[float]) -> list[float]:
+    """A model point (metres) in the open sketch's coordinates (metres)."""
+    app = _sw_type_info.flagged(adapter.swApp, "ISldWorks")
+    math_utility = _sw_type_info.flagged(app.GetMathUtility(), "IMathUtility")
+    point = _sw_type_info.flagged(
+        math_utility.CreatePoint(double_array(point_m)), "IMathPoint"
+    )
+    sketch = _sw_type_info.flagged(adapter.currentSketch, "ISketch")
+    moved = _sw_type_info.flagged(
+        point.MultiplyTransform(sketch.ModelToSketchTransform), "IMathPoint"
+    )
+    return [float(v) for v in as_list(moved.ArrayData)[:3]]
+
+
+def _centre_text(adapter: Any, sketch_text: Any, point_mm: list[float]) -> None:
+    """Move ``sketch_text`` so its middle is at model point ``point_mm``.
+
+    ``InsertSketchText``'s centre alignment didn't centre the text (on SW
+    2026 it dropped the selected line and started the text at the sketch's
+    origin), so the text is measured and moved: its middle, mapped into the
+    sketch, and ``SetCoordinates`` shifted by the difference to the point,
+    mapped into the sketch the same way (projected onto its plane).
+    """
+    middle = _to_sketch_space(adapter, _text_middle(sketch_text))
+    target = _to_sketch_space(adapter, [c / 1000.0 for c in point_mm])
+    at = [float(v) for v in as_list(sketch_text.GetCoordinates())]
+    sketch_text.SetCoordinates(
+        at[0] + target[0] - middle[0], at[1] + target[1] - middle[1], at[2]
+    )
+
+
+def _add_sketch_text_impl(
+    adapter: Any,
+    text: str,
+    x: float,
+    y: float,
+    height: float,
+    center_at: list[float] | None,
+) -> AdapterResult[dict[str, Any]]:
+    """Add text to the active sketch, from a point or centred on one.
+
+    ``IModelDoc2.InsertSketchText`` puts the text at the point; the letter
+    height is the text format's ``CharHeight``. ``center_at`` measures the
+    text and moves it so its middle is at that model point. (A line
+    selected first didn't lay the text along it on SolidWorks 2026, nor did
+    centre alignment centre it, so neither is used.)
+
+    Args:
+        adapter: A ``PyWin32Adapter`` with an open sketch.
+        text: The text; ``$PRP:"name"`` shows a custom property.
+        x: Start x in mm (sketch coordinates).
+        y: Start y in mm (the baseline).
+        height: Letter height in mm.
+        center_at: A model point ``[x, y, z]`` in mm to put the text's middle
+            at (projected onto the sketch).
+
+    Returns:
+        AdapterResult with ``id``, ``text`` (as SolidWorks shows it, links
+        resolved) and ``height`` (mm, read back).
+    """
+    if not adapter.currentSketchManager:
+        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active sketch")
+
+    def _text_operation() -> dict[str, Any]:
+        model = adapter.currentModel
+        model.ClearSelection2(True)
+        # Centred text starts at its target, so it never shows elsewhere
+        # (at the sketch's origin) before it is moved into place.
+        at_x, at_y = x / 1000.0, y / 1000.0
+        if center_at is not None:
+            at_x, at_y, _z = _to_sketch_space(adapter, [c / 1000.0 for c in center_at])
+        inserted = model.InsertSketchText(
+            at_x, at_y, 0.0, text, 0, 0, 0, _TEXT_NORMAL, _TEXT_NORMAL
+        )
+        model.ClearSelection2(True)
+        if not inserted:
+            raise Exception("SolidWorks added no sketch text")
+        sketch_text = _sw_type_info.flagged(inserted, "ISketchText")
+        text_format = sketch_text.GetTextFormat()
+        text_format.CharHeight = height / 1000.0
+        sketch_text.SetTextFormat(False, text_format)
+        if center_at is not None:
+            _centre_text(adapter, sketch_text, center_at)
+        shown = adapter._attempt(lambda: str(sketch_text.Text), default=text)
+        read_height = adapter._attempt(
+            lambda: float(sketch_text.GetTextFormat().CharHeight) * 1000.0,
+            default=height,
+        )
+        return {
+            "id": adapter._register_sketch_entity("Text", inserted),
+            "text": shown,
+            "height": round(read_height, 4),
+        }
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("add_sketch_text", _text_operation),
+    )
+
+
+def _set_sketch_text_impl(
+    adapter: Any, sketch_name: str, text: str
+) -> AdapterResult[dict[str, Any]]:
+    """Rewrite every sketch text in ``sketch_name``, with the sketch open.
+
+    SolidWorks doesn't redraw sketch text when the model rebuilds, not even
+    a ``$PRP:`` link whose dimension changed, and writing
+    ``ISketchText.Text`` outside the sketch changes the string but not the
+    geometry (SolidWorks 2026, 2026-11-18). Written while the sketch is
+    open (``EditSketch``), a link is read again; the sketch is then closed
+    and the model rebuilt.
+
+    Args:
+        adapter: A ``PyWin32Adapter`` with a part open.
+        sketch_name: The sketch, e.g. ``Sketch12``.
+        text: The new text; ``$PRP:"name"`` shows a custom property.
+
+    Returns:
+        AdapterResult with ``sketch``, ``before`` and ``after``: each text's
+        string before and after (a ``$PRP:`` link is read when the string
+        is asked for, so ``before`` can already show a new value the
+        lettering doesn't).
+    """
+
+    def _operation() -> dict[str, Any]:
+        model = adapter.currentModel
+        if not model:
+            raise Exception("No active model")
+        feature = model.FeatureByName(sketch_name)
+        if not feature:
+            raise Exception(
+                f"Sketch '{sketch_name}' not found; read the names with list_features."
+            )
+        feature = _sw_type_info.flagged(feature, "IFeature")
+        sketch = _sw_type_info.flagged(feature.GetSpecificFeature2(), "ISketch")
+        texts = [
+            _sw_type_info.flagged(t, "ISketchText")
+            for t in as_list(adapter._attempt(lambda: sketch.GetSketchTextSegments()))
+        ]
+        if not texts:
+            raise Exception(f"Sketch '{sketch_name}' has no text to rewrite.")
+        before = [str(t.Text) for t in texts]
+        model.ClearSelection2(True)
+        feature.Select2(False, 0)
+        model.EditSketch()
+        try:
+            open_sketch = _sw_type_info.flagged(model.GetActiveSketch2(), "ISketch")
+            texts = [
+                _sw_type_info.flagged(t, "ISketchText")
+                for t in as_list(open_sketch.GetSketchTextSegments())
+            ]
+            for sketch_text in texts:
+                sketch_text.Text = text
+            after = [str(t.Text) for t in texts]
+        finally:
+            _sw_type_info.flagged(model.SketchManager, "ISketchManager").InsertSketch(
+                True
+            )
+        model.ForceRebuild3(False)
+        return {"sketch": sketch_name, "before": before, "after": after}
+
+    return cast(
+        AdapterResult[dict[str, Any]],
+        adapter._handle_com_operation("set_sketch_text", _operation),
     )
 
 
@@ -1310,6 +1541,11 @@ def _add_sketch_dimension_impl(
                 f"Unknown sketch entity '{entity1}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
             )
 
+        if isinstance(entity1_obj, (tuple, list)) and (
+            (dimension_type or "").strip().lower() in {"radial", "diameter"}
+        ):
+            entity1_obj = _polygon_circle(entity1_obj, entity1)
+
         entity2_obj = None
         if entity2:
             entity2_obj = adapter._sketch_entities.get(entity2)
@@ -1319,6 +1555,12 @@ def _add_sketch_dimension_impl(
                 )
 
         dim_type = (dimension_type or "linear").strip().lower()
+        if dim_type in ELLIPSE_AXES:
+            display_ellipse = _ellipse_axis_dimension(
+                adapter, entity1_obj, entity1, dim_type
+            )
+            _set_dimension_value(adapter, display_ellipse, value / 2 / 1000.0)
+            return adapter._register_sketch_entity("Dimension", display_ellipse)  # type: ignore[no-any-return]
         placement = None
         if dim_type == "angular" and entity2_obj is not None:
             placement = adapter._angular_dimension_placement(entity1_obj, entity2_obj)
@@ -1434,33 +1676,127 @@ def _add_sketch_dimension_impl(
             value_si = value * _math_dim.pi / 180.0
         else:
             value_si = value / 1000.0
-
-        dim_obj = (
-            adapter._attempt(lambda: display_dim.GetDimension2(0), default=None)
-            or adapter._attempt(lambda: display_dim.GetDimension(), default=None)
-            or display_dim
-        )
-        if (
-            adapter._attempt(
-                lambda: dim_obj.SetSystemValue3(value_si, 1, None), default=None
-            )
-            is None
-        ):
-            if (
-                adapter._attempt(
-                    lambda: dim_obj.SetSystemValue2(value_si, 1), default=None
-                )
-                is None
-            ):
-                if hasattr(dim_obj, "SystemValue"):
-                    dim_obj.SystemValue = value_si
-
+        _set_dimension_value(adapter, display_dim, value_si)
         return adapter._register_sketch_entity("Dimension", display_dim)  # type: ignore[no-any-return]
 
     return cast(
         AdapterResult[str],
         adapter._handle_com_operation("add_sketch_dimension", _dimension_operation),
     )
+
+
+def _set_dimension_value(adapter: Any, display_dim: Any, value_si: float) -> None:
+    """Set a new dimension's value (metres or radians) in this configuration.
+
+    ``SetSystemValue3``, then ``SetSystemValue2``, then the ``SystemValue``
+    property, whichever this SolidWorks accepts.
+    """
+    dim_obj = (
+        adapter._attempt(lambda: display_dim.GetDimension2(0), default=None)
+        or adapter._attempt(lambda: display_dim.GetDimension(), default=None)
+        or display_dim
+    )
+    if (
+        adapter._attempt(
+            lambda: dim_obj.SetSystemValue3(value_si, 1, None), default=None
+        )
+        is None
+    ):
+        if (
+            adapter._attempt(lambda: dim_obj.SetSystemValue2(value_si, 1), default=None)
+            is None
+        ):
+            if hasattr(dim_obj, "SystemValue"):
+                dim_obj.SystemValue = value_si
+
+
+#: ``swSketchSegments_e.swSketchARC``: a circle or arc segment.
+_SKETCH_ARC = 1
+
+#: How far beside an ellipse's axis its dimension text goes, in metres.
+_AXIS_TEXT_OFFSET = 0.005
+
+#: An ellipse's axis dimensions, and the ``ISketchEllipse`` getter for the
+#: point at that axis's end.
+ELLIPSE_AXES = {"major_axis": "GetMajorPoint2", "minor_axis": "GetMinorPoint2"}
+
+
+def _ellipse_axis_dimension(
+    adapter: Any, ellipse: Any, entity_id: str, axis: str
+) -> Any:
+    """An aligned dimension from an ellipse's centre to the end of ``axis``.
+
+    It holds half the axis: an ellipse has a point at one end of each axis
+    only. ``AddDimension2`` with the text beside the axis's middle makes it
+    aligned, so a turned ellipse gets its true half-axis (SolidWorks 2026,
+    2026-11-18: 6.5 mm on an ellipse turned 30°, where a horizontal one
+    would read 5.63; ``AddSpecificDimension`` added nothing). A dimension
+    that doesn't read the axis's length (horizontal or vertical after all)
+    is refused rather than set, which would bend the ellipse.
+
+    Args:
+        adapter: The adapter, with the ellipse's sketch open.
+        ellipse: The ellipse, as ``CreateEllipse`` returned it.
+        entity_id: Its registered id, for messages.
+        axis: ``major_axis`` or ``minor_axis``.
+
+    Returns:
+        The display dimension.
+
+    Raises:
+        Exception: If the entity isn't an ellipse, a point can't be selected,
+            or SolidWorks adds no dimension or one that isn't aligned.
+    """
+    flagged = _sw_type_info.flagged(ellipse, "ISketchEllipse")
+    centre = adapter._attempt(lambda: flagged.GetCenterPoint2(), default=None)
+    end = adapter._attempt(lambda: getattr(flagged, ELLIPSE_AXES[axis])(), default=None)
+    if centre is None or end is None:
+        raise Exception(
+            f"'{entity_id}' is not an ellipse; {axis} dimensions an ellipse from add_ellipse."
+        )
+    model = adapter.currentModel
+    model.ClearSelection2(True)
+    for point, append in ((centre, False), (end, True)):
+        if not adapter._attempt(lambda p=point, a=append: bool(p.Select2(a, 0)), False):
+            raise Exception(f"Failed to select the {axis} points of '{entity_id}'")
+    dx, dy = end.X - centre.X, end.Y - centre.Y
+    length = math.hypot(dx, dy)
+    side = (-dy / length, dx / length) if length else (0.0, 1.0)
+    display = adapter._attempt(
+        lambda: model.AddDimension2(
+            centre.X + dx / 2 + side[0] * _AXIS_TEXT_OFFSET,
+            centre.Y + dy / 2 + side[1] * _AXIS_TEXT_OFFSET,
+            0.0,
+        ),
+        default=None,
+    )
+    if not display:
+        raise Exception(f"SolidWorks added no {axis} dimension to '{entity_id}'")
+    measured = adapter._attempt(
+        lambda: display.GetDimension2(0).SystemValue, default=None
+    )
+    if measured is None or abs(float(measured) - length) > 1e-6:
+        raise Exception(
+            f"The {axis} dimension of '{entity_id}' reads {measured}, not the "
+            f"axis's {length:.6f} m: it isn't aligned with the axis."
+        )
+    return display
+
+
+def _polygon_circle(segments: Any, entity_id: str) -> Any:
+    """A polygon's construction circle, which sizes it across its flats.
+
+    ``CreatePolygon`` returns the polygon's sides and the circle drawn
+    inside them; a diameter dimension on that circle drives the polygon.
+
+    Raises:
+        Exception: If no segment is a circle.
+    """
+    for segment in segments:
+        flagged = _sw_type_info.flagged(segment, "ISketchSegment")
+        if flagged.GetType() == _SKETCH_ARC:
+            return segment
+    raise Exception(f"Polygon '{entity_id}' has no construction circle to dimension.")
 
 
 def _sketch_point_xyz(

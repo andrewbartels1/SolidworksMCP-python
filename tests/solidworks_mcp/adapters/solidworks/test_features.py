@@ -1038,6 +1038,26 @@ def test_through_all_both_falls_back_to_the_single_ended_enum() -> None:
     ]
 
 
+def test_a_blind_cut_both_ways_is_one_mid_plane_cut() -> None:
+    """Blind with both_directions straddles the sketch plane: T1 = mid-plane,
+    ``depth`` in total, and no flipped retry (both sides are already cut)."""
+    feature = SimpleNamespace(Name="Cut-Extrude6")
+    adapter, log = _cut_adapter_recording(
+        cut4=lambda _args: feature, cut3=lambda _args: None
+    )
+    adapter.constants = {**adapter.constants, "swEndCondMidPlane": 6}
+
+    result = features._create_cut_extrude_impl(
+        adapter, ExtrusionParameters(depth=13.0, both_directions=True)
+    )
+
+    assert result.is_success, result.error
+    assert result.data.parameters["direction_flipped"] is False
+    cut_args = [entry[1] for entry in log if entry[0] != "select"]
+    # (Sd, Dir, T1, D1) of the one FeatureCut4 call.
+    assert [(a[0], a[2], a[3], a[5]) for a in cut_args] == [(True, False, 6, 0.013)]
+
+
 def test_blind_cut_from_a_face_sketch_flips_direction() -> None:
     """The requested direction points out of the part and builds nothing, so
     the single-ended cut is retried the other way (#193)."""

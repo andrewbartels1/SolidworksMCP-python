@@ -10,7 +10,7 @@
 [![SolidWorks](https://img.shields.io/badge/tested%20on-SolidWorks%202026-red)](https://www.solidworks.com/)
 [![Coverage](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python/branch/main/graph/badge.svg)](https://codecov.io/gh/andrewbartels1/SolidworksMCP-python)
 
-Python MCP server for SolidWorks automation with 140 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
+Python MCP server for SolidWorks automation with 145 tools, plus an optional agent/prompt-testing layer for AI-assisted workflows.
 
 [![115 MCP tools by support level (the 8 deprecated ones not counted), and how much of the core SolidWorks COM API they reach](docs/assets/progress/progress.svg)](https://andrewbartels1.com/SolidworksMCP-python/progress/)
 
@@ -191,6 +191,7 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 </tr>
 <tr>
 <td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#hole-positions"><img src="docs/assets/demos/part-features/test_holes_at_several_points-motion.gif" alt="A plate of Hole Wizard holes placed from points, a mirror and a ring" width="100%"></a><br><sub>A plate of Hole Wizard holes from points, a mirror and a ring</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#wrench"><img src="docs/assets/demos/equations/test_a_combination_wrench_sized_by_one_variable-motion.gif" alt="A steel combination wrench sized by one global variable and lettered with its size: 13 mm, then 19 mm, then 8 mm in its own configuration" width="100%"></a><br><sub>One variable sizes a combination wrench: equations and configurations</sub></td>
 </tr>
 </table>
 
@@ -366,7 +367,7 @@ It works only with the circuit-breaker adapter wrapper (the default for real Sol
 
 ### A shorter tool list
 
-All 140 tools cost about 55,000 tokens a turn. `SOLIDWORKS_MCP_TOOL_MODE=search` lists four instead (about 900 tokens); `SOLIDWORKS_MCP_TOOLSETS=core,drawing` lists only those groups. See [Choose which tools a client sees](https://andrewbartels1.com/SolidworksMCP-python/getting-started/installation/#4-choose-which-tools-a-client-sees).
+All 145 tools cost about 59,000 tokens a turn. `SOLIDWORKS_MCP_TOOL_MODE=search` lists four instead (about 900 tokens); `SOLIDWORKS_MCP_TOOLSETS=core,drawing` lists only those groups. See [Choose which tools a client sees](https://andrewbartels1.com/SolidworksMCP-python/getting-started/installation/#4-choose-which-tools-a-client-sees).
 
 ## Teach your agent the workflow
 

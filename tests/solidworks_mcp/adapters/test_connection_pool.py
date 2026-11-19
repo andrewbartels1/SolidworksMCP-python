@@ -1773,8 +1773,10 @@ async def test_connection_pool_forwards_explicit_templates() -> None:
 
 _SKETCH_PASSTHROUGHS = [
     ("add_spline", ([{"x": 0.0, "y": 0.0}, {"x": 1.0, "y": 2.0}],)),
-    ("add_polygon", (0.0, 0.0, 5.0, 6)),
-    ("add_ellipse", (0.0, 0.0, 10.0, 5.0)),
+    ("add_polygon", (0.0, 0.0, 5.0, 6, 30.0)),
+    ("add_ellipse", (0.0, 0.0, 10.0, 5.0, 15.0)),
+    ("add_sketch_text", ("abc", 1.0, 2.0, 4.0, [60.0, 2.0, 0.0])),
+    ("set_sketch_text", ("Sketch12", "abc")),
     ("sketch_linear_pattern", (["Arc1"], 1.0, 0.0, 20.0, 3)),
     ("sketch_circular_pattern", (["Arc1"], 360.0, 4)),
     ("sketch_mirror", (["Arc1"], "Line1")),

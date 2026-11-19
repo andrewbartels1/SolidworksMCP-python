@@ -258,12 +258,14 @@ Draw a centreline (construction line) in the open sketch, in mm.
 
 Draw a regular polygon (e.g. a hexagon) in the open sketch from its centre, radius and number of sides.
 
+`angle` turns it: the degrees its first corner is turned from +x (0 by default), so two hexagons 30° apart make a 12-point opening. A `diameter` dimension (`add_sketch_dimension`) on the polygon's `id` sizes it by the circle drawn inside it, so a hexagon is sized across flats and an equation can drive it.
+
 **Prerequisite:** Active sketch edit mode
 
 **Sample call:**
 
 ```json
-{}
+{"center_x": 0, "center_y": 0, "radius": 6.5, "sides": 6, "angle": 30}
 ```
 
 ---
@@ -278,6 +280,57 @@ Draw an ellipse in the open sketch from its centre and axis lengths, in mm.
 
 ```json
 {}
+```
+
+---
+
+### `add_sketch_text`
+
+Write text in the open sketch, at a point or centred on one, to deboss or emboss it.
+
+**Prerequisite:** Active sketch edit mode. To read from a face's own side (an underside), open the sketch on that face (`create_sketch` with `face_point`).
+
+**SolidWorks automation note:** `IModelDoc2.InsertSketchText` at the point, with normal letter spacing; the letter height is the text format's `CharHeight`. `center_at` measures the text from its edges (`ISketchText.GetEdges2`) and moves it (`SetCoordinates`) so its middle is on that model point. `$PRP:"name"` in the text shows a custom property: set one to a dimension's name in quotes (`set_custom_property`, value `"D1@Sketch3"`) and the text follows that dimension, through any equation that drives it. On SolidWorks 2026 a line selected first didn't lay the text along it, centre alignment didn't centre it, and mirrored text couldn't be cut, so the tool uses none of them.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `text` | `str` | ✅ | | The text; `$PRP:"name"` shows a custom property |
+| `x` | `float` | — | `0` | Start x in mm, sketch coordinates |
+| `y` | `float` | — | `0` | Start y (baseline) in mm |
+| `height` | `float` | — | `3.5` | Letter height in mm |
+| `center_at` | `list[float]?` | — | `None` | Model point `[x, y, z]` in mm for the text's middle |
+
+**Sample call:**
+
+```json
+{"text": "solidworksmcp-python $PRP:\"WrenchSize\" mm", "height": 3.5, "center_at": [85, 1.95, 0]}
+```
+
+Then `create_cut_extrude` on the sketch with a small `depth` debosses it.
+
+---
+
+### `set_sketch_text`
+
+Rewrite the text in a sketch and rebuild, so debossed lettering shows it.
+
+**Prerequisite:** A part with a sketch holding text from `add_sketch_text`
+
+**SolidWorks automation note:** SolidWorks doesn't redraw sketch text when the model rebuilds, not even a `$PRP:` link to a dimension an equation changed (SolidWorks 2026: four rebuild modes, saving, and writing `ISketchText.Text` outside the sketch all left the old lettering). The tool opens the sketch (`EditSketch`), writes `Text`, closes it and rebuilds; written that way, a `$PRP:` link is read again.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `sketch_name` | `str` | ✅ | | The sketch, e.g. `Sketch12` |
+| `text` | `str` | ✅ | | The new text; the same `$PRP:"name"` text re-reads the link |
+
+**Sample call:**
+
+```json
+{"sketch_name": "Sketch12", "text": "solidworksmcp-python  $PRP:\"WrenchSize\" mm"}
 ```
 
 ---

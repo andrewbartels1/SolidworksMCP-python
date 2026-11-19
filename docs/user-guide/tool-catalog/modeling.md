@@ -746,7 +746,7 @@ Cut material from the active part with a closed sketch profile: holes, slots, wi
 | `draft_angle` | `float` | — | `0.0` | Draft angle in degrees |
 | `reverse_direction` | `bool` | — | `false` | Cut against the sketch normal instead of along it. Usually not needed: if the requested direction finds no material, the cut is retried the other way and the reply sets direction_flipped |
 | `end_condition` | `str` | — | `"Blind"` | 'Blind' (cut 'depth' mm), 'ThroughAll' (through the body, one way) or 'ThroughAllBoth' (through the body both ways, for a sketch inside the body) |
-| `both_directions` | `bool` | — | `false` | With end_condition 'ThroughAll', cut through the body both ways (same as 'ThroughAllBoth') |
+| `both_directions` | `bool` | — | `false` | Cut both ways from the sketch plane: with 'Blind', a mid-plane cut 'depth' mm in total, centred on the plane (a slot either side of it); with 'ThroughAll', through the body both ways (same as 'ThroughAllBoth') |
 | `sketch_name` | `str?` | — | `null` | Sketch to cut from, e.g. 'Sketch3'. If omitted, the sketch most recently created/exited in this session is used, but only if it still exists in the model — there is no other fallback. Pass this explicitly whenever more than one unconsumed sketch could exist, or after any operation that might have changed the active sketch. |
 
 **Sample call:**

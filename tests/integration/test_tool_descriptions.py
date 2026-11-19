@@ -25,6 +25,7 @@ _MODULES = [
     "drawing_analysis",
     "drawing_automation",
     "engineering_data",
+    "equations",
     "export",
     "file_management",
     "macro_recording",

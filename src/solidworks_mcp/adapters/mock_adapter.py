@@ -31,6 +31,7 @@ from .base import (
     SweepParameters,
 )
 from .mock_drawing_pack import MockDrawingPackMixin
+from .mock_equations import MockEquationsMixin
 from .mock_sheet_metal import MockSheetMetalMixin
 from .mock_templates import MockTemplatesMixin
 from .solidworks.documentation import MATERIAL_PROPERTIES
@@ -143,7 +144,11 @@ class _BoolCallable:
 
 
 class MockSolidWorksAdapter(
-    MockSheetMetalMixin, MockTemplatesMixin, MockDrawingPackMixin, SolidWorksAdapter
+    MockSheetMetalMixin,
+    MockTemplatesMixin,
+    MockDrawingPackMixin,
+    MockEquationsMixin,
+    SolidWorksAdapter,
 ):
     """Mock adapter that simulates SolidWorks operations.
 
@@ -1941,14 +1946,16 @@ class MockSolidWorksAdapter(
         center_y: float,
         major_axis: float,
         minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
-        """Mock adding an axis-aligned ellipse to sketch.
+        """Mock adding an ellipse to sketch.
 
         Args:
             center_x (float): Ellipse centre X in millimetres.
             center_y (float): Ellipse centre Y in millimetres.
             major_axis (float): Full major-axis length in millimetres.
             minor_axis (float): Full minor-axis length in millimetres.
+            angle (float): The major axis's turn from +x, in degrees.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -1970,8 +1977,69 @@ class MockSolidWorksAdapter(
             execution_time=self._delays["sketch_operation"] / 2,
         )
 
+    async def add_sketch_text(
+        self,
+        text: str,
+        x: float = 0.0,
+        y: float = 0.0,
+        height: float = 3.5,
+        center_at: list[float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock adding sketch text: an id, the text as given, the height.
+
+        Args:
+            text (str): The text; ``$PRP:"name"`` shows a custom property.
+            x (float): Start x in mm (sketch coordinates).
+            y (float): Start y in mm (the baseline).
+            height (float): Letter height in mm.
+            center_at (list[float] | None): A model point [x, y, z] in mm for
+                the text's middle.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``id``, ``text`` and ``height``.
+        """
+        if not self._current_sketch:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active sketch"
+            )
+        self._operation_count += 1
+        text_id = f"Text_{random.randint(1000, 9999)}"
+        self._sketch_entity_ids.add(text_id)
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"id": text_id, "text": text, "height": height},
+            execution_time=self._delays["sketch_operation"] / 2,
+        )
+
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock rewriting a sketch's text: the text given, before and after.
+
+        Args:
+            sketch_name (str): The sketch.
+            text (str): The new text.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``sketch``, ``before`` and ``after``.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"sketch": sketch_name, "before": [], "after": [text]},
+        )
+
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Mock adding a regular polygon to sketch.
 
@@ -1982,6 +2050,7 @@ class MockSolidWorksAdapter(
                 to each vertex; matches the real adapter's
                 ``CreatePolygon(..., Inscribed=True)`` semantics).
             sides (int): Number of polygon sides.
+            angle (float): Degrees the first vertex is turned from +x.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.

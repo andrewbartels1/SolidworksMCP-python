@@ -1031,6 +1031,65 @@ The SW version picks only `OptimizeGeometry`, never `Sd`.
 
 ---
 
+## 36. `IEquationMgr`: no call that takes configuration names works from Python
+
+**Symptom:** `Add3` and `SetEquationAndConfigurationOption` return `-1`, `Status`
+reads `-1`, and nothing is added or changed, for any equation text.
+
+**What works** (probed live on SW 2026, 2026-11-17/18):
+
+| Call | Result |
+|---|---|
+| `Add3(-1, text, True, option, names)`, names as a `VT_BSTR` array, a `VT_VARIANT` array, a tuple, `None` or `pythoncom.Empty` | always `-1` |
+| `SetEquationAndConfigurationOption(i, text, 3, names)`, any array form | `-1` |
+| `ISetEquationAndConfigurationOption(i, text, 3, 1, names)` | `Invalid number of parameters` |
+| `Add2(-1, text, True)` (or `Add`) | adds in every configuration, returns the index |
+| `SetEquationAndConfigurationOption(i, text, 1, None)` with the configuration active | `0`: set in that configuration only |
+| `SetEquationAndConfigurationOption(i, text, 2, None)` | `0` on a 2-equation part, `-1` on a 19-equation one, even for the same text |
+| `Equation(i)` property put (through `IDispatch.Invoke`, `DISPATCH_PROPERTYPUT`) | changes it in every configuration; a bad text leaves it and sets `Status` to `-1` |
+| `EvaluateAll()` | returned `-1` on a part that solved: don't trust its return |
+
+**Fix:** add with `Add2`; change in every configuration with the property put; set
+named configurations one at a time as "this configuration", each made active, then
+show the original again. `Value(i)` is in the document's units (`19.0` for `19mm`).
+
+`adapters/solidworks/equations.py`.
+
+---
+
+## 37. A sketch on a plane at an angle: its x axis may not be the one you expect
+
+**Symptom:** a rectangle meant to run along the part, on a reference plane made
+15° from the Front Plane about the y axis, cut a half-depth groove instead.
+
+**Cause:** on that plane SolidWorks 2026 put the sketch's **x along the model's y**
+(up) and its y along the part. A rectangle spanning sketch x 0..120 covered the upper
+half of the thickness; its sketch y ±60 ran along the whole length.
+
+**Fix:** don't assume an angled plane's sketch axes. Make the profile span both ways
+across the direction you don't care about, and check the result (overall size,
+volume or body count). The wrench demo's jaw spans sketch x ±60 and picks the sketch-y
+side by the measured size.
+
+`tests/live/test_live_sw_equations_wrench.py`, `_jaw`.
+
+---
+
+## 38. Blind `both_directions` on a cut was one-sided; and patterns of patterns build nothing
+
+- **`FeatureCut4` mid-plane needs `T1 = swEndCondMidPlane` (6).** The adapter read
+  `both_directions` only with Through All, so a Blind cut asked for "both directions"
+  cut one way: a slot meant to straddle its plane came out beside it. Fixed: Blind with
+  `both_directions` passes `T1 = 6`, `D1` the total depth.
+- **A linear pattern that includes a circular pattern built nothing** (no volume
+  change; the tool removed the empty feature). Draw the second instance instead: the
+  wrench's 12-point opening is two hexagon cuts, the second from `add_polygon` with
+  `angle: 30`.
+
+Found 2026-11-18 building the equations demo.
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests

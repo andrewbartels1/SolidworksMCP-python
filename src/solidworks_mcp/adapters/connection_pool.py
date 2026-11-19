@@ -1033,6 +1033,30 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             lambda adapter: adapter.delete_configuration(name),
         )
 
+    async def list_equations(self) -> AdapterResult[list[dict[str, Any]]]:
+        """List the active model's equations using pool."""
+        return await self._execute_with_pool(
+            "list_equations", lambda adapter: adapter.list_equations()
+        )
+
+    async def set_equation(
+        self,
+        name: str,
+        expression: str,
+        configurations: str | list[str] = "all",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add or change an equation using pool."""
+        return await self._execute_with_pool(
+            "set_equation",
+            lambda adapter: adapter.set_equation(name, expression, configurations),
+        )
+
+    async def delete_equation(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete an equation using pool."""
+        return await self._execute_with_pool(
+            "delete_equation", lambda adapter: adapter.delete_equation(name)
+        )
+
     async def active_configuration(
         self,
     ) -> AdapterResult[str]:
@@ -1228,7 +1252,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         )
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add polygon using pool.
 
@@ -1237,13 +1266,16 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             center_y (float): The center y value.
             radius (float): The radius value.
             sides (int): The sides value.
+            angle (float): Degrees the first vertex is turned from +x.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
         """
         return await self._execute_with_pool(
             "add_polygon",
-            lambda adapter: adapter.add_polygon(center_x, center_y, radius, sides),
+            lambda adapter: adapter.add_polygon(
+                center_x, center_y, radius, sides, angle
+            ),
         )
 
     async def add_ellipse(
@@ -1252,6 +1284,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         center_y: float,
         major_axis: float,
         minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add ellipse using pool.
 
@@ -1260,6 +1293,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             center_y (float): The center y value.
             major_axis (float): The major axis value.
             minor_axis (float): The minor axis value.
+            angle (float): The major axis's turn from +x, in degrees.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -1267,8 +1301,51 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         return await self._execute_with_pool(
             "add_ellipse",
             lambda adapter: adapter.add_ellipse(
-                center_x, center_y, major_axis, minor_axis
+                center_x, center_y, major_axis, minor_axis, angle
             ),
+        )
+
+    async def add_sketch_text(
+        self,
+        text: str,
+        x: float = 0.0,
+        y: float = 0.0,
+        height: float = 3.5,
+        center_at: list[float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add sketch text using pool.
+
+        Args:
+            text (str): The text; ``$PRP:"name"`` shows a custom property.
+            x (float): Start x in mm (sketch coordinates).
+            y (float): Start y in mm (the baseline).
+            height (float): Letter height in mm.
+            center_at (list[float] | None): A model point [x, y, z] in mm for
+                the text's middle.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "add_sketch_text",
+            lambda adapter: adapter.add_sketch_text(text, x, y, height, center_at),
+        )
+
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Rewrite sketch text using pool.
+
+        Args:
+            sketch_name (str): The sketch.
+            text (str): The new text.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return await self._execute_with_pool(
+            "set_sketch_text",
+            lambda adapter: adapter.set_sketch_text(sketch_name, text),
         )
 
     async def sketch_linear_pattern(

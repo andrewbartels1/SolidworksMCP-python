@@ -917,6 +917,84 @@ deletes the hole it had started, and the plate's volume doesn't change.
 7. `pattern_circular({"features": ["Ø6.0 (6) Diameter Hole1"], "axis": "Axis1", "count": 6})`
 8. `create_hole({"face_point": [0, 15, 22], "hole_type": "counterbore", "size": "M6", "end_condition": "blind", "depth": 8, "positions": [[0, 20, -22]]})`, refused on purpose
 
+## Equations {#equations}
+
+Source: [`tests/live/test_live_sw_equations_wrench.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_equations_wrench.py).
+
+### One variable sizes a combination wrench {#wrench}
+
+![A steel combination wrench driven by one global variable: built at 13 mm, lettered on its handle, regrown to 19 mm by one equation edit, shrunk to 8 mm in its own configuration, and a bad expression refused](assets/demos/equations/test_a_combination_wrench_sized_by_one_variable-motion.gif)
+
+> *Example prompt:* Make a 13 mm combination wrench in chrome-vanadium
+> steel: an open end with its jaw at 15° and a curved jaw bottom, a raised
+> 12-point box end, a flat handle, and fillets where the heads meet it.
+> Letter "solidworksmcp-python" and the size into both faces of the handle.
+> Drive every size from one global variable, `Size`, so I can make a 19 mm
+> one by changing one number, then add an 8 mm size as its own
+> configuration.
+
+**What it shows.** A combination wrench in the usual layout (ISO 3318 /
+DIN 3113), modelled from photos of a real one: an open end with its jaw at
+15° and a curved jaw bottom, a 12-point box end tilted 15° and raised, a
+flat handle, fillets where both heads meet the handle, and 1.8159 (51CrV4)
+chrome-vanadium steel from the DIN library. It is built first at fixed
+13 mm sizes. Then `set_equation` adds a global variable `Size` = 13mm, six
+variables computed from it, and an equation on each dimension that sizes
+the wrench, including the jaw's ellipse, the ring's lift and the fillet
+radii: 25 equations.
+
+| Variable | Expression | Drives |
+| --- | --- | --- |
+| `Size` | 13mm | the jaw's width; both hexagons of the 12-point opening, across flats; the ellipse, ring lift and fillets as multiples of it |
+| `Length` | `"Size" * 12.8` | the handle bar's length and the box end's pattern spacing (head centre to head centre) |
+| `OpenHead` | `"Size" * 2.0` | the open end's diameter |
+| `BoxHead` | `"Size" * 1.55` | the box end's diameter |
+| `HeadT` | `"Size" * 0.5` | both heads' thickness |
+| `HandleW` | `"Size" * 0.9` | the handle's width (the round bar it is cut from) |
+| `HandleT` | `"Size" * 0.3` | the handle's thickness (two planes `"HandleT" / 2` either side of the Top Plane) |
+
+**Lettering that reads its own size.** `add_sketch_text` writes
+`solidworksmcp-python  $PRP:"WrenchSize" mm` on each face of the handle,
+centred on a point; the custom property `WrenchSize` is linked to a
+dimension the equations set to `Size`, and the part shows whole
+millimetres, so the handle reads "13 mm". The text is cut 0.3 mm deep on a
+spare block off the open end and a linear pattern moves it onto the
+handle's middle; two more equations keep it there at any size
+(`"Size" * 6.48 + 190mm`) and keep the block as thick as the handle. The
+block is then cut away. SolidWorks doesn't redraw sketch text when an
+equation changes the part, so after each size change `set_sketch_text`
+writes the text again, and the handle reads 19 mm, then 8 mm.
+
+Changing `Size` to 19mm is one call, and the whole wrench regrows. Setting
+it to 8mm with `configurations: ["8 mm"]` changes only that configuration,
+so the part holds both sizes. After each change, `verify_model` checks the
+overall size against the hand calculation:
+
+| `Size` | Expected size, mm (x, y, z) | Measured |
+| --- | --- | --- |
+| 13 mm, as built | 189.09 x 11.49 x 26 | pass |
+| 19 mm, Default | 276.37 x 16.8 x 38 | 276.366 x 16.7985 x 38.0 |
+| 8 mm, configuration "8 mm" | 116.36 x 7.07 x 16 | 116.3646 x 7.0731 x 16.0 |
+
+The last call fails **on purpose**: `"Nut" * 2` names a variable that
+doesn't exist, so SolidWorks refuses it (`equation_refused`), the equation
+keeps its old text and the wrench stays at 19 mm.
+
+**Tool calls**
+
+1. `create_part`, then the handle: a Right-plane circle sized with `add_sketch_dimension({"dimension_type": "diameter"})`, `create_extrusion` along x, flattened by two `create_reference_plane` offsets and a `ThroughAll` cut from each
+2. The box end at the origin: a circle extruded both ways on a plane tilted 15° and lifted `0.13 x Size`, then two `add_polygon({"sides": 6})` cuts, the second with `"angle": 30`, each sized across flats with a `diameter` dimension
+3. `create_axis({"reference": "x"})`, then `pattern_linear` of the box-end features to the handle's far end, and a clearance cut that removes the pattern's seed
+4. The open end at the origin: a Top-plane circle, `create_extrusion({"both_directions": true})`
+5. The jaw: a rectangle on a plane at 15°, `create_cut_extrude({"both_directions": true})`, then the curved bottom: `add_ellipse` with an `angle`, its axes sized with `add_sketch_dimension({"dimension_type": "major_axis"})` and `minor_axis`, cut through
+6. `add_fillet` where both heads meet the handle, faces then sides, and `set_material({"material_name": "1.8159 (51CrV4)", "database": "SolidWorks DIN Materials"})`
+7. `list_model_dimensions()` to find each dimension's full name
+8. `set_equation({"name": "Size", "expression": "13mm"})`, then the six variables, then one `set_equation` per dimension, then `list_equations()`
+9. The lettering: `set_custom_property` (`WrenchSize` linked to a Size dimension), `add_sketch_text({"text": "solidworksmcp-python  $PRP:\"WrenchSize\" mm", "height": 3.5, "center_at": [...]})` on each face of a spare block, a 0.3 mm cut, `pattern_linear` onto the handle's middle, two `set_equation` calls, and a cut that removes the block
+10. `set_equation({"name": "Size", "expression": "19mm"})`, `verify_model`, then `set_sketch_text` on both lettering sketches
+11. `create_configuration({"name": "8 mm"})`, `set_equation({"name": "Size", "expression": "8mm", "configurations": ["8 mm"]})`, `activate_configuration({"name": "8 mm"})`, `verify_model`, `set_sketch_text`
+12. `activate_configuration({"name": "Default"})`, `set_sketch_text`, then `set_equation({"name": "Size", "expression": "\"Nut\" * 2"})`, refused on purpose
+
 ## Run a demo yourself
 
 The demos need Windows, SolidWorks open and idle, and the project's `.venv`.

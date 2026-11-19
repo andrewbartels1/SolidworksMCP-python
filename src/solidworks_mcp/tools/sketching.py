@@ -281,6 +281,51 @@ class AddRelationInput(BaseModel):
     )
 
 
+class AddSketchTextInput(CompatInput):
+    """Input schema for adding text to the open sketch.
+
+    Attributes:
+        text (str): The text; ``$PRP:"name"`` shows a custom property.
+        x (float): Start x in mm (sketch coordinates).
+        y (float): Start y (baseline) in mm.
+        height (float): Letter height in mm.
+        center_at (list[float] | None): A model point [x, y, z] in mm for the
+            text's middle.
+    """
+
+    text: str = Field(
+        min_length=1,
+        description='The text. $PRP:"name" shows a custom property, e.g. one '
+        'linked to a dimension ("D1@Sketch3"), so the text follows it',
+    )
+    x: float = Field(default=0.0, description="Start x in mm, sketch coordinates")
+    y: float = Field(default=0.0, description="Start y (baseline) in mm")
+    height: float = Field(default=3.5, gt=0, description="Letter height in mm")
+    center_at: list[float] | None = Field(
+        default=None,
+        min_length=3,
+        max_length=3,
+        description="Model point [x, y, z] in mm to put the text's middle at "
+        "(projected onto the sketch), e.g. the middle of a handle's face",
+    )
+
+
+class SetSketchTextInput(CompatInput):
+    """Input schema for rewriting the text in a sketch.
+
+    Attributes:
+        sketch_name (str): The sketch whose text to rewrite.
+        text (str): The new text.
+    """
+
+    sketch_name: str = Field(min_length=1, description="The sketch, e.g. Sketch12")
+    text: str = Field(
+        min_length=1,
+        description='The new text; give the same $PRP:"name" text to re-read a '
+        "linked property after the model changed",
+    )
+
+
 class CheckSketchDefinitionInput(CompatInput):
     """Input schema for checking sketch definition status.
 
@@ -770,11 +815,13 @@ async def register_sketching_tools(
 
         Use it for nuts, hex bosses and pockets. Needs: an open sketch
         (`create_sketch`). Changes: adds the polygon's sides. Returns: `polygon` with
-        `id`, `center`, `radius` and `sides`.
+        `id`, `center`, `radius`, `sides` and `angle`. A `diameter` dimension
+        (`add_sketch_dimension`) on its `id` sizes it by the circle drawn inside it.
 
         Args:
             input_data: A mapping: `center_x`, `center_y` (mm, default 0), `radius`
-                (mm, circumscribed, default 10) and `sides` (default 6).
+                (mm, circumscribed, default 10), `sides` (default 6) and `angle`
+                (degrees the first corner is turned from +x, default 0).
 
         Returns:
             dict[str, Any]: The polygon added.
@@ -783,8 +830,9 @@ async def register_sketching_tools(
         center_y = input_data.get("center_y", 0.0)
         radius = input_data.get("radius", 10.0)
         sides = input_data.get("sides", 6)
+        angle = float(input_data.get("angle", 0.0))
 
-        result = await adapter.add_polygon(center_x, center_y, radius, sides)
+        result = await adapter.add_polygon(center_x, center_y, radius, sides, angle)
 
         require_success(result, context="Failed to add polygon")
         polygon_id = result.data
@@ -796,6 +844,7 @@ async def register_sketching_tools(
                 "center": {"x": center_x, "y": center_y},
                 "radius": radius,
                 "sides": sides,
+                "angle": angle,
             },
             "execution_time": result.execution_time,
         }
@@ -805,12 +854,13 @@ async def register_sketching_tools(
         """Draw an ellipse in the open sketch from its centre and axis lengths, in mm.
 
         Use it for oval holes and bosses. Needs: an open sketch (`create_sketch`).
-        Changes: adds an ellipse. Returns: `ellipse` with `id`, `center`, `major_axis`
-        and `minor_axis`.
+        Changes: adds an ellipse. Returns: `ellipse` with `id`, `center`, `major_axis`,
+        `minor_axis` and `angle`.
 
         Args:
             input_data: A mapping: `center_x`, `center_y` (mm, default 0),
-                `major_axis` (default 20) and `minor_axis` (default 10), in mm.
+                `major_axis` (default 20) and `minor_axis` (default 10), in mm, and
+                `angle`, the major axis's turn from +x in degrees (default 0).
 
         Returns:
             dict[str, Any]: The ellipse added.
@@ -819,8 +869,11 @@ async def register_sketching_tools(
         center_y = input_data.get("center_y", 0.0)
         major_axis = input_data.get("major_axis", 20.0)
         minor_axis = input_data.get("minor_axis", 10.0)
+        angle = input_data.get("angle", 0.0)
 
-        result = await adapter.add_ellipse(center_x, center_y, major_axis, minor_axis)
+        result = await adapter.add_ellipse(
+            center_x, center_y, major_axis, minor_axis, angle
+        )
 
         require_success(result, context="Failed to add ellipse")
         ellipse_id = result.data
@@ -832,7 +885,78 @@ async def register_sketching_tools(
                 "center": {"x": center_x, "y": center_y},
                 "major_axis": major_axis,
                 "minor_axis": minor_axis,
+                "angle": angle,
             },
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def add_sketch_text(input_data: AddSketchTextInput) -> dict[str, Any]:
+        """Write text in the open sketch, at a point or centred on one, to deboss or emboss it.
+
+        Use it for lettering, then cut (`create_cut_extrude`) or extrude the sketch.
+        `center_at` (a model point in mm) puts the text's middle there; otherwise it
+        starts at `x`, `y`. `$PRP:"name"` in the text shows a custom property;
+        one holding a dimension's name (`"D1@Sketch3"`, set with `set_custom_property`)
+        makes the text follow that dimension. To read from a face's own side, such as
+        an underside, open the sketch on that face (`create_sketch` `face_point`).
+        Needs: an open sketch (`create_sketch`). Changes: adds text. Returns: the
+        text's `id`, the `text` as SolidWorks shows it (links resolved) and its
+        `height`.
+
+        Args:
+            input_data: The text. `text` is required; `x`, `y` (mm), `height` (3.5
+                mm) and `center_at` have defaults.
+
+        Returns:
+            dict[str, Any]: The text added.
+        """
+        input_data = normalize_input(input_data, AddSketchTextInput)
+        result = await adapter.add_sketch_text(
+            input_data.text,
+            input_data.x,
+            input_data.y,
+            input_data.height,
+            input_data.center_at,
+        )
+        require_success(result, context="Failed to add sketch text")
+        added: dict[str, Any] = result.data or {}
+        return {
+            "status": "success",
+            "message": f"Added text {added['text']!r}, {added['height']} mm high",
+            "sketch_text": {
+                **added,
+                "center_at": input_data.center_at,
+            },
+            "execution_time": result.execution_time,
+        }
+
+    @mcp.tool()
+    async def set_sketch_text(input_data: SetSketchTextInput) -> dict[str, Any]:
+        """Rewrite the text in a sketch and rebuild, so debossed lettering shows it.
+
+        Use it after a change the text should follow: SolidWorks doesn't redraw sketch
+        text on rebuild, not even a `$PRP:` link to a dimension an equation changed.
+        Give the same `$PRP:"name"` text to re-read the link, or new text. The sketch
+        is opened, its text rewritten, closed, and the model rebuilt, so a cut made
+        from it changes too. Needs: a part with that sketch, holding text from
+        `add_sketch_text`. Changes: the sketch's text. Returns: the `sketch`, each
+        text `before` and `after` (links resolved).
+
+        Args:
+            input_data: `sketch_name` and `text`, both required.
+
+        Returns:
+            dict[str, Any]: The text before and after.
+        """
+        input_data = normalize_input(input_data, SetSketchTextInput)
+        result = await adapter.set_sketch_text(input_data.sketch_name, input_data.text)
+        require_success(result, context="Failed to rewrite the sketch text")
+        changed: dict[str, Any] = result.data or {}
+        return {
+            "status": "success",
+            "message": f"{input_data.sketch_name} now reads {changed.get('after')}",
+            "sketch_text": changed,
             "execution_time": result.execution_time,
         }
 
@@ -878,12 +1002,13 @@ async def register_sketching_tools(
 
     @mcp.tool()
     async def add_sketch_dimension(input_data: AddDimensionInput) -> dict[str, Any]:
-        """Add a driving dimension to sketch entities: linear, angular, radial or diameter.
+        """Add a driving dimension to sketch entities: linear, angular, radial, diameter or an ellipse axis.
 
         Use it to fix a size so the sketch is fully defined and can be changed later
         with `set_dimension`. Entities are the `id`s the add_* tools returned; two
-        connected lines for angular, a circle or arc for radial or diameter. No dialog
-        opens. Needs: an open sketch (`create_sketch`). Changes: adds the dimension and
+        connected lines for angular, a circle or arc for radial or diameter, an
+        ellipse for `major_axis` or `minor_axis` (`value` is the whole axis; the
+        dimension runs from the centre, so it shows half). No dialog opens. Needs: an open sketch (`create_sketch`). Changes: adds the dimension and
         resizes the geometry to `value`. Returns: `dimension` with `id`, `type`, `value`
         and the entities.
 

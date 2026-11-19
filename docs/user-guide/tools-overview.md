@@ -55,13 +55,21 @@ These read SolidWorks' installed files and never start it
 
     [**42 tools available** :octicons-arrow-right-24:](tool-catalog/modeling.md)
 
+- :material-function-variant:{ .lg .middle } **Equation Tools**
+
+    ---
+
+    Equations and global variables: one value drives several dimensions, so the part stays consistent when it changes.
+
+    [**3 tools available** :octicons-arrow-right-24:](tool-catalog/equations.md)
+
 - :material-pencil:{ .lg .middle } **Sketching Tools**
 
     ---
 
     Sketches on a plane or a flat face: lines, arcs, circles, rectangles, polygons, splines, relations, dimensions, offsets, mirrors, patterns and edges converted from the model.
 
-    [**19 tools available** :octicons-arrow-right-24:](tool-catalog/sketching.md)
+    [**21 tools available** :octicons-arrow-right-24:](tool-catalog/sketching.md)
 
 - :material-technical-draw:{ .lg .middle } **Drawing Tools**
 
@@ -117,7 +125,7 @@ These read SolidWorks' installed files and never start it
 
     Open, save, switch and inspect documents; the feature tree, configurations and the current selection; Pack and Go.
 
-    [**20 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
+    [**21 tools available** :octicons-arrow-right-24:](tool-catalog/file-management.md)
 
 - :material-code-braces:{ .lg .middle } **VBA Generation**
 
@@ -177,7 +185,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 140 Tools**
+**Total: 145 Tools**
 
 ## Deprecated tools
 

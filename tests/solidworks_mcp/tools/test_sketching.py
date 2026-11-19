@@ -872,6 +872,130 @@ async def test_sketching_error_branches_with_exceptions(mcp_server, mock_config)
 
 
 @pytest.mark.asyncio
+async def test_add_polygon_passes_its_angle_on(mcp_server, mock_config):
+    """The angle reaches the adapter and comes back in the reply (0 by default)."""
+    adapter = _SketchAdapterStub()
+    adapter.add_polygon = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="P_1")
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "add_polygon")
+
+    turned = await tool(input_data={"radius": 6.5, "sides": 6, "angle": 30})
+    plain = await tool(input_data={"radius": 6.5, "sides": 6})
+
+    assert adapter.add_polygon.await_args_list[0].args == (0.0, 0.0, 6.5, 6, 30.0)
+    assert turned["polygon"]["angle"] == 30.0
+    assert plain["polygon"]["angle"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_add_sketch_text_passes_everything_on(mcp_server, mock_config):
+    """Every input reaches the adapter; the reply carries what SolidWorks shows."""
+    adapter = _SketchAdapterStub()
+    adapter.add_sketch_text = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"id": "Text_1", "text": "size 13.00 mm", "height": 4.0},
+        )
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "add_sketch_text")
+
+    reply = await tool(
+        input_data={
+            "text": 'size $PRP:"Size" mm',
+            "height": 4,
+            "center_at": [60, 2, 0],
+        }
+    )
+
+    assert adapter.add_sketch_text.await_args.args == (
+        'size $PRP:"Size" mm',
+        0.0,
+        0.0,
+        4.0,
+        [60.0, 2.0, 0.0],
+    )
+    assert reply["status"] == "success"
+    assert reply["sketch_text"] == {
+        "id": "Text_1",
+        "text": "size 13.00 mm",
+        "height": 4.0,
+        "center_at": [60.0, 2.0, 0.0],
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "bad",
+    [{"text": ""}, {"text": "a", "height": 0}, {"text": "a", "center_at": [1, 2]}],
+)
+async def test_add_sketch_text_rejects_bad_input(mcp_server, mock_config, bad):
+    adapter = _SketchAdapterStub()
+    adapter.add_sketch_text = AsyncMock()
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    reply = await (await _tool(mcp_server, "add_sketch_text"))(input_data=bad)
+
+    assert reply["error_type"] == "invalid_input"
+    adapter.add_sketch_text.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_add_sketch_text_failure_is_an_error(mcp_server, mock_config):
+    adapter = _SketchAdapterStub()
+    adapter.add_sketch_text = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.ERROR, error="no sketch")
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+
+    reply = await (await _tool(mcp_server, "add_sketch_text"))(input_data={"text": "a"})
+
+    assert reply["status"] == "error"
+    assert "no sketch" in reply["message"]
+
+
+@pytest.mark.asyncio
+async def test_set_sketch_text_gives_before_and_after(mcp_server, mock_config):
+    adapter = _SketchAdapterStub()
+    adapter.set_sketch_text = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"sketch": "Sketch12", "before": ["13.00"], "after": ["19.00"]},
+        )
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "set_sketch_text")
+
+    reply = await tool(input_data={"sketch_name": "Sketch12", "text": "x"})
+    bad = await tool(input_data={"sketch_name": "", "text": "x"})
+
+    adapter.set_sketch_text.assert_awaited_once_with("Sketch12", "x")
+    assert reply["sketch_text"]["after"] == ["19.00"]
+    assert "Sketch12 now reads ['19.00']" in reply["message"]
+    assert bad["error_type"] == "invalid_input"
+
+
+@pytest.mark.asyncio
+async def test_add_ellipse_passes_its_angle_on(mcp_server, mock_config):
+    """The angle reaches the adapter and comes back in the reply (0 by default)."""
+    adapter = _SketchAdapterStub()
+    adapter.add_ellipse = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data="E_1")
+    )
+    await register_sketching_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "add_ellipse")
+
+    turned = await tool(input_data={"major_axis": 13, "minor_axis": 2.6, "angle": 15})
+    plain = await tool(input_data={"major_axis": 13, "minor_axis": 2.6})
+
+    assert adapter.add_ellipse.await_args_list[0].args == (0.0, 0.0, 13, 2.6, 15)
+    assert turned["ellipse"]["angle"] == 15
+    assert plain["ellipse"]["angle"] == 0.0
+
+
+@pytest.mark.asyncio
 async def test_sketching_tool_error_return_branches(mcp_server, mock_config):
     """Test sketching tool error return branches."""
     adapter = _SketchAdapterStub()

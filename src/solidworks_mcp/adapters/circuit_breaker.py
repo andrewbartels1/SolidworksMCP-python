@@ -1187,6 +1187,37 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             },
         )
 
+    async def list_equations(self) -> AdapterResult[list[dict[str, Any]]]:
+        """List the active model's equations through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_equations", lambda: self.adapter.list_equations()
+        )
+
+    async def set_equation(
+        self,
+        name: str,
+        expression: str,
+        configurations: str | list[str] = "all",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add or change an equation through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_equation",
+            lambda: self.adapter.set_equation(name, expression, configurations),
+            input_dict={
+                "name": name,
+                "expression": expression,
+                "configurations": configurations,
+            },
+        )
+
+    async def delete_equation(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete an equation through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "delete_equation",
+            lambda: self.adapter.delete_equation(name),
+            input_dict={"name": name},
+        )
+
     async def active_configuration(
         self,
     ) -> AdapterResult[str]:
@@ -1401,12 +1432,17 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         )
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add polygon through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_polygon",
-            lambda: self.adapter.add_polygon(center_x, center_y, radius, sides),
+            lambda: self.adapter.add_polygon(center_x, center_y, radius, sides, angle),
             input_dict={
                 "center_x": center_x,
                 "center_y": center_y,
@@ -1421,12 +1457,13 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         center_y: float,
         major_axis: float,
         minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add ellipse through circuit breaker."""
         return await self._execute_with_circuit_breaker(
             "add_ellipse",
             lambda: self.adapter.add_ellipse(
-                center_x, center_y, major_axis, minor_axis
+                center_x, center_y, major_axis, minor_axis, angle
             ),
             input_dict={
                 "center_x": center_x,
@@ -1434,6 +1471,28 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
                 "major_axis": major_axis,
                 "minor_axis": minor_axis,
             },
+        )
+
+    async def add_sketch_text(
+        self,
+        text: str,
+        x: float = 0.0,
+        y: float = 0.0,
+        height: float = 3.5,
+        center_at: list[float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add sketch text through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_sketch_text",
+            lambda: self.adapter.add_sketch_text(text, x, y, height, center_at),
+        )
+
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Rewrite sketch text through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_sketch_text", lambda: self.adapter.set_sketch_text(sketch_name, text)
         )
 
     async def sketch_linear_pattern(

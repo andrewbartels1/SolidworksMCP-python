@@ -813,7 +813,12 @@ class SolidWorksAdapter(ABC):
         )
 
     async def add_polygon(
-        self, center_x: float, center_y: float, radius: float, sides: int
+        self,
+        center_x: float,
+        center_y: float,
+        radius: float,
+        sides: int,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add a regular polygon to the current sketch.
 
@@ -822,6 +827,7 @@ class SolidWorksAdapter(ABC):
             center_y (float): The center y value.
             radius (float): The radius value.
             sides (int): The sides value.
+            angle (float): Degrees the first vertex is turned from +x.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -837,6 +843,7 @@ class SolidWorksAdapter(ABC):
         center_y: float,
         major_axis: float,
         minor_axis: float,
+        angle: float = 0.0,
     ) -> AdapterResult[str]:
         """Add an ellipse to the current sketch.
 
@@ -845,6 +852,7 @@ class SolidWorksAdapter(ABC):
             center_y (float): The center y value.
             major_axis (float): The major axis value.
             minor_axis (float): The minor axis value.
+            angle (float): The major axis's turn from +x, in degrees.
 
         Returns:
             AdapterResult[str]: The result produced by the operation.
@@ -852,6 +860,49 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="add_ellipse is not implemented by this adapter",
+        )
+
+    async def add_sketch_text(
+        self,
+        text: str,
+        x: float = 0.0,
+        y: float = 0.0,
+        height: float = 3.5,
+        center_at: list[float] | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add text to the current sketch.
+
+        Args:
+            text (str): The text; ``$PRP:"name"`` shows a custom property.
+            x (float): Start x in mm (sketch coordinates).
+            y (float): Start y in mm (the baseline).
+            height (float): Letter height in mm.
+            center_at (list[float] | None): A model point [x, y, z] in mm for
+                the text's middle.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``id``, ``text`` and ``height``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_sketch_text is not implemented by this adapter",
+        )
+
+    async def set_sketch_text(
+        self, sketch_name: str, text: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Rewrite the text in a sketch, with the sketch open, then rebuild.
+
+        Args:
+            sketch_name (str): The sketch, e.g. ``Sketch12``.
+            text (str): The new text.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``sketch``, ``before`` and ``after``.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_sketch_text is not implemented by this adapter",
         )
 
     async def add_sketch_constraint(
@@ -1505,6 +1556,49 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="delete_configuration is not implemented by this adapter",
+        )
+
+    async def list_equations(self) -> AdapterResult[list[dict[str, Any]]]:
+        """List the active model's equations and global variables.
+
+        Returns:
+            AdapterResult[list[dict[str, Any]]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_equations is not implemented by this adapter",
+        )
+
+    async def set_equation(
+        self,
+        name: str,
+        expression: str,
+        configurations: str | list[str] = "all",
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add an equation, or change the one ``name`` has.
+
+        Args:
+            name (str): A global variable or a dimension (``D1@Sketch1``).
+            expression (str): The right-hand side.
+            configurations (str | list[str]): "all", "this" or names.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_equation is not implemented by this adapter",
+        )
+
+    async def delete_equation(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Delete the equation for ``name``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Not implemented by this adapter.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="delete_equation is not implemented by this adapter",
         )
 
     async def active_configuration(

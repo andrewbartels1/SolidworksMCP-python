@@ -530,6 +530,44 @@ class TestMockAdapterSuccessPaths:
         assert "at least 2 points" in (result.error or "")
 
     @pytest.mark.asyncio
+    async def test_add_sketch_text_gives_an_id_the_text_and_height(self):
+        """Mock add_sketch_text gives an id, the text and the height."""
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+        await adapter.create_sketch("Top")
+
+        result = await adapter.add_sketch_text(
+            "abc", height=4.0, center_at=[60.0, 2.0, 0.0]
+        )
+
+        assert result.status == AdapterResultStatus.SUCCESS
+        assert result.data["text"] == "abc" and result.data["height"] == 4.0
+        assert result.data["id"] in adapter._sketch_entity_ids
+
+    @pytest.mark.asyncio
+    async def test_set_sketch_text_gives_the_text(self):
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        no_model = await adapter.set_sketch_text("Sketch12", "abc")
+        await adapter.create_part()
+
+        result = await adapter.set_sketch_text("Sketch12", "abc")
+
+        assert no_model.status == AdapterResultStatus.ERROR
+        assert result.data == {"sketch": "Sketch12", "before": [], "after": ["abc"]}
+
+    @pytest.mark.asyncio
+    async def test_add_sketch_text_needs_a_sketch(self):
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        result = await adapter.add_sketch_text("abc")
+
+        assert result.status == AdapterResultStatus.ERROR
+
+    @pytest.mark.asyncio
     async def test_add_ellipse_success(self):
         """Mock add_ellipse returns an Ellipse_* id with an active sketch."""
         adapter = MockSolidWorksAdapter({})

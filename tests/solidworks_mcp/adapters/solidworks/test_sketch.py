@@ -876,6 +876,214 @@ def test_add_sketch_dimension_radial_diameter_and_selection_errors() -> None:
     assert "Failed to select secondary entity" in (bad_secondary.error or "")
 
 
+def _polygon_adapter(
+    segments: tuple[object, ...],
+) -> tuple[_FakeSketchAdapter, list[object]]:
+    """A fake adapter whose ``Polygon_1`` is ``segments``; the selections made."""
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    adapter._sketch_entities = {"Polygon_1": segments}
+    selected: list[object] = []
+    adapter._select_sketch_entity = lambda entity, append: (
+        selected.append(entity) or True
+    )
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_args: True,
+        AddDiameterDimension2=lambda *_args: SimpleNamespace(
+            GetDimension2=lambda *_a: SimpleNamespace(SetSystemValue3=lambda *_b: True)
+        ),
+    )
+    return adapter, selected
+
+
+def test_a_polygon_angle_turns_its_first_corner() -> None:
+    """The vertex point CreatePolygon takes is turned ``angle`` degrees from +x."""
+    adapter = _FakeSketchAdapter()
+    create = Mock(return_value=(object(),))
+    adapter.currentSketchManager = SimpleNamespace(CreatePolygon=create)
+
+    result = sketch._add_polygon_impl(adapter, 10.0, 0.0, 6.5, 6, 30.0)
+
+    assert result.is_success, result.error
+    args = create.call_args.args
+    assert args[3] == pytest.approx((10.0 + 6.5 * math.cos(math.radians(30))) / 1000)
+    assert args[4] == pytest.approx(6.5 * math.sin(math.radians(30)) / 1000)
+    assert args[6:] == (6, True)
+
+
+def test_an_ellipse_angle_turns_its_axes() -> None:
+    """The major point is ``angle`` from +x, the minor point a quarter turn on."""
+    adapter = _FakeSketchAdapter()
+    create = Mock(return_value=object())
+    adapter.currentSketchManager = SimpleNamespace(CreateEllipse=create)
+
+    result = sketch._add_ellipse_impl(adapter, 10.0, 0.0, 13.0, 2.6, 15.0)
+
+    assert result.is_success, result.error
+    args = create.call_args.args
+    turn = math.radians(15)
+    assert args[3] == pytest.approx((10.0 + 6.5 * math.cos(turn)) / 1000)
+    assert args[4] == pytest.approx(6.5 * math.sin(turn) / 1000)
+    assert args[6] == pytest.approx((10.0 - 1.3 * math.sin(turn)) / 1000)
+    assert args[7] == pytest.approx(1.3 * math.cos(turn) / 1000)
+
+
+class _Point:
+    """A sketch point that records whether it was selected."""
+
+    def __init__(self, x: float, selects: bool = True) -> None:
+        self.X, self.Y, self.Z = x, 0.0, 0.0
+        self._selects = selects
+        self.selected: list[bool] = []
+
+    def Select2(self, append: bool, _mark: int) -> bool:
+        self.selected.append(append)
+        return self._selects
+
+
+def _ellipse_adapter(
+    ellipse: object, added: object
+) -> tuple[_FakeSketchAdapter, list[tuple[object, ...]]]:
+    """A fake adapter with ``Ellipse_1``; the AddDimension2 calls made."""
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    adapter._sketch_entities = {"Ellipse_1": ellipse}
+    calls: list[tuple[object, ...]] = []
+
+    def _add(*args: object) -> object:
+        calls.append(args)
+        return added
+
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_a: True, AddDimension2=_add
+    )
+    return adapter, calls
+
+
+def _display(reads: float, values: list[float]) -> SimpleNamespace:
+    """A display dimension that reads ``reads`` m and records values set."""
+    dimension = SimpleNamespace(
+        SystemValue=reads, SetSystemValue3=lambda v, *_a: values.append(v) or True
+    )
+    return SimpleNamespace(GetDimension2=lambda *_a: dimension)
+
+
+@pytest.mark.parametrize(
+    ("axis", "getter"),
+    [("major_axis", "GetMajorPoint2"), ("minor_axis", "GetMinorPoint2")],
+)
+def test_an_ellipse_axis_is_dimensioned_from_its_centre(axis: str, getter: str) -> None:
+    """Centre then axis point, text beside the axis; it holds half the axis."""
+    centre, end = _Point(0.0), _Point(0.0065)
+    ellipse = SimpleNamespace(GetCenterPoint2=lambda: centre, **{getter: lambda: end})
+    values: list[float] = []
+    adapter, calls = _ellipse_adapter(ellipse, _display(0.0065, values))
+
+    result = sketch._add_sketch_dimension_impl(adapter, "Ellipse_1", None, axis, 13.0)
+
+    assert result.is_success, result.error
+    assert (centre.selected, end.selected) == ([False], [True])
+    # Beside the axis's middle: half way along x, 5 mm off it in y.
+    assert calls[0] == (pytest.approx(0.00325), pytest.approx(0.005), 0.0)
+    assert values == [pytest.approx(0.0065)]
+
+
+def test_an_axis_dimension_that_is_not_aligned_is_refused() -> None:
+    """A dimension reading less than the axis (horizontal on a turned one)."""
+    ellipse = SimpleNamespace(
+        GetCenterPoint2=lambda: _Point(0.0), GetMajorPoint2=lambda: _Point(0.0065)
+    )
+    values: list[float] = []
+    adapter, _calls = _ellipse_adapter(ellipse, _display(0.0056, values))
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "major_axis", 13.0
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "isn't aligned with the axis" in (result.error or "")
+    assert values == []
+
+
+def test_a_zero_length_axis_puts_its_text_above_the_centre() -> None:
+    ellipse = SimpleNamespace(
+        GetCenterPoint2=lambda: _Point(0.0), GetMinorPoint2=lambda: _Point(0.0)
+    )
+    adapter, calls = _ellipse_adapter(ellipse, _display(0.0, []))
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "minor_axis", 0.0
+    )
+
+    assert result.is_success, result.error
+    assert calls[0] == (0.0, pytest.approx(0.005), 0.0)
+
+
+def test_an_axis_dimension_needs_an_ellipse() -> None:
+    adapter, _calls = _ellipse_adapter(SimpleNamespace(), None)
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "major_axis", 13.0
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "is not an ellipse" in (result.error or "")
+
+
+def test_an_axis_point_that_cannot_be_selected_is_an_error() -> None:
+    ellipse = SimpleNamespace(
+        GetCenterPoint2=lambda: _Point(0.0), GetMajorPoint2=lambda: _Point(1.0, False)
+    )
+    adapter, _calls = _ellipse_adapter(ellipse, None)
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "major_axis", 13.0
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Failed to select the major_axis points" in (result.error or "")
+
+
+def test_no_axis_dimension_from_solidworks_is_an_error() -> None:
+    ellipse = SimpleNamespace(
+        GetCenterPoint2=lambda: _Point(0.0), GetMinorPoint2=lambda: _Point(1.0)
+    )
+    adapter, _calls = _ellipse_adapter(ellipse, None)
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Ellipse_1", None, "minor_axis", 2.6
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "added no minor_axis dimension" in (result.error or "")
+
+
+def test_a_diameter_on_a_polygon_dimensions_its_construction_circle() -> None:
+    """The circle inside the polygon sizes it across flats; its sides are skipped."""
+    side = SimpleNamespace(GetType=lambda: 0)
+    circle = SimpleNamespace(GetType=lambda: 1)
+    adapter, selected = _polygon_adapter((side, side, circle))
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Polygon_1", None, "diameter", 13.0
+    )
+
+    assert result.is_success, result.error
+    assert selected == [circle]
+
+
+def test_a_polygon_with_no_circle_cannot_be_dimensioned() -> None:
+    side = SimpleNamespace(GetType=lambda: 0)
+    adapter, _selected = _polygon_adapter((side, side))
+
+    result = sketch._add_sketch_dimension_impl(
+        adapter, "Polygon_1", None, "diameter", 13.0
+    )
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "no construction circle" in (result.error or "")
+
+
 def test_add_sketch_dimension_missing_entities_and_placement_errors() -> None:
     adapter = _FakeSketchAdapter()
     adapter.currentSketchManager = object()
@@ -2513,3 +2721,284 @@ async def test_mixin_create_sketch_forwards_face_point(monkeypatch) -> None:
 
     assert await _Mixin().create_sketch(None, (1.0, 2.0, 3.0)) == "ok"
     assert calls == [(None, (1.0, 2.0, 3.0))]
+
+
+class _TextFormat:
+    def __init__(self) -> None:
+        self.CharHeight = 0.0035
+
+
+class _CurveParams:
+    def __init__(self, start: tuple[float, ...], end: tuple[float, ...]) -> None:
+        self.StartPoint = start
+        self.EndPoint = end
+
+
+class _Edge:
+    """An IEdge whose curve runs from ``start`` to ``end`` (model metres)."""
+
+    def __init__(self, start: tuple[float, ...], end: tuple[float, ...]) -> None:
+        self._params = _CurveParams(start, end)
+
+    def GetCurveParams3(self) -> _CurveParams:
+        return self._params
+
+
+class _SketchText:
+    """ISketchText: a format, the text shown, edges, and its position."""
+
+    def __init__(self, shown: str, edges: tuple[_Edge, ...] = ()) -> None:
+        self.Text = shown
+        self._format = _TextFormat()
+        self._edges = edges
+        self.coordinates = (0.0, 0.0, 0.0)
+
+    def GetTextFormat(self) -> _TextFormat:
+        return self._format
+
+    def SetTextFormat(self, _use_doc: bool, text_format: _TextFormat) -> bool:
+        self._format = text_format
+        return True
+
+    def GetEdges2(self) -> tuple[_Edge, ...]:
+        return self._edges
+
+    def GetCoordinates(self) -> tuple[float, float, float]:
+        return self.coordinates
+
+    def SetCoordinates(self, x: float, y: float, z: float) -> bool:
+        self.coordinates = (x, y, z)
+        return True
+
+
+def _text_adapter(
+    inserted: object,
+) -> tuple[_FakeSketchAdapter, list[tuple[object, ...]]]:
+    """A fake adapter with an open sketch; the InsertSketchText calls made.
+
+    Its sketch maps model x to sketch x and model z to sketch y (a sketch
+    on a face 2 mm up, seen from above), through the math utility.
+    """
+    adapter = _FakeSketchAdapter()
+    adapter.currentSketchManager = object()
+    calls: list[tuple[object, ...]] = []
+
+    def _insert(*args: object) -> object:
+        calls.append(args)
+        return inserted
+
+    adapter.currentModel = SimpleNamespace(
+        ClearSelection2=lambda *_a: True, InsertSketchText=_insert
+    )
+
+    def _point(data: object) -> SimpleNamespace:
+        x, _y, z = (float(v) for v in getattr(data, "value", data))
+        return SimpleNamespace(
+            MultiplyTransform=lambda _t: SimpleNamespace(ArrayData=(x, z, 0.0))
+        )
+
+    adapter.swApp = SimpleNamespace(
+        GetMathUtility=lambda: SimpleNamespace(CreatePoint=_point)
+    )
+    adapter.currentSketch = SimpleNamespace(ModelToSketchTransform=object())
+    return adapter, calls
+
+
+def test_sketch_text_at_a_point_at_a_height() -> None:
+    """Normal spacing, no flags; the height is set and read back."""
+    adapter, calls = _text_adapter(_SketchText("solidworksmcp-python 13.00 mm"))
+
+    result = sketch._add_sketch_text_impl(
+        adapter, 'solidworksmcp-python $PRP:"Size" mm', 10.0, -2.0, 4.0, None
+    )
+
+    assert result.is_success, result.error
+    assert calls[0][:3] == (pytest.approx(0.01), pytest.approx(-0.002), 0.0)
+    assert calls[0][3:] == ('solidworksmcp-python $PRP:"Size" mm', 0, 0, 0, 100, 100)
+    assert result.data["text"] == "solidworksmcp-python 13.00 mm"
+    assert result.data["height"] == pytest.approx(4.0)
+    assert result.data["id"].startswith("Text_")
+
+
+def test_sketch_text_centred_on_a_model_point() -> None:
+    """Its middle (from its edges) is moved onto the point, mapped into the sketch."""
+    edges = (
+        _Edge((0.000, 0.002, 0.000), (0.020, 0.002, 0.000)),
+        _Edge((0.040, 0.002, 0.004), (0.040, 0.002, 0.000)),
+    )
+    text = _SketchText("abc", edges)
+    adapter, calls = _text_adapter(text)
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 4.0, [60.0, 2.0, 1.0])
+
+    assert result.is_success, result.error
+    # Inserted at the point already (mapped into the sketch: 0.060, 0.001),
+    # so it never shows at the sketch's origin first.
+    assert calls[0][:2] == (pytest.approx(0.060), pytest.approx(0.001))
+    # Middle (0.020, 0.002) in the sketch; the point maps to (0.060, 0.001).
+    assert text.coordinates == (
+        pytest.approx(0.040),
+        pytest.approx(-0.001),
+        0.0,
+    )
+
+
+def test_sketch_text_with_no_edges_cannot_be_centred() -> None:
+    adapter, _calls = _text_adapter(_SketchText("abc"))
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 4.0, [60.0, 2.0, 0.0])
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "no edges to centre it by" in (result.error or "")
+
+
+def test_sketch_text_needs_an_open_sketch() -> None:
+    adapter = _FakeSketchAdapter()
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, None)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No active sketch" in (result.error or "")
+
+
+def test_no_sketch_text_from_solidworks_is_an_error() -> None:
+    adapter, _calls = _text_adapter(None)
+
+    result = sketch._add_sketch_text_impl(adapter, "abc", 0, 0, 3.5, None)
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "added no sketch text" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_the_mixin_passes_sketch_text_on() -> None:
+    adapter, calls = _text_adapter(_SketchText("abc"))
+    adapter.add_sketch_text = sketch.SolidWorksSketchMixin.add_sketch_text.__get__(
+        adapter
+    )
+
+    result = await adapter.add_sketch_text("abc", 1.0, 2.0, 5.0)
+
+    assert result.is_success, result.error
+    assert calls[0][:2] == (pytest.approx(0.001), pytest.approx(0.002))
+
+
+class _Lettering:
+    """ISketchText whose text resolves a $PRP link to ``value``."""
+
+    def __init__(self, shown: str, value: str) -> None:
+        self._text = shown
+        self._value = value
+
+    @property
+    def Text(self) -> str:
+        return self._text.replace('$PRP:"WrenchSize"', self._value)
+
+    @Text.setter
+    def Text(self, text: str) -> None:
+        self._text = text
+
+
+def _lettered_model(
+    texts: list[_Lettering], feature: object | None = True
+) -> tuple[_FakeSketchAdapter, list[str]]:
+    """A fake part with ``Sketch12`` holding ``texts``; the calls made, in order."""
+    calls: list[str] = []
+    sketch = SimpleNamespace(GetSketchTextSegments=lambda: tuple(texts))
+    found = (
+        SimpleNamespace(
+            GetSpecificFeature2=lambda: sketch,
+            Select2=lambda *_a: calls.append("select") or True,
+        )
+        if feature
+        else None
+    )
+    adapter = _FakeSketchAdapter()
+    adapter.currentModel = SimpleNamespace(
+        FeatureByName=lambda name: found if name == "Sketch12" else None,
+        ClearSelection2=lambda *_a: True,
+        EditSketch=lambda: calls.append("edit"),
+        GetActiveSketch2=lambda: sketch,
+        SketchManager=SimpleNamespace(
+            InsertSketch=lambda _rebuild: calls.append("close")
+        ),
+        ForceRebuild3=lambda _top: calls.append("rebuild"),
+    )
+    return adapter, calls
+
+
+def test_sketch_text_is_rewritten_with_the_sketch_open() -> None:
+    """Open, write, close, rebuild; the link reads the new size."""
+    text = _Lettering("size 13.00 mm", "19.00")
+    adapter, calls = _lettered_model([text])
+
+    result = sketch._set_sketch_text_impl(
+        adapter, "Sketch12", 'size $PRP:"WrenchSize" mm'
+    )
+
+    assert result.is_success, result.error
+    assert result.data == {
+        "sketch": "Sketch12",
+        "before": ["size 13.00 mm"],
+        "after": ["size 19.00 mm"],
+    }
+    assert calls == ["select", "edit", "close", "rebuild"]
+
+
+def test_rewriting_text_in_a_missing_sketch_changes_nothing() -> None:
+    adapter, calls = _lettered_model([], feature=None)
+
+    result = sketch._set_sketch_text_impl(adapter, "Sketch12", "abc")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Sketch 'Sketch12' not found" in (result.error or "")
+    assert calls == []
+
+
+def test_a_sketch_with_no_text_is_an_error() -> None:
+    adapter, calls = _lettered_model([])
+
+    result = sketch._set_sketch_text_impl(adapter, "Sketch12", "abc")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "has no text to rewrite" in (result.error or "")
+    assert calls == []
+
+
+def test_the_sketch_is_closed_even_when_writing_fails() -> None:
+    class _Stuck(_Lettering):
+        @property
+        def Text(self) -> str:
+            return "abc"
+
+        @Text.setter
+        def Text(self, _text: str) -> None:
+            raise RuntimeError("read only")
+
+    adapter, calls = _lettered_model([_Stuck("abc", "")])
+
+    result = sketch._set_sketch_text_impl(adapter, "Sketch12", "xyz")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert calls == ["select", "edit", "close"]
+
+
+def test_rewriting_sketch_text_needs_a_model() -> None:
+    adapter = _FakeSketchAdapter()
+
+    result = sketch._set_sketch_text_impl(adapter, "Sketch12", "abc")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "No active model" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_the_mixin_passes_set_sketch_text_on() -> None:
+    adapter, _calls = _lettered_model([_Lettering("a", "")])
+    adapter.set_sketch_text = sketch.SolidWorksSketchMixin.set_sketch_text.__get__(
+        adapter
+    )
+
+    result = await adapter.set_sketch_text("Sketch12", "b")
+
+    assert result.data["after"] == ["b"]
