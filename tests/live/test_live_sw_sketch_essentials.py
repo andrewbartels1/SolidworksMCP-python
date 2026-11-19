@@ -76,10 +76,20 @@ async def _ok(reply: dict[str, Any]) -> dict[str, Any]:
     return reply
 
 
-async def _close(tools: dict[str, Any]) -> str:
-    """Close the open sketch; its tree name."""
+async def _open(tools: dict[str, Any]) -> str:
+    """Open a sketch on the Top plane; its name as create_sketch gives it."""
+    made = await _ok(await tools["create_sketch"]({"plane": "Top"}))
+    return str(made["sketch"]["name"])
+
+
+async def _close(tools: dict[str, Any], opened: str) -> str:
+    """Close the open sketch; its tree name.
+
+    ``exit_sketch`` names the sketch only when one was asked for, so the
+    name ``create_sketch`` gave is kept otherwise.
+    """
     closed = await _ok(await tools["exit_sketch"]())
-    return str(closed["sketch"]["name"])
+    return str(closed.get("sketch", {"name": opened})["name"])
 
 
 async def _cut(tools: dict[str, Any], sketch: str) -> None:
@@ -97,7 +107,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
 
     # 1. The plate: centre rectangle, a refused corner, fillets, chamfers.
     starting("A 120 x 80 plate from its centre, corners rounded and chamfered")
-    await _ok(await tools["create_sketch"]({"plane": "Top"}))
+    opened = await _open(tools)
     plate = await _ok(
         await tools["add_rectangle"](
             {"x1": 0, "y1": 0, "x2": 60, "y2": 40, "from_center": True}
@@ -114,7 +124,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
             {"corners": [[60, -40], [60, 40]], "distance": CHAMFER}
         )
     )
-    outline = await _close(tools)
+    outline = await _close(tools, opened)
     await _ok(
         await tools["create_extrusion"]({"sketch_name": outline, "depth": THICKNESS})
     )
@@ -145,7 +155,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
 
     # 2. Slots, with two construction lines across them.
     starting("A straight slot and an arc slot, with two construction lines")
-    await _ok(await tools["create_sketch"]({"plane": "Top"}))
+    opened = await _open(tools)
     straight = await _ok(
         await tools["add_slot"]({"start": [-40, -15], "end": [-40, 15], "width": 10})
     )
@@ -177,7 +187,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
     made = await _ok(
         await tools["set_construction_geometry"]({"entities": [upright["line"]["id"]]})
     )
-    await _cut(tools, await _close(tools))
+    await _cut(tools, await _close(tools, opened))
     slotted_volume = plate_volume - (STRAIGHT_SLOT_MM2 + ARC_SLOT_MM2) * THICKNESS
     slotted = await _volume(tools, slotted_volume)
     evidence(
@@ -199,7 +209,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
 
     # 3. Keyhole: extend two lines to a circle, trim the arc between them.
     starting("A keyhole: two lines extended to a circle, the arc between trimmed")
-    await _ok(await tools["create_sketch"]({"plane": "Top"}))
+    opened = await _open(tools)
     await _ok(await tools["add_circle"]({"center_x": 0, "center_y": 10, "radius": _R}))
     for x in (-_HALF, _HALF):
         await _ok(await tools["add_line"]({"x1": x, "y1": -15, "x2": x, "y2": 0}))
@@ -211,7 +221,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
         for x in (-_HALF, _HALF)
     ]
     trimmed = await _ok(await tools["sketch_trim"]({"point": [0, 10 - _R]}))
-    await _cut(tools, await _close(tools))
+    await _cut(tools, await _close(tools, opened))
     keyhole_volume = slotted_volume - KEYHOLE_MM2 * THICKNESS
     keyed = await _volume(tools, keyhole_volume)
     evidence(
@@ -229,7 +239,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
 
     # 4. Stadium window: line, tangent arc, line, three-point arc.
     starting("A window from lines, a tangent arc and a three-point arc")
-    await _ok(await tools["create_sketch"]({"plane": "Top"}))
+    opened = await _open(tools)
     await _ok(await tools["add_line"]({"x1": -20, "y1": 25, "x2": 10, "y2": 25}))
     tangent = await _ok(
         await tools["add_arc"](
@@ -250,7 +260,7 @@ async def test_a_slotted_bracket_plate(scratch: Any) -> None:
             }
         )
     )
-    await _cut(tools, await _close(tools))
+    await _cut(tools, await _close(tools, opened))
     final_volume = keyhole_volume - WINDOW_MM2 * THICKNESS
     finished = await _volume(tools, final_volume)
     evidence(
