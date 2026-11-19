@@ -19,10 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   drive several dimensions (`"D1@Sketch1" = "Width" / 2`); `set_equation`
   adds or changes one, in every configuration by default, solves and
   rebuilds, and gives the new value. An expression SolidWorks can't use
-  fails as `equation_refused` and changes nothing. 143 tools. Named
-  configurations are set one at a time; the reply's `values` gives each
-  one's value. Demo: one variable sizes a combination wrench (13, 19 and
-  8 mm), on the demos page and in the README.
+  fails as `equation_refused` and changes nothing. Named configurations
+  are set one at a time; the reply's `values` gives each one's value. Demo:
+  one variable sizes a steel combination wrench (13, 19 and 8 mm, 27
+  equations) whose handle is lettered with its own size, on the demos page
+  and in the README.
+- **`add_sketch_text`**: writes text in the open sketch at a height, and
+  with `center_at` centres it on a point (measured from the text's own
+  edges, since SolidWorks' alignment doesn't centre it). The text can show
+  a custom property (`$PRP:"Name"`), so an equation-driven part can carry
+  its size; cut or extrude it like any sketch.
+- **`set_sketch_text`**: rewrites the text in a named sketch and rebuilds,
+  giving the text before and after. SolidWorks doesn't redraw sketch text
+  when an equation changes the part; writing it again does. 145 tools.
+- **`add_ellipse` takes an `angle`**, the degrees its major axis is turned
+  from +x, and **an ellipse can be dimensioned**: `add_sketch_dimension`
+  with `major_axis` or `minor_axis` on an ellipse's `id` sizes that axis,
+  so an equation can drive it.
 - **`add_polygon` takes an `angle`**: the degrees its first corner is
   turned from +x (0 by default), e.g. two hexagons 30° apart for a
   12-point opening.

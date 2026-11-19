@@ -191,7 +191,7 @@ Each GIF is a live test driving SolidWorks 2026 through the MCP tools, with the 
 </tr>
 <tr>
 <td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#hole-positions"><img src="docs/assets/demos/part-features/test_holes_at_several_points-motion.gif" alt="A plate of Hole Wizard holes placed from points, a mirror and a ring" width="100%"></a><br><sub>A plate of Hole Wizard holes from points, a mirror and a ring</sub></td>
-<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#wrench"><img src="docs/assets/demos/equations/test_a_combination_wrench_sized_by_one_variable-motion.gif" alt="A combination wrench sized by one global variable: 13 mm, then 19 mm, then 8 mm in its own configuration" width="100%"></a><br><sub>One variable sizes a combination wrench: equations and configurations</sub></td>
+<td width="33%" valign="top"><a href="https://andrewbartels1.com/SolidworksMCP-python/demos/#wrench"><img src="docs/assets/demos/equations/test_a_combination_wrench_sized_by_one_variable-motion.gif" alt="A steel combination wrench sized by one global variable and lettered with its size: 13 mm, then 19 mm, then 8 mm in its own configuration" width="100%"></a><br><sub>One variable sizes a combination wrench: equations and configurations</sub></td>
 </tr>
 </table>
 

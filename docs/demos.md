@@ -923,35 +923,47 @@ Source: [`tests/live/test_live_sw_equations_wrench.py`](https://github.com/andre
 
 ### One variable sizes a combination wrench {#wrench}
 
-![A combination wrench driven by one global variable: built at 13 mm, regrown to 19 mm by one equation edit, shrunk to 8 mm in its own configuration, and a bad expression refused](assets/demos/equations/test_a_combination_wrench_sized_by_one_variable-motion.gif)
+![A steel combination wrench driven by one global variable: built at 13 mm, lettered on its handle, regrown to 19 mm by one equation edit, shrunk to 8 mm in its own configuration, and a bad expression refused](assets/demos/equations/test_a_combination_wrench_sized_by_one_variable-motion.gif)
 
-> *Example prompt:* Make a 13 mm combination wrench: an open end with its jaw
-> at 15° to the handle, a 12-point box end, and a flat handle. Drive every
-> size from one global variable, `Size`, so I can make a 19 mm one by
-> changing one number, then add an 8 mm size as its own configuration.
+> *Example prompt:* Make a 13 mm combination wrench in chrome-vanadium
+> steel: an open end with its jaw at 15° and a curved jaw bottom, a raised
+> 12-point box end, a flat handle, and fillets where the heads meet it.
+> Letter "solidworksmcp-python" and the size into both faces of the handle.
+> Drive every size from one global variable, `Size`, so I can make a 19 mm
+> one by changing one number, then add an 8 mm size as its own
+> configuration.
 
 **What it shows.** A combination wrench in the usual layout (ISO 3318 /
-DIN 3113), modelled from a picture of one: an open end with its jaw at 15°,
-a 12-point box end, and a flat handle with rounded edges. It is built first
-at fixed 13 mm sizes. Then `set_equation` adds a global variable `Size` =
-13mm, six variables computed from it, and an equation on each of the twelve
-dimensions that size the wrench: 19 equations in all.
+DIN 3113), modelled from photos of a real one: an open end with its jaw at
+15° and a curved jaw bottom, a 12-point box end tilted 15° and raised, a
+flat handle, fillets where both heads meet the handle, and 1.8159 (51CrV4)
+chrome-vanadium steel from the DIN library. It is built first at fixed
+13 mm sizes. Then `set_equation` adds a global variable `Size` = 13mm, six
+variables computed from it, and an equation on each dimension that sizes
+the wrench, including the jaw's ellipse, the ring's lift and the fillet
+radii: 25 equations.
 
 | Variable | Expression | Drives |
 | --- | --- | --- |
-| `Size` | 13mm | the jaw's width; both hexagons of the 12-point opening, across flats |
-| `Length` | `"Size" * 13.0` | the handle bar's length and the box end's pattern spacing (head centre to head centre) |
-| `OpenHead` | `"Size" * 2.4` | the open end's diameter |
-| `BoxHead` | `"Size" * 1.8` | the box end's diameter |
-| `HeadT` | `"Size" * 0.45` | both heads' thickness |
-| `HandleW` | `"Size" * 0.95` | the handle's width (the round bar it is cut from) |
-| `HandleT` | `"Size" * 0.32` | the handle's thickness (two planes `"HandleT" / 2` either side of the Top Plane) |
+| `Size` | 13mm | the jaw's width; both hexagons of the 12-point opening, across flats; the ellipse, ring lift and fillets as multiples of it |
+| `Length` | `"Size" * 12.8` | the handle bar's length and the box end's pattern spacing (head centre to head centre) |
+| `OpenHead` | `"Size" * 2.0` | the open end's diameter |
+| `BoxHead` | `"Size" * 1.55` | the box end's diameter |
+| `HeadT` | `"Size" * 0.5` | both heads' thickness |
+| `HandleW` | `"Size" * 0.9` | the handle's width (the round bar it is cut from) |
+| `HandleT` | `"Size" * 0.3` | the handle's thickness (two planes `"HandleT" / 2` either side of the Top Plane) |
 
-Every size grows from the wrench's centre line, so it keeps its shape at
-any size: the jaw is a mid-plane cut on a plane at 15°, the heads and the
-handle bar are circle diameters, the 12-point opening is two hexagons 30°
-apart, each sized across flats, and the box end sits at the far end of the
-handle by a linear pattern.
+**Lettering that reads its own size.** `add_sketch_text` writes
+`solidworksmcp-python  $PRP:"WrenchSize" mm` on each face of the handle,
+centred on a point; the custom property `WrenchSize` is linked to a
+dimension the equations set to `Size`, and the part shows whole
+millimetres, so the handle reads "13 mm". The text is cut 0.3 mm deep on a
+spare block off the open end and a linear pattern moves it onto the
+handle's middle; two more equations keep it there at any size
+(`"Size" * 6.48 + 190mm`) and keep the block as thick as the handle. The
+block is then cut away. SolidWorks doesn't redraw sketch text when an
+equation changes the part, so after each size change `set_sketch_text`
+writes the text again, and the handle reads 19 mm, then 8 mm.
 
 Changing `Size` to 19mm is one call, and the whole wrench regrows. Setting
 it to 8mm with `configurations: ["8 mm"]` changes only that configuration,
@@ -960,14 +972,9 @@ overall size against the hand calculation:
 
 | `Size` | Expected size, mm (x, y, z) | Measured |
 | --- | --- | --- |
-| 13 mm, as built | 196.08 x 5.85 x 31.2 | 196.0804 x 5.85 x 31.2 |
-| 19 mm, Default | 286.58 x 8.55 x 45.6 | 286.5791 x 8.55 x 45.6 |
-| 8 mm, configuration "8 mm" | 120.66 x 3.6 x 19.2 | 120.6649 x 3.6 x 19.2 |
-
-Length is `Length` plus the box end's radius (0.9 x `Size`) plus how far
-the open end still reaches once the jaw is cut: the jaw corner nearer the
-axis, √(1.2² − 0.5²) along the jaw and 0.5 across it, turned 15°, which
-is 1.1831 x `Size`.
+| 13 mm, as built | 189.09 x 11.49 x 26 | pass |
+| 19 mm, Default | 276.37 x 16.8 x 38 | 276.366 x 16.7985 x 38.0 |
+| 8 mm, configuration "8 mm" | 116.36 x 7.07 x 16 | 116.3646 x 7.0731 x 16.0 |
 
 The last call fails **on purpose**: `"Nut" * 2` names a variable that
 doesn't exist, so SolidWorks refuses it (`equation_refused`), the equation
@@ -975,17 +982,18 @@ keeps its old text and the wrench stays at 19 mm.
 
 **Tool calls**
 
-1. `create_part`, then the handle: a Right-plane circle Ø12.35 sized with `add_sketch_dimension({"dimension_type": "diameter"})`, `create_extrusion({"depth": 169})` along x
-2. Flatten it: `create_reference_plane({"reference": "Top Plane", "offset": 2.08})` and the same with `"flip": true`, then a `ThroughAll` cut from each, away from the handle
-3. The box end at the origin: a Top-plane circle Ø23.4, `create_extrusion({"depth": 5.85, "both_directions": true})`, then two `add_polygon({"sides": 6, "radius": 6.5})` cuts, the second with `"angle": 30`, each sized across flats with a `diameter` dimension
-4. `create_axis({"reference": "x"})`, then `pattern_linear` of the three box-end features, 2 instances 169 mm apart, to the handle's far end
-5. The open end at the origin: a Top-plane circle Ø31.2, `create_extrusion({"depth": 5.85, "both_directions": true})`, which also fills the box end's pattern seed
-6. The jaw: `create_axis({"reference": "y"})`, `create_reference_plane({"reference": "Front Plane", "angle": 15, "axis": "Axis2"})`, a rectangle on it, `create_cut_extrude({"depth": 13, "both_directions": true})`, a mid-plane cut
-7. `list_model_dimensions()` to find the twelve dimensions' full names
-8. `set_equation({"name": "Size", "expression": "13mm"})`, then the six variables, then one `set_equation` per dimension, e.g. `{"name": "D1@Sketch7", "expression": "\"OpenHead\""}`, then `list_equations()`
-9. `set_equation({"name": "Size", "expression": "19mm"})`, then `verify_model({"bounding_box_mm": [286.58, 8.55, 45.6]})`
-10. `create_configuration({"name": "8 mm"})`, `set_equation({"name": "Size", "expression": "8mm", "configurations": ["8 mm"]})`, `activate_configuration({"name": "8 mm"})`, `verify_model`
-11. `set_equation({"name": "Size", "expression": "\"Nut\" * 2"})`, refused on purpose
+1. `create_part`, then the handle: a Right-plane circle sized with `add_sketch_dimension({"dimension_type": "diameter"})`, `create_extrusion` along x, flattened by two `create_reference_plane` offsets and a `ThroughAll` cut from each
+2. The box end at the origin: a circle extruded both ways on a plane tilted 15° and lifted `0.13 x Size`, then two `add_polygon({"sides": 6})` cuts, the second with `"angle": 30`, each sized across flats with a `diameter` dimension
+3. `create_axis({"reference": "x"})`, then `pattern_linear` of the box-end features to the handle's far end, and a clearance cut that removes the pattern's seed
+4. The open end at the origin: a Top-plane circle, `create_extrusion({"both_directions": true})`
+5. The jaw: a rectangle on a plane at 15°, `create_cut_extrude({"both_directions": true})`, then the curved bottom: `add_ellipse` with an `angle`, its axes sized with `add_sketch_dimension({"dimension_type": "major_axis"})` and `minor_axis`, cut through
+6. `add_fillet` where both heads meet the handle, faces then sides, and `set_material({"material_name": "1.8159 (51CrV4)", "database": "SolidWorks DIN Materials"})`
+7. `list_model_dimensions()` to find each dimension's full name
+8. `set_equation({"name": "Size", "expression": "13mm"})`, then the six variables, then one `set_equation` per dimension, then `list_equations()`
+9. The lettering: `set_custom_property` (`WrenchSize` linked to a Size dimension), `add_sketch_text({"text": "solidworksmcp-python  $PRP:\"WrenchSize\" mm", "height": 3.5, "center_at": [...]})` on each face of a spare block, a 0.3 mm cut, `pattern_linear` onto the handle's middle, two `set_equation` calls, and a cut that removes the block
+10. `set_equation({"name": "Size", "expression": "19mm"})`, `verify_model`, then `set_sketch_text` on both lettering sketches
+11. `create_configuration({"name": "8 mm"})`, `set_equation({"name": "Size", "expression": "8mm", "configurations": ["8 mm"]})`, `activate_configuration({"name": "8 mm"})`, `verify_model`, `set_sketch_text`
+12. `activate_configuration({"name": "Default"})`, `set_sketch_text`, then `set_equation({"name": "Size", "expression": "\"Nut\" * 2"})`, refused on purpose
 
 ## Run a demo yourself
 
