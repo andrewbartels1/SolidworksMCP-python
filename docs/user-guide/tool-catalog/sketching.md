@@ -347,7 +347,7 @@ Round corners of the open sketch to a radius, picking each corner by its point.
 
 **Prerequisite:** Active sketch edit mode, with entities meeting at each corner
 
-**SolidWorks automation note:** Each corner is found among the open sketch's points (`ISketch.GetSketchPoints2`, within 0.01 mm), selected alone, and rounded with `ISketchManager.CreateFillet` (constrained corners kept, so no dialog opens). The lines either side are trimmed back to the arc, as in SolidWorks. Corners are points, not ids, because a rectangle or polygon registers as one id with no id per corner. Every corner is found before any is rounded: a corner with no sketch point fails as `invalid_input` and nothing changes.
+**SolidWorks automation note:** Each corner is found among the open sketch's points (`ISketch.GetSketchPoints2`, within 0.01 mm), selected alone, and rounded with `ISketchManager.CreateFillet` (constrained corners kept, so no dialog opens). The lines either side are trimmed back to the arc, as in SolidWorks. Corners are points, not ids, because a rectangle or polygon registers as one id with no id per corner. Every corner is found before any is rounded: a corner with no sketch point fails as `invalid_input` and nothing changes. A sketch point that isn't where two entities meet (a centre rectangle's centre point) is refused by SolidWorks, also as `invalid_input`.
 
 **Parameters:**
 

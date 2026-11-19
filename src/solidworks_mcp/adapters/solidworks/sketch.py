@@ -3136,8 +3136,11 @@ def _treat_corners(
                     raise Exception(f"Couldn't select the corner at {where}")
                 segment = make(manager)
                 if not segment:
+                    # A point need not be a corner: a centre rectangle's
+                    # centre point is a sketch point (seen live, 2026-11-19).
                     raise Exception(
-                        f"SolidWorks refused the {prefix.lower()} at corner {where}"
+                        f"SolidWorks refused the {prefix.lower()} at corner {where}: "
+                        "it isn't where two entities meet"
                     )
                 ids.append(adapter._register_sketch_entity(prefix, segment))
         finally:

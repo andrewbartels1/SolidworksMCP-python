@@ -25,11 +25,18 @@ the entities either side back to it, and reply with one id per corner.
 
 ### Requirement: A corner that isn't there changes nothing
 Each tool SHALL fail with `invalid_input` when no sketch is open, when a
-corner has no sketch point, or when `distance2` and `angle` are both given,
-naming the corner or the fields; the sketch SHALL be unchanged.
+corner has no sketch point, when SolidWorks refuses a point that isn't where
+two entities meet, or when `distance2` and `angle` are both given, naming the
+corner or the fields; the sketch SHALL be unchanged.
 
 #### Scenario: A point off the profile
 - **WHEN** `add_sketch_fillet` is called with a corner at `[0, 0]` inside
   the rectangle
 - **THEN** it fails with `invalid_input` naming `[0, 0]`, and no corner is
   rounded
+
+#### Scenario: A sketch point that isn't a corner
+- **WHEN** the rectangle was drawn from its centre, so `[0, 0]` is its
+  centre point, and `add_sketch_fillet` is called there
+- **THEN** SolidWorks refuses it, the tool fails with `invalid_input` saying
+  the point isn't where two entities meet, and the part is unchanged

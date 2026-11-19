@@ -249,6 +249,7 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
         patterns=(
             r"No sketch point at corner",
+            r"SolidWorks refused the (fillet|chamfer) at corner",
             r"No sketch entity at \[",
             r"SolidWorks refused to (trim|extend) at",
             r"Unknown sketch entity '",
