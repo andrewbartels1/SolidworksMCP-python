@@ -167,10 +167,6 @@ OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"
 _DEPRECATED_IN = "2.1.0"
 
 _STABLE = Support(SupportLevel.STABLE)
-#: Built and unit-tested; stable once its live demo passes (queue item 32).
-_SKETCH_ESSENTIALS = Support(
-    SupportLevel.BETA, "new in sketch essentials; its live demo hasn't run yet."
-)
 
 
 def _deprecated(replacement: str | None) -> Support:
@@ -320,12 +316,12 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "add_ellipse": _STABLE,
     "add_sketch_text": _STABLE,
     "set_sketch_text": _STABLE,
-    "add_sketch_fillet": _SKETCH_ESSENTIALS,
-    "add_sketch_chamfer": _SKETCH_ESSENTIALS,
-    "add_slot": _SKETCH_ESSENTIALS,
-    "sketch_trim": _SKETCH_ESSENTIALS,
-    "sketch_extend": _SKETCH_ESSENTIALS,
-    "set_construction_geometry": _SKETCH_ESSENTIALS,
+    "add_sketch_fillet": _STABLE,
+    "add_sketch_chamfer": _STABLE,
+    "add_slot": _STABLE,
+    "sketch_trim": _STABLE,
+    "sketch_extend": _STABLE,
+    "set_construction_geometry": _STABLE,
     "add_line": _STABLE,
     "add_polygon": _STABLE,
     "add_rectangle": _STABLE,
