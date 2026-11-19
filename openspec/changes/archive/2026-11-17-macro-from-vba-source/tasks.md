@@ -7,5 +7,5 @@
 ## 2. Checks and docs
 
 - [x] 2.1 Unit tests: allowed, refused, two sources, bad characters
-- [ ] 2.2 Live test written (run pending): a sketch added by VBA source
+- [x] 2.2 Live test: a sketch added by VBA source (passed live 2026-11-17)
 - [x] 2.3 Catalog entry, installation guide (the setting and its risk), CHANGELOG; full suite, ruff, mypy, docs strict
