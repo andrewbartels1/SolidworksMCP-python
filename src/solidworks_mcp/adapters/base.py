@@ -1023,6 +1023,136 @@ class SolidWorksAdapter(ABC):
             error="set_construction_geometry is not implemented by this adapter",
         )
 
+    async def create_exploded_view(
+        self, steps: list[dict[str, Any]] | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Explode the active assembly, automatically or step by step, and show it.
+
+        Args:
+            steps (list[dict[str, Any]] | None): ``components``, ``direction``, ``distance``, ``reverse``; none explodes it automatically.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_exploded_view is not implemented by this adapter",
+        )
+
+    async def set_exploded_view(self, exploded: bool) -> AdapterResult[dict[str, Any]]:
+        """Show the assembly's exploded view, or collapse it.
+
+        Args:
+            exploded (bool): ``True`` explodes, ``False`` collapses.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_exploded_view is not implemented by this adapter",
+        )
+
+    async def pattern_components(
+        self,
+        components: list[str],
+        axis: str,
+        count: int,
+        kind: str = "linear",
+        spacing: float | None = None,
+        angle: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Repeat components along or around a reference axis.
+
+        Args:
+            components (list[str]): The seed components' instance names.
+            axis (str): A reference axis's name.
+            count (int): Instances, the seeds included.
+            kind (str): ``linear`` or ``circular``.
+            spacing (float | None): Linear spacing, mm.
+            angle (float | None): Circular angle, degrees.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="pattern_components is not implemented by this adapter",
+        )
+
+    async def mirror_components(
+        self, components: list[str], plane: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mirror components about a plane, as instances of the same parts.
+
+        Args:
+            components (list[str]): Instance names.
+            plane (str): The plane's name.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="mirror_components is not implemented by this adapter",
+        )
+
+    async def replace_component(
+        self, component: str, file_path: str, all_instances: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Swap a component for another part or assembly file.
+
+        Args:
+            component (str): The instance name.
+            file_path (str): The part or assembly to put in its place.
+            all_instances (bool): Replace every instance of the same file.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="replace_component is not implemented by this adapter",
+        )
+
+    async def set_component_appearance(
+        self,
+        component: str,
+        visible: bool | None = None,
+        transparent: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Hide or show a component, and make it transparent or opaque.
+
+        Args:
+            component (str): The instance name.
+            visible (bool | None): Show (``True``) or hide (``False``).
+            transparent (bool | None): Transparent or opaque.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_component_appearance is not implemented by this adapter",
+        )
+
+    async def add_balloons(
+        self, view_name: str, layout: str = "square"
+    ) -> AdapterResult[dict[str, Any]]:
+        """Number a drawing view's parts with balloons, one per part.
+
+        Args:
+            view_name (str): The drawing view.
+            layout (str): ``square``, ``circle``, ``top``, ``bottom``, ``left`` or ``right``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_balloons is not implemented by this adapter",
+        )
+
     async def add_sketch_constraint(
         self,
         entity1: str,

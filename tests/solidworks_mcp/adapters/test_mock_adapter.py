@@ -546,6 +546,51 @@ class TestMockAdapterSuccessPaths:
         assert result.data["id"] in adapter._sketch_entity_ids
 
     @pytest.mark.asyncio
+    async def test_assembly_depth_needs_an_assembly(self):
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_part()
+
+        results = [
+            await adapter.create_exploded_view(),
+            await adapter.set_exploded_view(True),
+            await adapter.pattern_components(["pin-1"], "Axis1", 3, spacing=5.0),
+            await adapter.mirror_components(["foot-1"], "Right Plane"),
+            await adapter.replace_component("pin-1", "C:/p/pin45.sldprt"),
+            await adapter.set_component_appearance("pin-1", visible=False),
+            await adapter.add_balloons("Drawing View1"),
+        ]
+
+        assert all("requires a" in (r.error or "") for r in results)
+
+    @pytest.mark.asyncio
+    async def test_assembly_depth_in_an_assembly_and_balloons_in_a_drawing(self):
+        adapter = MockSolidWorksAdapter({})
+        await adapter.connect()
+        await adapter.create_assembly()
+
+        none = await adapter.set_exploded_view(True)
+        exploded = await adapter.create_exploded_view([{"components": ["pin-1"]}])
+        shown = await adapter.set_exploded_view(False)
+        pattern = await adapter.pattern_components(["pin-1"], "Axis1", 3, spacing=5.0)
+        mirror = await adapter.mirror_components(["foot-1"], "Right Plane")
+        replaced = await adapter.replace_component("pin-1", "C:/p/pin45.sldprt")
+        hidden = await adapter.set_component_appearance("base-1", visible=False)
+        kept = await adapter.set_component_appearance("base-1", transparent=True)
+        await adapter.create_drawing()
+        balloons = await adapter.add_balloons("Drawing View1", "top")
+
+        assert "No exploded view found" in (none.error or "")
+        assert exploded.data["steps"] == 1
+        assert shown.data == {"view": "ExplView1", "exploded": False}
+        assert pattern.data["added"] == ["pin-1-copy1", "pin-1-copy2"]
+        assert mirror.data["added"] == ["foot-1-mirror"]
+        assert replaced.data["replaced"] == {"pin-1": "C:/p/pin45.sldprt"}
+        assert hidden.data == {"visible": False, "transparent": None}
+        assert kept.data["visible"] is True
+        assert balloons.data["count"] == 3
+
+    @pytest.mark.asyncio
     async def test_sketch_essentials_need_an_open_sketch(self):
         adapter = MockSolidWorksAdapter({})
         await adapter.connect()

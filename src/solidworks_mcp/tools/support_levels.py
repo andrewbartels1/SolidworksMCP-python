@@ -167,6 +167,10 @@ OFFLINE_FAMILIES = frozenset({"docs_discovery", "server_admin", "vba_generation"
 _DEPRECATED_IN = "2.1.0"
 
 _STABLE = Support(SupportLevel.STABLE)
+#: Built and unit-tested; stable once its live demo passes (queue item 33).
+_ASSEMBLY_DEPTH = Support(
+    SupportLevel.BETA, "new in assembly depth; its live demo hasn't run yet."
+)
 
 
 def _deprecated(replacement: str | None) -> Support:
@@ -247,6 +251,13 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_configuration": _STABLE,
     "activate_configuration": _STABLE,
     "delete_configuration": _STABLE,
+    # assembly
+    "create_exploded_view": _ASSEMBLY_DEPTH,
+    "set_exploded_view": _ASSEMBLY_DEPTH,
+    "pattern_components": _ASSEMBLY_DEPTH,
+    "mirror_components": _ASSEMBLY_DEPTH,
+    "replace_component": _ASSEMBLY_DEPTH,
+    "add_balloons": _ASSEMBLY_DEPTH,
     # equations
     "list_equations": _STABLE,
     "set_equation": _STABLE,

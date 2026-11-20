@@ -55,7 +55,7 @@ the COM-coverage packages (the user's choice 2026-11-19).
   `_component_names`); balloons and the exploded drawing view beside the
   drawing code. New code goes in its own module instead of growing `io.py`
   (4,000 lines), as queue item 40 recommends.
-- New tool module `tools/assembly.py`; `base.py`, `circuit_breaker.py`,
+- New tool module `tools/assembly.py` (`add_balloons` joins `tools/drawing.py`); `base.py`, `circuit_breaker.py`,
   `connection_pool.py` and the mock gain the new methods.
 - `tool_hints.py`, `support_levels.py`, the toolsets, the error classifier,
   `docs/agents/tool-description-standard.md` (the verb).

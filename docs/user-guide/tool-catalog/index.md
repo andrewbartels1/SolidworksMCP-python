@@ -1,6 +1,6 @@
-# Tool Catalog — All 151 Tools
+# Tool Catalog — All 157 Tools
 
-This reference documents all **151 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **157 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -11,8 +11,9 @@ Each section covers one functional category with parameter tables and copy-paste
 |----------|-------|-------------|
 | [Modeling Tools](modeling.md) | 42 | Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, Hole Wizard holes, cosmetic threads, shells, drafts, ribs, sheet metal (flanges, bends, the flat pattern), fillets, chamfers, patterns, reference geometry, mates, dimensions, feature renaming and the document unit system. |
 | [Equation Tools](equations.md) | 3 | Equations and global variables: one value driving several dimensions, in all configurations or chosen ones. |
+| [Assembly Tools](assembly.md) | 5 | Exploded views, component patterns and mirrors, and replacing a component with another file. |
 | [Sketching Tools](sketching.md) | 27 | Sketches on a plane or a flat face: lines, circles, arcs, slots, splines, polygons, text, fillets, chamfers, trim and extend, construction geometry, relations, dimensions, offsets, mirrors and patterns. |
-| [Drawing Tools](drawing.md) | 13 | Drawings from a model: standard, section and detail views, dimensions, notes, centre marks, the sheet format and title block, and a drawing check. |
+| [Drawing Tools](drawing.md) | 14 | Drawings from a model: standard, section, detail and exploded views, dimensions, notes, balloons, centre marks, the sheet format and title block, and a drawing check. |
 | [Drawing Analysis Tools](drawing-analysis.md) | 1 | Compare two versions of a drawing file. |
 | [Drawing Automation Tools](drawing-automation.md) | 7 | Model dimensions laid out without overlaps, datum tags, tolerances, BOM tables, sheet scale and complete A3 drawings. |
 | [Engineering Data Tools](engineering-data.md) | 8 | Read and edit the data drawings and BOMs are built from: model dimensions by name, measurements, materials, custom properties and sheet-metal flat patterns. |

@@ -1565,6 +1565,77 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             lambda: self.adapter.set_construction_geometry(entities, construction),
         )
 
+    async def create_exploded_view(
+        self, steps: list[dict[str, Any]] | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Explode the active assembly, automatically or step by step, and show it, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_exploded_view", lambda: self.adapter.create_exploded_view(steps)
+        )
+
+    async def set_exploded_view(self, exploded: bool) -> AdapterResult[dict[str, Any]]:
+        """Show the assembly's exploded view, or collapse it, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_exploded_view", lambda: self.adapter.set_exploded_view(exploded)
+        )
+
+    async def pattern_components(
+        self,
+        components: list[str],
+        axis: str,
+        count: int,
+        kind: str = "linear",
+        spacing: float | None = None,
+        angle: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Repeat components along or around a reference axis, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "pattern_components",
+            lambda: self.adapter.pattern_components(
+                components, axis, count, kind, spacing, angle
+            ),
+        )
+
+    async def mirror_components(
+        self, components: list[str], plane: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mirror components about a plane, as instances of the same parts, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "mirror_components",
+            lambda: self.adapter.mirror_components(components, plane),
+        )
+
+    async def replace_component(
+        self, component: str, file_path: str, all_instances: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Swap a component for another part or assembly file, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "replace_component",
+            lambda: self.adapter.replace_component(component, file_path, all_instances),
+        )
+
+    async def set_component_appearance(
+        self,
+        component: str,
+        visible: bool | None = None,
+        transparent: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Hide or show a component, and make it transparent or opaque, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_component_appearance",
+            lambda: self.adapter.set_component_appearance(
+                component, visible, transparent
+            ),
+        )
+
+    async def add_balloons(
+        self, view_name: str, layout: str = "square"
+    ) -> AdapterResult[dict[str, Any]]:
+        """Number a drawing view's parts with balloons, one per part, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_balloons", lambda: self.adapter.add_balloons(view_name, layout)
+        )
+
     async def sketch_linear_pattern(
         self,
         entities: list[str],

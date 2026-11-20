@@ -82,6 +82,19 @@ def double_array(values: list[float]) -> Any:
         return tuple(values)
 
 
+def long_array(values: list[int]) -> Any:
+    """``VARIANT(VT_ARRAY | VT_I4)``, e.g. one orientation per component (tuple when pywin32 is absent)."""
+    try:
+        import pythoncom
+        import win32com.client as w32
+
+        return w32.VARIANT(
+            pythoncom.VT_ARRAY | pythoncom.VT_I4, [int(v) for v in values]
+        )
+    except ImportError:  # non-Windows
+        return tuple(values)
+
+
 def dispatch_array(values: list[Any]) -> Any:
     """``VARIANT(VT_ARRAY | VT_DISPATCH)``, e.g. edges for a flange (tuple when pywin32 is absent)."""
     try:

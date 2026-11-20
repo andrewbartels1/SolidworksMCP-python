@@ -165,6 +165,13 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "create_configuration": _adds("Add Configuration"),
     "activate_configuration": _sets("Activate Configuration"),
     "delete_configuration": _discards("Delete Configuration"),
+    # assembly
+    "create_exploded_view": _adds("Create Exploded View"),
+    "set_exploded_view": _sets("Set Exploded View"),
+    "pattern_components": _adds("Pattern Components"),
+    "mirror_components": _adds("Mirror Components"),
+    "replace_component": _overwrites("Replace Component"),
+    "add_balloons": _adds("Add Balloons"),
     "list_equations": _reads("List Equations"),
     "set_equation": _sets("Set Equation"),
     "delete_equation": _discards("Delete Equation"),

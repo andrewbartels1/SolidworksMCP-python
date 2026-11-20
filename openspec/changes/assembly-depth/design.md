@@ -23,7 +23,9 @@ SpeedPak, lightweight states; balloon text other than the item number.
 ### 1. New code in its own modules
 
 `adapters/solidworks/assembly.py` (a mixin, as `sketch.py` is) holds the
-COM calls; `tools/assembly.py` holds the tools. They import the existing
+COM calls; `tools/assembly.py` holds the tools. `add_balloons` is a drawing
+tool (`tools/drawing.py`): it acts on a drawing, so it belongs to the drawing
+toolset, and a client with only that toolset still has it. They import the existing
 helpers from `io.py` and `drawing_standard.py` rather than copying them.
 This follows queue item 40's direction (split by topic) without moving
 existing code, which item 40 will do.
@@ -77,12 +79,13 @@ read back rather than trusted.
 
 ### 5. Visibility and transparency
 
-`set_component_state` gains `visible` and `transparent`. Visibility goes
-through the `CompConfigProperties5` call it already makes (its visibility
-argument, every other value read and passed back); transparency selects the
-component and calls `IAssemblyDoc.SetComponentTransparent`. Both are read
-back (`IComponent2.Visible`, `GetTransparency` or the selection state) in
-the reply.
+`set_component_state` gains `visible` and `transparent`, through a new
+adapter method `set_component_appearance`: visibility sets
+`IComponent2.Visible` (1 shown, 0 hidden) and reads it back; transparency
+selects the component and calls `IAssemblyDoc.SetComponentTransparent`.
+(Built this way rather than through `CompConfigProperties5`, which would
+have to pass back every other component property to change one.) The tool
+calls the existing state method only for `fixed` / `flexible`.
 
 ### 6. Balloons and the exploded drawing view
 

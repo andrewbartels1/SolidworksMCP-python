@@ -899,6 +899,8 @@ Fix or float a component of the active assembly, or make a sub-assembly rigid or
 | `component` | `str` | ✅ |  | Component instance name, as reported by list_components |
 | `fixed` | `bool?` | — | `null` | true fixes the component in place; false floats it so mates can move it; leave it out to keep it as it is |
 | `flexible` | `bool?` | — | `null` | For a sub-assembly: true lets its own mates move inside this assembly (a crank that turns); false makes it rigid; leave it out to keep it as it is |
+| `visible` | `bool?` | — | `null` | false hides the component (to see inside), true shows it (`IComponent2.Visible`) |
+| `transparent` | `bool?` | — | `null` | true shows it see-through, false opaque (`IAssemblyDoc.SetComponentTransparent`) |
 
 **Sample call:**
 

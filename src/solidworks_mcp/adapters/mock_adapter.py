@@ -2196,6 +2196,190 @@ class MockSolidWorksAdapter(
             },
         )
 
+    def _no_assembly(self, operation: str) -> AdapterResult[Any] | None:
+        """The wrong-document error, or ``None`` with an assembly open."""
+        if self._current_model and self._current_model.type == "Assembly":
+            return None
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error=f"{operation} requires an assembly document",
+        )
+
+    async def create_exploded_view(
+        self, steps: list[dict[str, Any]] | None = None
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock exploding the assembly: one view, the steps counted.
+
+        Args:
+            steps (list[dict[str, Any]] | None): The explode steps.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``view``, ``steps`` and ``automatic``.
+        """
+        if error := self._no_assembly("create_exploded_view"):
+            return error
+        self._exploded = True
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "view": "ExplView1",
+                "steps": len(steps or []),
+                "automatic": not steps,
+            },
+        )
+
+    async def set_exploded_view(self, exploded: bool) -> AdapterResult[dict[str, Any]]:
+        """Mock showing or collapsing the exploded view.
+
+        Args:
+            exploded (bool): Explode or collapse.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``view`` and ``exploded``.
+        """
+        if error := self._no_assembly("set_exploded_view"):
+            return error
+        if not getattr(self, "_exploded", False):
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="No exploded view found in the active configuration",
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"view": "ExplView1", "exploded": exploded},
+        )
+
+    async def pattern_components(
+        self,
+        components: list[str],
+        axis: str,
+        count: int,
+        kind: str = "linear",
+        spacing: float | None = None,
+        angle: float | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock a component pattern: (count - 1) new instances per seed.
+
+        Args:
+            components (list[str]): The seeds.
+            axis (str): The axis.
+            count (int): Instances, seeds included.
+            kind (str): ``linear`` or ``circular``.
+            spacing (float | None): Linear spacing, mm.
+            angle (float | None): Circular angle, degrees.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``feature`` and ``added``.
+        """
+        if error := self._no_assembly("pattern_components"):
+            return error
+        added = [f"{c}-copy{i}" for c in components for i in range(1, count)]
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"feature": "LocalLPattern1", "added": added},
+        )
+
+    async def mirror_components(
+        self, components: list[str], plane: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock mirroring: one new instance per component.
+
+        Args:
+            components (list[str]): The components.
+            plane (str): The plane.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``plane`` and ``added``.
+        """
+        if error := self._no_assembly("mirror_components"):
+            return error
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"plane": plane, "added": [f"{c}-mirror" for c in components]},
+        )
+
+    async def replace_component(
+        self, component: str, file_path: str, all_instances: bool = False
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock replacing: the component now uses ``file_path``.
+
+        Args:
+            component (str): The instance.
+            file_path (str): The new file.
+            all_instances (bool): Every instance.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``component``, ``file_path``,
+            ``replaced``.
+        """
+        if error := self._no_assembly("replace_component"):
+            return error
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "component": component,
+                "file_path": file_path,
+                "replaced": {component: file_path},
+            },
+        )
+
+    async def set_component_appearance(
+        self,
+        component: str,
+        visible: bool | None = None,
+        transparent: bool | None = None,
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock hiding, showing and transparency: the states as asked.
+
+        Args:
+            component (str): The instance.
+            visible (bool | None): Show or hide.
+            transparent (bool | None): Transparent or opaque.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``visible`` and ``transparent``.
+        """
+        if error := self._no_assembly("set_component_state"):
+            return error
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "visible": True if visible is None else visible,
+                "transparent": transparent,
+            },
+        )
+
+    async def add_balloons(
+        self, view_name: str, layout: str = "square"
+    ) -> AdapterResult[dict[str, Any]]:
+        """Mock balloons: three, numbered 1 to 3.
+
+        Args:
+            view_name (str): The view.
+            layout (str): The layout.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``view``, ``layout``, ``count``, ``items``.
+        """
+        if not self._current_model or self._current_model.type != "Drawing":
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error="add_balloons requires a drawing document",
+            )
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "view": view_name,
+                "layout": layout,
+                "count": 3,
+                "items": ["1", "2", "3"],
+            },
+        )
+
     async def add_polygon(
         self,
         center_x: float,

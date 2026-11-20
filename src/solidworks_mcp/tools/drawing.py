@@ -34,6 +34,7 @@ class CreateDrawingViewInput(BaseModel):
         position_y (float): The position y value.
         scale (float): The scale value.
         view_type (str): The view type value.
+        exploded (bool): Show the assembly's exploded view.
     """
 
     model_path: str = Field(description="Path to the SolidWorks model file")
@@ -45,6 +46,11 @@ class CreateDrawingViewInput(BaseModel):
     scale: float = Field(default=1.0, description="View scale factor")
     orientation: str = Field(
         default="front", description="View orientation (front, top, right, isometric)"
+    )
+    exploded: bool = Field(
+        default=False,
+        description="Show the assembly's exploded view (create_exploded_view) in "
+        "this view",
     )
 
 
@@ -379,6 +385,22 @@ class DimensionInput(CompatInput):
                 self.position_x = float(self.position[0])
             if self.position_y is None:
                 self.position_y = float(self.position[1])
+
+
+class AddBalloonsInput(CompatInput):
+    """Input schema for balloons on a drawing view.
+
+    Attributes:
+        view_name (str): The drawing view.
+        layout (str): Where the balloons go around the view.
+    """
+
+    view_name: str = Field(
+        min_length=1, description="The drawing view, as list_drawing_views names it"
+    )
+    layout: Literal["square", "circle", "top", "bottom", "left", "right"] = Field(
+        default="square", description="Where the balloons go around the view"
+    )
 
 
 async def register_drawing_tools(
@@ -874,5 +896,34 @@ async def register_drawing_tools(
             "execution_time": result.execution_time,
         }
 
-    tool_count = 13  # Number of tools registered
+    @mcp.tool()
+    async def add_balloons(input_data: AddBalloonsInput) -> dict[str, Any]:
+        """Number the parts in a drawing view with balloons, one per part.
+
+        Use it on an assembly drawing, with a BOM (`insert_bom_table`): the
+        balloons carry the BOM's item numbers. Works best on an exploded view
+        (`create_drawing_view` with `exploded`). Needs: an open drawing with a view
+        of an assembly. Changes: adds balloons around the view. Returns:
+        `balloons` with the `view`, `layout`, `count` and the `items` shown. A
+        view that isn't there fails as `not_found`.
+
+        Args:
+            input_data: `view_name` is required; `layout` is `square`.
+
+        Returns:
+            dict[str, Any]: The balloons added.
+        """
+        input_data = normalize_input(input_data, AddBalloonsInput)
+        require_capability(adapter, "add_balloons", "Active adapter can't add balloons")
+        result = await adapter.add_balloons(input_data.view_name, input_data.layout)
+        require_success(result, context="Failed to add balloons")
+        count = (result.data or {}).get("count", 0)
+        return {
+            "status": "success",
+            "message": f"Added {count} balloon(s) to {input_data.view_name}",
+            "balloons": result.data,
+            "execution_time": result.execution_time,
+        }
+
+    tool_count = 14  # Number of tools registered
     return tool_count

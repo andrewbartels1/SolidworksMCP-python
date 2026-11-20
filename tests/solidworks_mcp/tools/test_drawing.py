@@ -553,3 +553,23 @@ async def test_add_note_refuses_without_the_capability(mcp_server, mock_config) 
     result = await tool({"text": "X", "position_x": 1, "position_y": 1})
 
     assert result["error_type"] == "not_supported"
+
+
+@pytest.mark.asyncio
+async def test_add_balloons_numbers_a_view(mcp_server, mock_config) -> None:
+    adapter = Mock()
+    adapter.add_balloons = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"view": "Drawing View1", "count": 3, "items": ["1", "2", "3"]},
+        )
+    )
+    await register_drawing_tools(mcp_server, adapter, mock_config)
+    tool = await _tool(mcp_server, "add_balloons")
+
+    reply = await tool(input_data={"view_name": "Drawing View1", "layout": "top"})
+    bad = await tool(input_data={"view_name": "Drawing View1", "layout": "middle"})
+
+    adapter.add_balloons.assert_awaited_once_with("Drawing View1", "top")
+    assert reply["message"] == "Added 3 balloon(s) to Drawing View1"
+    assert bad["error_type"] == "invalid_input"

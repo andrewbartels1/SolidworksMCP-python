@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Assembly depth** (queue item 33): an assembly to the drawing a shop
+  builds from, 157 tools in all. `create_exploded_view` explodes the
+  assembly automatically or step by step (components along x, y or z) and
+  `set_exploded_view` shows or collapses it; `pattern_components` repeats
+  components along or around an axis; `mirror_components` mirrors them about
+  a plane; `replace_component` swaps one (or every instance) for another file;
+  `add_balloons` numbers a drawing view's parts. `set_component_state` hides,
+  shows and makes components transparent, and `create_drawing_view` takes
+  `exploded`. Tool names may now start with `replace_`.
 - **Sketch essentials** (queue item 32): six sketch tools agents reach
   for next, 151 tools in all. `add_sketch_fillet` and `add_sketch_chamfer`
   round or bevel corners picked by their points (a rectangle's corners have

@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 151,
+  "total": 157,
   "by_level": {
    "stable": 143,
-   "beta": 0,
+   "beta": 6,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -29,6 +29,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Draw a circular arc in the open sketch: from its centre, through three points, or tangent."
+   },
+   {
+    "name": "add_balloons",
+    "family": "drawing",
+    "level": "beta",
+    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "summary": "Number the parts in a drawing view with balloons, one per part."
    },
    {
     "name": "add_centerline",
@@ -330,6 +337,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Place one named view of a part or assembly on the active drawing sheet."
+   },
+   {
+    "name": "create_exploded_view",
+    "family": "assembly",
+    "level": "beta",
+    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "summary": "Explode the active assembly, automatically or step by step, and show it."
    },
    {
     "name": "create_extrusion",
@@ -787,6 +801,13 @@
     "summary": "Measure faces, edges or vertices of the active model with SolidWorks' Measure tool."
    },
    {
+    "name": "mirror_components",
+    "family": "assembly",
+    "level": "beta",
+    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "summary": "Mirror assembly components about a plane, as instances of the same parts."
+   },
+   {
     "name": "mirror_feature",
     "family": "modeling",
     "level": "stable",
@@ -815,6 +836,13 @@
     "summary": "Repeat features of the active part around an axis, e.g. a ring of bosses or ribs."
    },
    {
+    "name": "pattern_components",
+    "family": "assembly",
+    "level": "beta",
+    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "summary": "Repeat assembly components in a row along an axis, or around one."
+   },
+   {
     "name": "pattern_linear",
     "family": "modeling",
     "level": "stable",
@@ -834,6 +862,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Rename a feature in the active model's feature tree."
+   },
+   {
+    "name": "replace_component",
+    "family": "assembly",
+    "level": "beta",
+    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "summary": "Swap an assembly component for another part or assembly file."
    },
    {
     "name": "reset_circuit_breaker",
@@ -910,7 +945,7 @@
     "family": "modeling",
     "level": "stable",
     "reason": "",
-    "summary": "Fix or float a component of the active assembly, or make a sub-assembly rigid or flexible."
+    "summary": "Fix or float an assembly component, make a sub-assembly flexible, or hide it or make it transparent."
    },
    {
     "name": "set_construction_geometry",
@@ -939,6 +974,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Add or change an equation or global variable, so one value drives others (a parametric part)."
+   },
+   {
+    "name": "set_exploded_view",
+    "family": "assembly",
+    "level": "beta",
+    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "summary": "Show the active assembly exploded, or collapse it."
    },
    {
     "name": "set_flat_pattern",
@@ -1071,11 +1113,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 266,
+   "covered": 281,
    "total": 2838
   },
   "api": {
-   "covered": 308,
+   "covered": 321,
    "total": 5985
   },
   "interfaces": [
@@ -1173,6 +1215,7 @@
      "InsertSketch",
      "InsertSketchForEdgeFlange",
      "InsertSketchText",
+     "IsExploded",
      "Lock",
      "Parameter",
      "Save",
@@ -1213,6 +1256,7 @@
      "GetWhatsWrong",
      "GetWhatsWrongCount",
      "InsertBomTable4",
+     "IsExploded",
      "SaveAs",
      "SaveAs2",
      "SaveAs3",
@@ -1225,6 +1269,7 @@
    {
     "name": "IPartDoc",
     "covered": [
+     "CreateExplodedView",
      "ExportToDWG2",
      "FeatureByName",
      "FeatureExtrusion2",
@@ -1233,10 +1278,12 @@
      "FeatureRevolve2",
      "FirstFeature",
      "GetBodies2",
+     "GetExplodedViewNames",
      "GetMaterialPropertyName2",
      "GetPartBox",
      "InsertMirrorFeature",
-     "SetMaterialPropertyName2"
+     "SetMaterialPropertyName2",
+     "ShowExploded"
     ],
     "total": 167
    },
@@ -1246,13 +1293,21 @@
      "AddComponent4",
      "AddComponent5",
      "AddMate5",
+     "AutoExplode",
      "CompConfigProperties5",
+     "CreateExplodedView",
      "FeatureByName",
      "FixComponent",
      "GetBox",
      "GetComponentByName",
      "GetComponentCount",
      "GetComponents",
+     "GetExplodedViewNames",
+     "MirrorComponents3",
+     "ReplaceComponents2",
+     "SetComponentTransparent",
+     "ShowExploded",
+     "ShowExploded2",
      "UnfixComponent"
     ],
     "total": 198
@@ -1261,9 +1316,11 @@
     "name": "IDrawingDoc",
     "covered": [
      "ActivateView",
+     "AutoBalloon5",
      "AutoDimension",
      "Create1stAngleViews2",
      "Create3rdAngleViews2",
+     "CreateAutoBalloonOptions",
      "CreateDetailViewAt4",
      "CreateDrawViewFromModelView3",
      "CreateSectionViewAt5",

@@ -88,6 +88,27 @@ def cb_with_mock():
     inner.set_construction_geometry = AsyncMock(
         return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
     )
+    inner.create_exploded_view = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.set_exploded_view = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.pattern_components = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.mirror_components = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.replace_component = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.set_component_appearance = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
+    inner.add_balloons = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
     inner.sketch_linear_pattern = AsyncMock(
         return_value=AdapterResult(status=AdapterResultStatus.SUCCESS)
     )
@@ -1192,6 +1213,16 @@ _ESSENTIALS = [
     ("sketch_trim", ([0.0, 2.0],)),
     ("sketch_extend", ([-3.0, -0.5],)),
     ("set_construction_geometry", (["Line_1"], False)),
+    (
+        "create_exploded_view",
+        ([{"components": ["pin-1"], "direction": "y", "distance": 40.0}],),
+    ),
+    ("set_exploded_view", (False,)),
+    ("pattern_components", (["pin-1"], "Axis1", 4, "linear", 25.0, None)),
+    ("mirror_components", (["foot-1"], "Right Plane")),
+    ("replace_component", ("pin-1", "C:/p/pin45.sldprt", True)),
+    ("set_component_appearance", ("base-1", False, True)),
+    ("add_balloons", ("Drawing View1", "circle")),
 ]
 
 
