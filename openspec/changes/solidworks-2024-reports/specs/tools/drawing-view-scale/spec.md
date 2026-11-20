@@ -1,9 +1,10 @@
 ## ADDED Requirements
 
 ### Requirement: A view's own scale is applied and read back
-`create_drawing_view` with a `scale` other than 1 SHALL give the new view its
-own scale (no longer the sheet's) and reply with `scale_applied` true only
-when the scale read back from the view matches.
+`create_drawing_view` with a `scale` SHALL give the new view its own scale
+(no longer the sheet's) and reply with `scale_applied` true only when the
+scale read back from the view matches. With no `scale` the view SHALL keep
+the sheet's scale, so `set_sheet_scale` still governs it.
 
 #### Scenario: A half-scale top view
 - **WHEN** a top view is placed with `scale` 0.5
