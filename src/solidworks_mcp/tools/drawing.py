@@ -29,10 +29,10 @@ class CreateDrawingViewInput(BaseModel):
 
     Attributes:
         model_path (str): The model path value.
-        orientation (str): The orientation value.
+        orientation (str | None): The orientation; none takes view_type.
         position_x (float): The position x value.
         position_y (float): The position y value.
-        scale (float): The scale value.
+        scale (float | None): The view's own scale; none uses the sheet's.
         view_type (str): The view type value.
     """
 
@@ -42,9 +42,16 @@ class CreateDrawingViewInput(BaseModel):
     )
     position_x: float = Field(default=100.0, description="X position in drawing (mm)")
     position_y: float = Field(default=200.0, description="Y position in drawing (mm)")
-    scale: float = Field(default=1.0, description="View scale factor")
-    orientation: str = Field(
-        default="front", description="View orientation (front, top, right, isometric)"
+    scale: float | None = Field(
+        default=None,
+        gt=0,
+        description="The view's own scale, e.g. 0.5 for 1:2; leave it out to use "
+        "the sheet's scale (set_sheet_scale)",
+    )
+    orientation: str | None = Field(
+        default=None,
+        description="View orientation (front, top, right, isometric); left out, "
+        "a view_type that names one is used, else front",
     )
 
 

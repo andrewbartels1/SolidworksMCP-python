@@ -1648,6 +1648,45 @@ async def test_repeated_lookups_build_the_index_once(
 
 
 @pytest.mark.asyncio
+async def test_a_built_index_is_saved_in_the_user_folder(
+    mcp_server, mock_config, fake_type_library
+) -> None:
+    """#257: not in the working folder, which uvx may start unwritable."""
+    from solidworks_mcp.tools import docs_discovery
+
+    tools = await _docs_tools(mcp_server, mock_config)
+
+    result = await tools["lookup_api_method"](
+        {"interface": "ISldWorks", "method": "OpenDoc6"}
+    )
+
+    saved = docs_discovery.USER_INDEX_DIR / "solidworks_docs_index_2026.json"
+    assert result["index_status"] == "rebuilt"
+    assert saved.is_file()
+    assert not Path(".generated").exists()
+
+
+@pytest.mark.asyncio
+async def test_an_index_in_the_old_folder_is_still_read(
+    mcp_server, mock_config, fake_type_library
+) -> None:
+    from solidworks_mcp.tools import docs_discovery
+
+    tools = await _docs_tools(mcp_server, mock_config)
+    arguments = {"interface": "ISldWorks", "method": "OpenDoc6"}
+    await tools["lookup_api_method"](arguments)
+    name = "solidworks_docs_index_2026.json"
+    old = Path(".generated/docs-index")
+    old.mkdir(parents=True)
+    (docs_discovery.USER_INDEX_DIR / name).rename(old / name)
+
+    result = await tools["lookup_api_method"](arguments)
+
+    assert result["index_status"] == "ready"
+    assert len(fake_type_library) == 1
+
+
+@pytest.mark.asyncio
 async def test_an_index_from_another_type_library_version_is_rebuilt(
     mcp_server, mock_config, fake_type_library
 ) -> None:
