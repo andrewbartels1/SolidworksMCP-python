@@ -17,5 +17,6 @@
 ## 4. Checks and sign-off
 
 - [x] 4.1 Unit suite at 100% coverage, ruff, mypy, mkdocs strict, link check; CHANGELOG
-- [ ] 4.2 Live on 2026: a fillet, a half-scale view, and a lookup started from a read-only folder
-- [ ] 4.3 The user decides what to say on #255, #256, #257 and when; nothing is posted until then
+- [x] 4.2 Live on 2026: a fillet, a half-scale view, and a lookup started from a read-only folder
+- [ ] 4.3 The user decides what to say on #255, #256, #257 and when; nothing is posted until then (replies drafted 2026-11-20: fixed in the release, then the selftest on 2024)
+- [ ] 4.4 After the merge: release 2.1.0 from main (pyproject, version.py, server.json, CHANGELOG heading), tag pushed by the user's OK
