@@ -8,6 +8,7 @@ import pytest
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.tools.drawing import (
     AutoCenterMarksInput,
+    CreateDrawingViewInput,
     DimensionInput,
     DrawingCreationInput,
     DrawingViewInput,
@@ -553,3 +554,13 @@ async def test_add_note_refuses_without_the_capability(mcp_server, mock_config) 
     result = await tool({"text": "X", "position_x": 1, "position_y": 1})
 
     assert result["error_type"] == "not_supported"
+
+
+def test_a_drawing_view_leaves_scale_and_orientation_to_the_sheet_and_view_type() -> (
+    None
+):
+    """#256: no scale means the sheet's; no orientation means view_type's."""
+    made = CreateDrawingViewInput(model_path="C:/p/plate.sldprt", view_type="top")
+
+    assert made.scale is None
+    assert made.orientation is None

@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-21
+
 ### Changed
 
 - **`generate_drawing_package` fits every title-block field** (#158):
@@ -228,6 +230,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`add_fillet` works on SolidWorks 2024** (#255): below 2025 it called
+  `IFeatureManager.FeatureFillet3` with 15 arguments where the method takes
+  14, so every fillet failed with "Invalid number of parameters". Every
+  version now makes the call checked live on 2026.
+- **`create_drawing_view` applies `scale`** (#256): the view kept the sheet's
+  scale and `scale_applied` was always false. A given scale is now the view's
+  own and is read back; left out, the view uses the sheet's scale. With no
+  `orientation`, a `view_type` such as `isometric` sets the view instead of
+  giving a front view.
+- **API lookups work when the server starts in a read-only folder** (#257):
+  the index was saved relative to the working folder, which Claude Desktop
+  started through `uvx` can't write to. It is now saved in
+  `~/.solidworks_mcp/docs-index`; an index in the old folder is still read.
 - **`construction` is honoured on SolidWorks**: `add_line`, `add_circle`
   and `add_rectangle` accepted `construction` but drew normal geometry, while
   the reply said `"construction": true`. The tools now set it on the new

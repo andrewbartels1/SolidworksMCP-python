@@ -295,7 +295,9 @@ def test_add_fillet_and_chamfer_selection_and_feature_failures() -> None:
     )
     extension = SimpleNamespace(SelectByID2=lambda edge, *_args: edge != "Edge<bad>")
     adapter.currentModel = SimpleNamespace(
-        FeatureManager=feature_manager, Extension=extension
+        FeatureManager=feature_manager,
+        Extension=extension,
+        FeatureFillet3=lambda *args: 0,
     )
 
     fillet_select_error = features._add_fillet_impl(adapter, 2.0, ["Edge<bad>"])
@@ -1150,15 +1152,16 @@ def test_feature_cut3_fallback_reverses_direction_not_the_cut_side() -> None:
     assert cut3_args == cut4_args[:26]
 
 
-def test_fillet_with_unparseable_version_and_unreadable_feature_name() -> None:
-    class _Fillet:
-        @property
-        def Name(self):  # noqa: N802
-            raise RuntimeError("stale dispatch")
-
-    adapter = _versioned_adapter("garbage")
+@pytest.mark.parametrize("revision", ["32.5.0", "33.2.1", "34.0.0", "garbage"])
+def test_a_fillet_makes_the_same_call_on_every_version(revision: str) -> None:
+    """#255: SolidWorks 2024 (32) took a 15-argument call with 14 parameters."""
+    calls: list[tuple[object, ...]] = []
+    adapter = _versioned_adapter(revision)
     adapter.currentModel = SimpleNamespace(
-        FeatureManager=SimpleNamespace(FeatureFillet3=lambda *_a: _Fillet()),
+        FeatureManager=SimpleNamespace(
+            FeatureFillet3=lambda *_a: pytest.fail("the old call")
+        ),
+        FeatureFillet3=lambda *args: calls.append(args) or 1,
         Extension=SimpleNamespace(SelectByID2=lambda *_a: True),
     )
 
@@ -1166,6 +1169,7 @@ def test_fillet_with_unparseable_version_and_unreadable_feature_name() -> None:
 
     assert result.is_success, result.error
     assert result.data.name == "Fillet"
+    assert calls == [(0.002, True, 0, False, 0, 0, None, False, False)]
 
 
 @pytest.mark.parametrize("percent", [0.0, 100.0, 150.0])
@@ -1977,9 +1981,9 @@ class TestPyWin32AdapterBranches:
             Extension=SimpleNamespace(SelectByID2=Mock(return_value=True)),
             FeatureManager=SimpleNamespace(
                 FeatureCut3=Mock(return_value=None),
-                FeatureFillet3=Mock(return_value=None),
                 FeatureChamfer=Mock(return_value=None),
             ),
+            FeatureFillet3=Mock(return_value=0),
             FirstFeature=SimpleNamespace(
                 GetTypeName2=lambda: "ProfileFeature",
                 Name="Sketch1",

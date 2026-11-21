@@ -2102,18 +2102,6 @@ def _add_fillet_impl(
             LookupError: If an edge or face entry selects nothing.
             Exception: If the feature is ``None``.
         """
-        # Detect SW major version for FeatureFillet3 parameter count
-        fillet_sw_major = 0
-        if getattr(adapter, "swApp", None):
-            rev = adapter._attempt(
-                lambda: adapter._get_attr_or_call(adapter.swApp, "RevisionNumber"),
-                default="0",
-            )
-            try:
-                fillet_sw_major = int(str(rev).split(".")[0])
-            except (ValueError, IndexError):
-                fillet_sw_major = 0
-
         # Only touch the selection when edges/faces were explicitly named.
         # An empty edge_names means "use whatever is already selected" --
         # e.g. entities the user hand-picked in the live UI via
@@ -2163,48 +2151,27 @@ def _add_fillet_impl(
                 if not selected:
                     raise LookupError(f"Failed to select edge: {edge_name}")
 
-        # SW 2025+ (major >= 33): IModelDoc2.FeatureFillet3 (9 params).
-        # Returns a non-zero int on success — NOT an IFeature — so we look up
-        # the last modified feature afterwards to get the name/id.
-        # Older builds: IFeatureManager.FeatureFillet3 (15 params, returns IFeature).
-        if fillet_sw_major >= 33:
-            result_code = adapter.currentModel.FeatureFillet3(
-                radius / 1000.0,  # R1 in meters
-                True,  # Propagate (VT_BOOL)
-                0,  # Ftyp (VT_I4)
-                False,  # VarRadTyp (VT_BOOL — must be bool, not int)
-                0,  # OverflowType (VT_I4)
-                0,  # NRadii (VT_I4)
-                None,  # Radii (VT_VARIANT)
-                False,  # UseHelpPoint (VT_BOOL)
-                False,  # UseTangentHoldLine (VT_BOOL)
+        # IModelDoc2.FeatureFillet3 (9 params) on every version. It returns a
+        # non-zero int on success, not an IFeature, so the feature is looked
+        # up afterwards for its name. (Before #255, versions below 2025 called
+        # IFeatureManager.FeatureFillet3 with 15 arguments, radius first; its
+        # signature has 14, options first, so it always failed with
+        # DISP_E_BADPARAMCOUNT on SolidWorks 2024.)
+        result_code = adapter.currentModel.FeatureFillet3(
+            radius / 1000.0,  # R1 in meters
+            True,  # Propagate (VT_BOOL)
+            0,  # Ftyp (VT_I4)
+            False,  # VarRadTyp (VT_BOOL — must be bool, not int)
+            0,  # OverflowType (VT_I4)
+            0,  # NRadii (VT_I4)
+            None,  # Radii (VT_VARIANT)
+            False,  # UseHelpPoint (VT_BOOL)
+            False,  # UseTangentHoldLine (VT_BOOL)
+        )
+        if not result_code:
+            raise Exception(
+                "Failed to create fillet (IModelDoc2.FeatureFillet3 returned 0)"
             )
-            if not result_code:
-                raise Exception(
-                    "Failed to create fillet (IModelDoc2.FeatureFillet3 returned 0)"
-                )
-            feature = None  # int return — retrieve feature object below
-        else:
-            feature_manager = adapter.currentModel.FeatureManager
-            feature = feature_manager.FeatureFillet3(
-                radius / 1000.0,
-                0,
-                0,
-                0,
-                0,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                False,
-                0,
-                False,
-            )
-            if not feature:
-                raise Exception("Failed to create fillet")
 
         # IModelDoc2.FeatureFillet3 returns non-zero for a selection it then
         # builds nothing from (e.g. a bare face, seen live on SW 2026), so a
@@ -2223,25 +2190,12 @@ def _add_fillet_impl(
                 "edges could not be filleted at this radius."
             )
 
-        # Resolve the feature name — FeatureFillet3 on SW 2025+ returns an int,
-        # not an IFeature, so we can only report a default name here.
-        feature_name = "Fillet"
-        if feature is not None:
-            # Not hasattr(): it only swallows AttributeError, so a stale COM
-            # dispatch raising on Name would fail a fillet that was created.
-            try:
-                feature_name = feature.Name or "Fillet"
-            except Exception:  # noqa: BLE001 - int return / stale dispatch
-                pass
-
+        # IModelDoc2.FeatureFillet3 returns an int, not an IFeature, so the
+        # name is SolidWorks' default; list_features gives the numbered one.
         return SolidWorksFeature(
-            name=feature_name,
+            name="Fillet",
             type="Fillet",
-            id=(
-                adapter._attempt(lambda: adapter._get_feature_id(feature), default="")
-                if feature
-                else ""
-            ),
+            id="",
             parameters={"radius": radius, "edges": edge_names},
             properties={"created": datetime.now().isoformat()},
         )
