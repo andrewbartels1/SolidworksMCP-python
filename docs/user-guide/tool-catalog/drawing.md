@@ -27,6 +27,7 @@ Place one named view of a part or assembly on the active drawing sheet.
 | `position_y` | `float` | — | `200.0` | Y position in drawing (mm) |
 | `scale` | `float?` | — | `None` | The view's own scale, e.g. `0.5` for 1:2 (`UseSheetScale` off, `ScaleDecimal`, read back as `scale_applied`); left out, the sheet's scale (`set_sheet_scale`) |
 | `orientation` | `str?` | — | `None` | View orientation (front, top, right, isometric); left out, a `view_type` that names one is used, else front |
+| `exploded` | `bool` | — | `False` | Show the assembly's exploded view (`create_exploded_view`) in this view (`IView.ShowExploded`) |
 
 **Sample call:**
 
@@ -361,3 +362,27 @@ List the views on the active drawing, by name.
 ```
 
 ---
+
+---
+
+### `add_balloons`
+
+Number the parts in a drawing view with balloons, one per part.
+
+**Prerequisite:** An open drawing with a view of an assembly; a BOM (`insert_bom_table`) for the item numbers
+
+**SolidWorks automation note:** Selects the view by name and calls `IDrawingDoc.AutoBalloon5` with options from `CreateAutoBalloonOptions`: the layout (`swBalloonLayoutType_e`), circular balloons, and one balloon per part (`IgnoreMultiple`). The balloons carry the BOM's item numbers. Works best on an exploded view (`create_drawing_view` with `exploded`). A view that isn't there fails as `not_found`, listing the views.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `view_name` | `str` | ✅ | | The drawing view, as `list_drawing_views` names it |
+| `layout` | `str` | — | `square` | `square`, `circle`, `top`, `bottom`, `left` or `right` |
+
+**Sample call:**
+
+```json
+{"view_name": "Drawing View1", "layout": "square"}
+```
+

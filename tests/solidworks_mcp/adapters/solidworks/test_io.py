@@ -4483,6 +4483,56 @@ async def test_set_dimension_in_named_configurations(monkeypatch) -> None:
     assert "No configuration named 'Short'" in (unknown.error or "")
 
 
+class TestExplodedDrawingView:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("shows", "expected"), [(True, True), (False, False)])
+    async def test_a_view_shows_the_exploded_assembly(
+        self, monkeypatch, shows: bool, expected: bool
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+        adapter.swApp = MagicMock()
+        adapter.swApp.OpenDoc6.return_value = MagicMock()
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._dynamic",
+            SimpleNamespace(Dispatch=lambda obj: obj),
+        )
+        names = iter([[], ["Drawing View1"]])
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._view_names",
+            lambda adapter, drawing: next(names),
+        )
+        view = SimpleNamespace(ShowExploded=lambda show: shows)
+        adapter.currentModel.CreateDrawViewFromModelView3.return_value = view
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, "orientation": "isometric", "exploded": True}
+        )
+
+        assert result.data["exploded"] is expected
+
+    @pytest.mark.asyncio
+    async def test_a_view_that_came_back_empty_isnt_exploded(self, monkeypatch) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.GetType.return_value = 3
+        adapter.swApp = MagicMock()
+        adapter.swApp.OpenDoc6.return_value = MagicMock()
+        names = iter([[], ["Drawing View1"]])
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._view_names",
+            lambda adapter, drawing: next(names),
+        )
+        adapter.currentModel.CreateDrawViewFromModelView3.return_value = None
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, "exploded": True}
+        )
+
+        assert result.data["exploded"] is False
+
+
 def _view_adapter(monkeypatch, view: object):  # noqa: ANN202
     """A drawing that places ``view`` and reports one new view."""
     adapter = _build_adapter(monkeypatch)

@@ -12,6 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Assembly depth** (queue item 33): an assembly to the drawing a shop
+  builds from, 157 tools in all. `create_exploded_view` explodes the
+  assembly automatically or step by step (components along x, y or z) and
+  `set_exploded_view` shows or collapses it; `pattern_components` repeats
+  components along or around an axis; `mirror_components` mirrors them about
+  a plane; `replace_component` swaps one (or every instance) for another file;
+  `add_balloons` numbers a drawing view's parts. `set_component_state` hides,
+  shows and makes components transparent, and `create_drawing_view` takes
+  `exploded`. Tool names may now start with `replace_`. Stable, checked
+  live on SolidWorks 2026. Demo: a pinned base, patterned, mirrored,
+  swapped, exploded and ballooned, on the demos page.
+
+### Fixed
+
+- **`create_axis` in an assembly names the new axis.** It read the last
+  item in the tree, which in an assembly is the Mates folder, so the axis
+  came back as `Mates` and `pattern_components` couldn't find it. It now
+  compares the tree's names before and after, wherever the axis lands.
+- **`insert_component` says where it puts a part**: `x`, `y` and `z` are
+  the component's centre (the middle of its bounding box), not its origin,
+  as SolidWorks places it. Only the descriptions changed.
+
 ## [2.1.0] - 2026-11-21
 
 ### Changed

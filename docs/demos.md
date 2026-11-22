@@ -1042,6 +1042,47 @@ meet").
 8. `add_fillet({"radius": 10, "edge_names": [two corner edges]})`, `add_chamfer({"distance": 10, "edge_names": [two corner edges]})`
 9. `verify_model({"volume_mm3": ...})` after each step
 
+## Assemblies {#assemblies}
+
+Source: [`tests/live/test_live_sw_assembly_depth.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_assembly_depth.py).
+
+### A pinned base, exploded and ballooned {#pinned-base}
+
+![A base with one pin is patterned to four pins, its foot mirrored, every pin swapped for a longer one, the base hidden and made transparent, the pins exploded upward, and an exploded isometric drawing gets a BOM and balloons](assets/demos/assembly-depth/test_a_pinned_base_drawn_exploded_with_balloons-motion.gif)
+
+> *Example prompt:* Build a 120 x 60 x 8 mm base with a foot under its right
+> end and one 8 mm pin, then pattern the pin to four, 30 mm apart. Mirror the
+> foot to the other end and swap the pins for 45 mm ones. Explode the pins
+> 40 mm up and make an exploded drawing with a BOM and balloons.
+
+**What it shows.** Every new assembly tool, each step checked by the
+component count and the assembly's bounding box:
+
+| Step | Tools | Components | Size, mm |
+| --- | --- | --- | --- |
+| A base, a 30 mm pin and a foot; the pin patterned to four, 30 mm apart along x | `create_axis`, `pattern_components` | 6 | 120 x 44 x 60 |
+| The foot mirrored about the Right Plane | `mirror_components` | 7 | 120 x 44 x 60 |
+| Every pin swapped for the 45 mm pin: 15 mm taller | `replace_component` `all_instances` | 7 | 120 x 59 x 60 |
+| The base hidden, shown and made transparent | `set_component_state` `visible`, `transparent` | 7 | |
+| The pins lifted 40 mm; collapsed and exploded again | `create_exploded_view`, `set_exploded_view` | 7 | 59 high, then 99 |
+| An exploded isometric view, a BOM (4 rows) and one balloon per part (3) | `create_drawing_view` `exploded`, `insert_bom_table`, `add_balloons` | | |
+
+The first swap fails **on purpose**: a file that doesn't exist is refused
+as `invalid_input` before anything changes. `insert_component` places each
+part by its centre, and the pattern runs along the axis's own direction
+(toward -x for an x axis), so the seed pin stands at the right end.
+
+**Tool calls**
+
+1. `create_part`, `create_sketch`, `add_rectangle` or `add_circle`, `exit_sketch`, `create_extrusion`: the base, two pins and the foot, saved
+2. `create_assembly`, `insert_component` x 3 (by centre), `create_axis({"reference": "x"})`, `pattern_components({"components": ["pin30-1"], "axis": "Axis1", "count": 4, "spacing": 30})`
+3. `mirror_components({"components": ["foot-1"], "plane": "Right Plane"})`
+4. `replace_component` with a missing file, refused on purpose; then `replace_component({"component": "pin30-1", "file_path": "...pin45.SLDPRT", "all_instances": true})`
+5. `set_component_state({"component": "base-1", "visible": false})`, `visible: true`, `transparent: true`
+6. `create_exploded_view({"steps": [{"components": [the four pins], "direction": "y", "distance": 40}]})`, `set_exploded_view({"exploded": false})`, then `true`
+7. `create_drawing`, `create_drawing_view({"view_type": "isometric", "exploded": true})`, `insert_bom_table`, `add_balloons({"view_name": "Drawing View1", "layout": "square"})`
+8. `verify_model` after each step
+
 ## Run a demo yourself
 
 The demos need Windows, SolidWorks open and idle, and the project's `.venv`.

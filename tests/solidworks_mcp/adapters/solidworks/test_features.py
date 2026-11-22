@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, PropertyMock, patch
 
 import pytest
 
@@ -1387,6 +1387,7 @@ class TestCreateAxisImplErrors:
         feature_manager = MagicMock()
         feature_manager.GetFeatureCount.return_value = None
         adapter.currentModel.FeatureManager = feature_manager
+        adapter.currentModel.FirstFeature = None  # an empty tree
 
         result = _create_axis_impl(adapter, "z")
 
@@ -1733,6 +1734,7 @@ class TestCreateAxisImplMoreErrors:
         adapter.currentModel = MagicMock()
         adapter.currentModel.FeatureByName.return_value = None
         adapter.currentModel.Extension.SelectByID2.return_value = False
+        adapter.currentModel.FirstFeature = None  # an empty tree
 
         result = _create_axis_impl(adapter, "z")
 
@@ -1748,6 +1750,7 @@ class TestCreateAxisImplMoreErrors:
         feature_manager = MagicMock()
         feature_manager.GetFeatureCount.return_value = 5  # unchanged
         adapter.currentModel.FeatureManager = feature_manager
+        adapter.currentModel.FirstFeature = None  # an empty tree
 
         result = _create_axis_impl(adapter, "z")
 
@@ -2867,14 +2870,29 @@ class TestReferenceGeometryOutcomes:
         result = _create_axis_impl(adapter, "w")
         assert "Unknown axis reference 'w'" in (result.error or "")
 
-    def test_axis_reports_its_planes(self, monkeypatch) -> None:
+    @staticmethod
+    def _tree(*features: tuple[str, str]) -> SimpleNamespace | None:
+        """A feature chain (FirstFeature -> GetNextFeature) of (type, name)."""
+        first = None
+        for kind, name in reversed(features):
+            first = SimpleNamespace(GetTypeName2=kind, Name=name, GetNextFeature=first)
+        return first
+
+    def _axis_adapter(self, monkeypatch, before, after):  # noqa: ANN202
+        """An adapter whose tree reads ``before`` then ``after`` the axis."""
         adapter = _build_adapter(monkeypatch)
-        adapter.currentModel = MagicMock()
-        adapter.currentModel.FeatureByName.return_value = _selectable_feature()
-        adapter.currentModel.FeatureManager.GetFeatureCount.side_effect = [5, 6]
-        adapter.currentModel.FeatureByPositionReverse.return_value = SimpleNamespace(
-            Name="Axis1"
+        model = MagicMock()
+        model.FeatureByName.return_value = _selectable_feature()
+        model.FeatureManager.GetFeatureCount.side_effect = [5, 6]
+        type(model).FirstFeature = PropertyMock(
+            side_effect=[self._tree(*before), self._tree(*after)]
         )
+        adapter.currentModel = model
+        return adapter
+
+    def test_axis_reports_its_planes(self, monkeypatch) -> None:
+        part = [("RefPlane", "Top Plane"), ("Extrusion", "Boss-Extrude1")]
+        adapter = self._axis_adapter(monkeypatch, part, [*part, ("RefAxis", "Axis1")])
 
         result = _create_axis_impl(adapter, "-Z")
 
@@ -2884,12 +2902,55 @@ class TestReferenceGeometryOutcomes:
         assert result.data["features_before"] == 5
         assert result.data["features_after"] == 6
 
-    def test_an_axis_whose_name_cannot_be_read_says_none(self, monkeypatch) -> None:
+    def test_an_axis_in_an_assembly_is_found_wherever_it_sits(
+        self, monkeypatch
+    ) -> None:
+        """An assembly keeps its Mates folder last; the axis is found by name."""
+        before = [("Reference", "pin-1"), ("MateGroup", "Mates")]
+        after = [("Reference", "pin-1"), ("RefAxis", "Axis1"), ("MateGroup", "Mates")]
+        adapter = self._axis_adapter(monkeypatch, before, after)
+
+        result = _create_axis_impl(adapter, "x")
+
+        assert result.data["name"] == "Axis1"
+
+    def test_one_new_feature_of_another_type_is_still_the_axis(
+        self, monkeypatch
+    ) -> None:
+        adapter = self._axis_adapter(
+            monkeypatch,
+            [("MateGroup", "Mates")],
+            [("MateGroup", "Mates"), ("Axis", "Axis1")],
+        )
+
+        result = _create_axis_impl(adapter, "x")
+
+        assert result.data["name"] == "Axis1"
+
+    @pytest.mark.parametrize(
+        "after",
+        [
+            [("MateGroup", "Mates")],
+            [("MateGroup", "Mates"), ("Other", "A"), ("Other", "B")],
+        ],
+    )
+    def test_an_axis_that_cannot_be_told_apart_says_none(
+        self, monkeypatch, after
+    ) -> None:
+        adapter = self._axis_adapter(monkeypatch, [("MateGroup", "Mates")], after)
+
+        result = _create_axis_impl(adapter, "x")
+
+        assert result.is_success
+        assert result.data["name"] is None
+
+    def test_an_unreadable_tree_names_no_axis(self, monkeypatch) -> None:
         adapter = _build_adapter(monkeypatch)
-        adapter.currentModel = MagicMock()
-        adapter.currentModel.FeatureByName.return_value = _selectable_feature()
-        adapter.currentModel.FeatureManager.GetFeatureCount.side_effect = [5, 6]
-        adapter.currentModel.FeatureByPositionReverse.return_value = None
+        model = MagicMock()
+        model.FeatureByName.return_value = _selectable_feature()
+        model.FeatureManager.GetFeatureCount.side_effect = [5, 6]
+        type(model).FirstFeature = PropertyMock(side_effect=RuntimeError("COM"))
+        adapter.currentModel = model
 
         result = _create_axis_impl(adapter, "x")
 

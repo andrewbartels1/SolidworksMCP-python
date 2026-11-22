@@ -3352,10 +3352,20 @@ class SolidWorksIOMixin:
                 scale_read, scale, rel_tol=1e-6
             )
 
+            shows_exploded = None
+            if _first(data, "exploded", default=False):
+                shown = _as_com(adapter, view, "IView") if view is not None else None
+                shows_exploded = bool(
+                    shown is not None
+                    and adapter._attempt(
+                        lambda: shown.ShowExploded(True), default=False
+                    )
+                )
             return {
                 "name": new_view,
                 "model_path": path,
                 "orientation": view_name,
+                "exploded": shows_exploded,
                 "position": {"x": x, "y": y},
                 "scale": scale or None,
                 "scale_applied": scale_applied if scale else None,

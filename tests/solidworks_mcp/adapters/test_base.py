@@ -160,6 +160,33 @@ async def test_base_default_sketch_helpers_return_error() -> None:
     result = await adapter.set_construction_geometry(["Line_1"], False)
     assert "set_construction_geometry is not implemented" in (result.error or "")
 
+    result = await adapter.create_exploded_view(
+        [{"components": ["pin-1"], "direction": "y", "distance": 40.0}],
+    )
+    assert "create_exploded_view is not implemented" in (result.error or "")
+
+    result = await adapter.set_exploded_view(
+        False,
+    )
+    assert "set_exploded_view is not implemented" in (result.error or "")
+
+    result = await adapter.pattern_components(
+        ["pin-1"], "Axis1", 4, "linear", 25.0, None
+    )
+    assert "pattern_components is not implemented" in (result.error or "")
+
+    result = await adapter.mirror_components(["foot-1"], "Right Plane")
+    assert "mirror_components is not implemented" in (result.error or "")
+
+    result = await adapter.replace_component("pin-1", "C:/p/pin45.sldprt", True)
+    assert "replace_component is not implemented" in (result.error or "")
+
+    result = await adapter.set_component_appearance("base-1", False, True)
+    assert "set_component_appearance is not implemented" in (result.error or "")
+
+    result = await adapter.add_balloons("Drawing View1", "circle")
+    assert "add_balloons is not implemented" in (result.error or "")
+
     result = await adapter.add_sketch_constraint("e1", None, "coincident")
     assert result.status == AdapterResultStatus.ERROR
 

@@ -108,11 +108,12 @@ name and tell two tools apart by name alone. Pick the verb by meaning:
 | --- | --- |
 | `create_` | makes a new document, or a new feature built from a sketch or acting on the whole body (extrusion, rib, hole, shell) |
 | `add_` | adds an entity to an open sketch or a drawing, or treats edges or faces of an existing body (fillet, chamfer, draft, thread) |
-| `pattern_`, `mirror_` | repeats existing features |
+| `pattern_`, `mirror_` | repeats existing features or components |
 | `sketch_` | an operation on the open sketch's entities (offset, mirror, pattern, convert) |
 | `get_` | reads one thing |
 | `list_` | reads a collection |
 | `set_` | changes one value |
+| `replace_` | swaps one thing for another (a component for another file) |
 | `open_`, `save_`, `close_`, `export_` | file operations |
 | `activate_`, `delete_` | makes a document or configuration the active one; removes a feature, configuration or equation |
 | `check_`, `verify_`, `measure_`, `compare_` | read-only checks |

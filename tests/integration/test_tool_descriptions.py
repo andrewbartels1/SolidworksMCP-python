@@ -19,6 +19,7 @@ from solidworks_mcp.tools.tool_boundary import tool_family
 
 _MODULES = [
     "analysis",
+    "assembly",
     "automation",
     "docs_discovery",
     "drawing",
@@ -217,7 +218,7 @@ def test_the_field_check_follows_refs_and_nesting() -> None:
 _TOOL_VERBS = (
     "add|analyze|apply|batch|check|close|compare|convert|create|delete|execute|"
     "export|extract|generate|get|insert|list|load|manage|measure|open|optimize|"
-    "pattern|rename|save|select|set|sketch|suppress|validate|verify"
+    "pattern|rename|replace|save|select|set|sketch|suppress|validate|verify"
 )
 _TOOL_LIKE = re.compile(rf"`((?:{_TOOL_VERBS})_[a-z0-9_]+)`")
 

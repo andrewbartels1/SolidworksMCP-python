@@ -1018,7 +1018,23 @@ def _profile_feature_names(adapter: Any) -> list[str]:
         list[str]: Bare sketch names, earliest first.  Empty when the walk
         finds no sketches or the tree is inaccessible.
     """
-    names: list[str] = []
+    return [name for kind, name in _tree_features(adapter) if kind == "ProfileFeature"]
+
+
+def _tree_features(adapter: Any) -> list[tuple[str, str]]:
+    """Every feature's (type, name) in feature-tree order.
+
+    Walks ``FirstFeature`` -> ``GetNextFeature``; a feature whose type or
+    name can't be read is left out.
+
+    Args:
+        adapter: A connected adapter with a valid ``currentModel``.
+
+    Returns:
+        list[tuple[str, str]]: ``(GetTypeName2, Name)`` pairs, earliest
+        first. Empty when the tree is inaccessible.
+    """
+    found: list[tuple[str, str]] = []
     try:
         _flag_feature_methods(adapter.currentModel, "IModelDoc2")
         feat = _read_member(adapter.currentModel, "FirstFeature")
@@ -1028,8 +1044,12 @@ def _profile_feature_names(adapter: Any) -> list[str]:
                 break
             _flag_feature_members(feat, *_TREE_WALK_MEMBERS)
             try:
-                if _read_member(feat, "GetTypeName2") == "ProfileFeature":
-                    names.append(str(_read_member(feat, "Name")))
+                found.append(
+                    (
+                        str(_read_member(feat, "GetTypeName2")),
+                        str(_read_member(feat, "Name")),
+                    )
+                )
             except Exception:
                 pass
             try:
@@ -1038,7 +1058,7 @@ def _profile_feature_names(adapter: Any) -> list[str]:
                 break
     except Exception:
         pass
-    return names
+    return found
 
 
 def _create_sweep_impl(
@@ -3187,6 +3207,28 @@ def _create_reference_plane_impl(
     )
 
 
+def _new_axis_name(adapter: Any, before: set[str]) -> str | None:
+    """The name of the axis that isn't among ``before``.
+
+    The tree is compared by name rather than read at a position: an
+    assembly keeps its Mates folder (and may place new reference geometry)
+    away from the end of the tree. A new ``RefAxis`` is preferred; otherwise
+    the only new feature, if there is exactly one.
+
+    Args:
+        adapter: The connected adapter.
+        before: Every feature name before the axis was made.
+
+    Returns:
+        str | None: The axis's name, or None when it can't be told apart.
+    """
+    new = [(kind, name) for kind, name in _tree_features(adapter) if name not in before]
+    axes = [name for kind, name in new if kind == "RefAxis"]
+    if axes:
+        return axes[-1]
+    return new[0][1] if len(new) == 1 else None
+
+
 def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, Any]]:
     """Create a reference axis along a principal direction.
 
@@ -3226,6 +3268,7 @@ def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, A
 
     def _axis_operation() -> dict[str, Any]:
         before = _feature_count(adapter)
+        names_before = {name for _, name in _tree_features(adapter)}
         adapter._attempt(
             lambda: adapter.currentModel.ClearSelection2(True), default=None
         )
@@ -3249,14 +3292,11 @@ def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, A
                 "unchanged."
             )
 
-        # The new axis is the last feature; its name is what create_reference_plane's
-        # `axis` takes. None if it can't be read, never invented.
-        newest = adapter._attempt(
-            lambda: adapter.currentModel.FeatureByPositionReverse(0), default=None
-        )
-        name = adapter._attempt(lambda: newest.Name, default=None) if newest else None
+        # Its name is what create_reference_plane's `axis` and
+        # pattern_components take. None if it can't be read, never invented.
+        name = _new_axis_name(adapter, names_before)
         return {
-            "name": str(name) if name else None,
+            "name": name,
             "reference": key,
             "planes": [plane_a, plane_b],
             "features_before": before,

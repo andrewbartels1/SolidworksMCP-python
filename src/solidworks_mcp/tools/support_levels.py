@@ -247,6 +247,13 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_configuration": _STABLE,
     "activate_configuration": _STABLE,
     "delete_configuration": _STABLE,
+    # assembly
+    "create_exploded_view": _STABLE,
+    "set_exploded_view": _STABLE,
+    "pattern_components": _STABLE,
+    "mirror_components": _STABLE,
+    "replace_component": _STABLE,
+    "add_balloons": _STABLE,
     # equations
     "list_equations": _STABLE,
     "set_equation": _STABLE,

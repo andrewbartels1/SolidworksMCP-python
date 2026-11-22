@@ -310,6 +310,17 @@ _SMOKE_PAYLOADS: dict[str, dict[str, Any]] = {
     "sketch_trim": {"point": [0.0, 5.0]},
     "sketch_extend": {"point": [0.0, 5.0]},
     "set_construction_geometry": {"entities": ["Line1"]},
+    "create_exploded_view": {},
+    "set_exploded_view": {"exploded": True},
+    "pattern_components": {
+        "components": ["pin-1"],
+        "axis": "Axis1",
+        "count": 4,
+        "spacing": 25.0,
+    },
+    "mirror_components": {"components": ["foot-1"], "plane": "Right Plane"},
+    "replace_component": {"component": "pin-1", "file_path": "C:/parts/pin45.sldprt"},
+    "add_balloons": {"view_name": "Drawing View1"},
     "sketch_tutorial_simple_hole": {
         "plane": "Front",
         "center_x": 0.0,

@@ -21,6 +21,7 @@ from ..adapters.base import (
 from .input_compat import CompatInput
 from .tool_boundary import (
     normalize_input,
+    require_capability,
     require_success,
     with_tool_boundary,
 )
@@ -651,17 +652,26 @@ class InsertComponentInput(CompatInput):
 
     Attributes:
         file_path (str): Path to the part or sub-assembly.
-        x (float): X position in millimetres.
-        y (float): Y position in millimetres.
-        z (float): Z position in millimetres.
+        x (float): X of the component's centre (its bounding box's middle, not its origin), in mm.
+        y (float): Y of the component's centre (its bounding box's middle, not its origin), in mm.
+        z (float): Z of the component's centre (its bounding box's middle, not its origin), in mm.
     """
 
     file_path: str = Field(
         description="Absolute path to the .sldprt or .sldasm to insert"
     )
-    x: float = Field(default=0.0, description="X position in millimetres")
-    y: float = Field(default=0.0, description="Y position in millimetres")
-    z: float = Field(default=0.0, description="Z position in millimetres")
+    x: float = Field(
+        default=0.0,
+        description="X of the component's centre (its bounding box's middle, not its origin), in mm",
+    )
+    y: float = Field(
+        default=0.0,
+        description="Y of the component's centre (its bounding box's middle, not its origin), in mm",
+    )
+    z: float = Field(
+        default=0.0,
+        description="Z of the component's centre (its bounding box's middle, not its origin), in mm",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         if not self.file_path.strip():
@@ -913,12 +923,22 @@ class SetComponentStateInput(CompatInput):
             "to keep it as it is"
         ),
     )
+    visible: bool | None = Field(
+        default=None,
+        description="false hides the component (to see inside), true shows it",
+    )
+    transparent: bool | None = Field(
+        default=None, description="true shows it see-through, false opaque"
+    )
 
     def model_post_init(self, __context: Any) -> None:
         if not self.component.strip():
             raise ValueError("component is required")
-        if self.fixed is None and self.flexible is None:
-            raise ValueError("give fixed, flexible or both")
+        if all(
+            v is None
+            for v in (self.fixed, self.flexible, self.visible, self.transparent)
+        ):
+            raise ValueError("give fixed, flexible, visible or transparent")
 
 
 class CreateReferencePlaneInput(CompatInput):
@@ -2274,40 +2294,63 @@ async def register_modeling_tools(
 
     @mcp.tool()
     async def set_component_state(input_data: SetComponentStateInput) -> dict[str, Any]:
-        """Fix or float a component of the active assembly, or make a sub-assembly rigid or flexible.
+        """Fix or float an assembly component, make a sub-assembly flexible, or hide it or make it transparent.
 
         Float a part so mates can position it (the first part inserted is fixed); fix
         one to hold it still. Make a sub-assembly flexible so its own mates move in
-        this assembly (a crank whose knob turns). Only what you pass changes: the
-        component's suppression, visibility and configuration are kept. Needs: an
-        open assembly. Changes: the component's fixed or solving state. Returns:
-        `state` with `component`, `before` and `after` (`fixed`, `flexible` and the
-        properties kept).
+        this assembly (a crank whose knob turns). Hide a component (`visible` false)
+        or make it `transparent` to see the parts inside. Only what you pass changes:
+        the component's suppression, configuration and other states are kept. Needs:
+        an open assembly. Changes: the states you pass. Returns: `state` with
+        `component`, `before` and `after` (`fixed`, `flexible`, `visible` and the
+        properties kept), and `appearance` (`visible`, `transparent`) when you
+        changed it.
 
         Args:
-            input_data: The component and what to change: `fixed`, `flexible` or
-                both.
+            input_data: The component and what to change: `fixed`, `flexible`,
+                `visible`, `transparent`, any of them.
 
         Returns:
             dict[str, Any]: The state before and after.
         """
         input_data = normalize_input(input_data, SetComponentStateInput)
-        result = await adapter.set_component_state(
-            input_data.component, input_data.fixed, input_data.flexible
-        )
-        require_success(result, context="Failed to set the component state")
-        data = result.data if isinstance(result.data, dict) else {}
-        after = data.get("after", {})
+        data: dict[str, Any] = {"component": input_data.component}
         words = []
-        if input_data.fixed is not None:
-            words.append("fixed" if after.get("fixed") else "floating")
-        if input_data.flexible is not None:
-            words.append("flexible" if after.get("flexible") else "rigid")
+        execution_time = 0.0
+        if input_data.fixed is not None or input_data.flexible is not None:
+            result = await adapter.set_component_state(
+                input_data.component, input_data.fixed, input_data.flexible
+            )
+            require_success(result, context="Failed to set the component state")
+            data = result.data if isinstance(result.data, dict) else data
+            execution_time = result.execution_time or 0.0
+            after = data.get("after", {})
+            if input_data.fixed is not None:
+                words.append("fixed" if after.get("fixed") else "floating")
+            if input_data.flexible is not None:
+                words.append("flexible" if after.get("flexible") else "rigid")
+        if input_data.visible is not None or input_data.transparent is not None:
+            require_capability(
+                adapter,
+                "set_component_appearance",
+                "Active adapter can't hide components or make them transparent",
+            )
+            shown = await adapter.set_component_appearance(
+                input_data.component, input_data.visible, input_data.transparent
+            )
+            require_success(shown, context="Failed to set the component state")
+            appearance = shown.data or {}
+            data = {**data, "appearance": appearance}
+            execution_time += shown.execution_time or 0.0
+            if input_data.visible is not None:
+                words.append("shown" if appearance.get("visible") else "hidden")
+            if input_data.transparent is not None:
+                words.append("transparent" if input_data.transparent else "opaque")
         return {
             "status": "success",
             "message": f"{input_data.component} is now {' and '.join(words)}",
             "state": data,
-            "execution_time": result.execution_time,
+            "execution_time": execution_time,
         }
 
     @mcp.tool()

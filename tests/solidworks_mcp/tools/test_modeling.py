@@ -2330,6 +2330,58 @@ async def test_set_component_state_tool_says_what_changed(
 
 
 @pytest.mark.asyncio
+async def test_set_component_state_hides_and_makes_transparent(mcp_server) -> None:
+    adapter = Mock()
+    adapter.set_component_appearance = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"visible": False, "transparent": True},
+        )
+    )
+    adapter.set_component_state = AsyncMock()
+    await register_modeling_tools(mcp_server, adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "set_component_state"
+    )
+
+    reply = await tool({"component": "base-1", "visible": False, "transparent": True})
+    shown = await tool({"component": "base-1", "visible": True})
+
+    adapter.set_component_state.assert_not_awaited()
+    assert reply["message"] == "base-1 is now hidden and transparent"
+    assert reply["state"]["appearance"] == {"visible": False, "transparent": True}
+    assert shown["message"] == "base-1 is now hidden"
+
+
+@pytest.mark.asyncio
+async def test_set_component_state_does_both_and_says_opaque(mcp_server) -> None:
+    adapter = Mock()
+    adapter.set_component_state = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"component": "pin-1", "after": {"fixed": True}},
+            execution_time=0.5,
+        )
+    )
+    adapter.set_component_appearance = AsyncMock(
+        return_value=AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={"visible": True, "transparent": False},
+            execution_time=0.25,
+        )
+    )
+    await register_modeling_tools(mcp_server, adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "set_component_state"
+    )
+
+    reply = await tool({"component": "pin-1", "fixed": True, "transparent": False})
+
+    assert reply["message"] == "pin-1 is now fixed and opaque"
+    assert reply["execution_time"] == pytest.approx(0.75)
+
+
+@pytest.mark.asyncio
 async def test_the_mock_refuses_an_empty_state_change(mock_adapter) -> None:
     result = await mock_adapter.set_component_state("crank-1")
 

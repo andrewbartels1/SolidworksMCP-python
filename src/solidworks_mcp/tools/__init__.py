@@ -9,6 +9,7 @@ from fastmcp import FastMCP
 from loguru import logger
 
 from .analysis import register_analysis_tools
+from .assembly import register_assembly_tools
 from .automation import register_automation_tools
 from .docs_discovery import register_docs_discovery_tools
 from .drawing import register_drawing_tools
@@ -42,6 +43,7 @@ async def register_tools(mcp: FastMCP, adapter: Any, config: Any) -> int:
     # Register tool categories
     await register_modeling_tools(mcp, adapter, config)
     await register_equation_tools(mcp, adapter, config)
+    await register_assembly_tools(mcp, adapter, config)
     await register_sketching_tools(mcp, adapter, config)
     await register_drawing_tools(mcp, adapter, config)
     await register_drawing_analysis_tools(mcp, adapter, config)

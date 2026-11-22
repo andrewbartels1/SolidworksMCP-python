@@ -63,6 +63,14 @@ These read SolidWorks' installed files and never start it
 
     [**3 tools available** :octicons-arrow-right-24:](tool-catalog/equations.md)
 
+- :material-cogs:{ .lg .middle } **Assembly Tools**
+
+    ---
+
+    Exploded views, component patterns and mirrors, and replacing a component with another file.
+
+    [**5 tools available** :octicons-arrow-right-24:](tool-catalog/assembly.md)
+
 - :material-pencil:{ .lg .middle } **Sketching Tools**
 
     ---
@@ -75,9 +83,9 @@ These read SolidWorks' installed files and never start it
 
     ---
 
-    Drawings from a model: standard, section and detail views, dimensions, notes, centre marks, the sheet format and title block, and a drawing check.
+    Drawings from a model: standard, section, detail and exploded views, dimensions, notes, balloons, centre marks, the sheet format and title block, and a drawing check.
 
-    [**13 tools available** :octicons-arrow-right-24:](tool-catalog/drawing.md)
+    [**14 tools available** :octicons-arrow-right-24:](tool-catalog/drawing.md)
 
 - :material-file-cog:{ .lg .middle } **Drawing Automation**
 
@@ -185,7 +193,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 151 Tools**
+**Total: 157 Tools**
 
 ## Deprecated tools
 

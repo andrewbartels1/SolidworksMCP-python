@@ -256,6 +256,14 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
     ),
     ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
+            "Give the full path of an existing .sldprt or .sldasm to put in "
+            "the component's place."
+        ),
+        patterns=(r"No file at .* to replace",),
+    ),
+    ErrorRule(
         error_type="not_found",
         hint=(
             "Check the name or path - list what exists first (list_features, "
