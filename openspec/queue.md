@@ -43,7 +43,7 @@ Last updated 2026-11-25.
 | 30 | Build a part from an engineering drawing (image or PDF): research first, then an OpenSpec change for a first version | #249 | not yet written | Research to do (the user's request 2026-11-17) |
 | 31 | `generate_drawing_package` fits every title-block field the sheet format fills from a property, not just DWG NO. and TITLE | #158 (part) | `title-block-fit-every-field` | Done 2026-11-19 (#251), checked live |
 | 32 | Sketch essentials: sketch fillet and chamfer, slots, trim and extend, tangent and 3-point arcs, centre rectangle, construction geometry on and off (ISketchManager; the user's choice 2026-11-19, first of the COM-coverage packages) | none | `sketch-essentials` (archived) | Done 2026-11-19 (#253): six tools, live demo passed |
-| 33 | Assembly depth and a ballooned drawing: exploded view, component patterns, mirror and replace components, hide/show/transparency, `AutoBalloon` on the drawing | #23 (part) | `assembly-depth` | Live demo passed, stable; PR pending |
+| 33 | Assembly depth and a ballooned drawing: exploded view, component patterns, mirror and replace components, hide/show/transparency, `AutoBalloon` on the drawing | #23 (part) | `assembly-depth` | Done (#260, archived 2026-11-22) |
 | 34 | Helix and swept cuts: helix/spiral, a swept cut (`create_sweep` only adds material), thicken; springs and modelled threads | none | not yet written | Planned |
 | 35 | Multi-body tools: combine (add, subtract, common), split, move/copy, delete/keep a body, scale | none | not yet written | Planned |
 | 36 | Appearance and colour: set a part's, body's or face's colour and read it back | none | not yet written | Planned (small; may ride with another item) |
