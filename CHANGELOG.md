@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`create_axis` in an assembly names the new axis.** It read the last
   item in the tree, which in an assembly is the Mates folder, so the axis
   came back as `Mates` and `pattern_components` couldn't find it. It now
-  walks back to the newest reference axis.
+  compares the tree's names before and after, wherever the axis lands.
 
 ## [2.1.0] - 2026-11-21
 

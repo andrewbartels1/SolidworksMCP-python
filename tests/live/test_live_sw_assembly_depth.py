@@ -155,6 +155,8 @@ async def test_a_pinned_base_drawn_exploded_with_balloons(
     pin_name = next(n for n in names if n.startswith("pin30"))
     foot_name = next(n for n in names if n.startswith("foot"))
     axis = await _ok(await tools["create_axis"]({"reference": "x"}))
+    evidence("The new axis, named in an assembly", axis["axis"], call="create_axis(x)")
+    assert axis["axis"]["name"], axis
     pattern = await _ok(
         await tools["pattern_components"](
             {
