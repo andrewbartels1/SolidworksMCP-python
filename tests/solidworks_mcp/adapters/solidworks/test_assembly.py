@@ -27,6 +27,7 @@ class _Component:
 
     def Select4(self, _append: bool, data: Any, _callout: bool) -> bool:
         self.selected_mark = data.Mark
+        self.marks = [*getattr(self, "marks", []), data.Mark]
         return self._selectable
 
     def GetPathName(self) -> str:
@@ -69,10 +70,15 @@ class _Assembly:
 
     # IModelDoc2 / IAssemblyDoc
     def ClearSelection2(self, _all: bool) -> bool:
+        for component in self.components.values():
+            component.__dict__.pop("selected_mark", None)
+        self.selected_named: dict[int, str] = {}
         return True
 
     def _select(self, name: str, kind: str, *args: Any) -> bool:
         self.calls.append(("SelectByID2", name, kind, args[4]))
+        if name in self.known:
+            self.selected_named = {**getattr(self, "selected_named", {}), args[4]: name}
         return name in self.known
 
     def GetBox(self, _options: int) -> tuple[float, ...]:
@@ -102,7 +108,7 @@ class _Assembly:
 
     def GetActiveConfiguration(self) -> Any:
         def add_step(distance: float, *args: Any) -> Any:
-            self.calls.append(("AddExplodeStep2", distance, args[1]))
+            self.calls.append(("AddExplodeStep2", distance, args[0], args[1]))
             if self.step_result is not None:
                 self.lift += distance
             return self.step_result
@@ -110,11 +116,18 @@ class _Assembly:
         return SimpleNamespace(AddExplodeStep2=add_step)
 
     def _create_feature(self, data: Any) -> Any:
-        self.calls.append(("CreateFeature", data.kind))
-        if self.feature_result is None:
+        """Pattern what's selected, as SolidWorks does: seeds 1, axis 2."""
+        axis = getattr(self, "selected_named", {}).get(2)
+        self.calls.append(("CreateFeature", data.kind, axis))
+        if self.feature_result is None or axis is None:
             return None
         count = getattr(data, "D1TotalInstances", None) or data.TotalInstances
-        for seed in _values(data.SeedComponentArray):
+        seeds = [
+            c
+            for c in list(self.components.values())
+            if getattr(c, "selected_mark", None) == 1
+        ]
+        for seed in seeds:
             for copy in range(2, count + 1 + self.pattern_extra):
                 name = f"{seed.Name2.split('-')[0]}-{copy}"
                 self.components[name] = _Component(name, seed.path)
@@ -215,9 +228,10 @@ async def test_explode_steps_select_components_and_the_direction_plane() -> None
 
     model = adapter.currentModel
     assert result.data["size_after_mm"] == [120.0, 78.0, 60.0]
-    assert model.components["pin-1"].selected_mark == 1
+    assert model.components["pin-1"].marks == [1]
     assert ("SelectByID2", "Top Plane", "PLANE", 2) in model.calls
-    assert ("AddExplodeStep2", 0.04, False) in model.calls
+    # Along the Top Plane's normal (index 2), +y; not an in-plane axis.
+    assert ("AddExplodeStep2", 0.04, 2, False) in model.calls
     assert model.views == ["ExplView1"]
 
 
@@ -283,7 +297,8 @@ async def test_a_linear_component_pattern() -> None:
         "components_after": 5,
         "added": ["pin-2", "pin-3", "pin-4"],
     }
-    assert ("CreateFeature", 108) in adapter.currentModel.calls
+    assert ("CreateFeature", 108, "Axis1") in adapter.currentModel.calls
+    assert ("SelectByID2", "Axis1", "AXIS", 2) in adapter.currentModel.calls
 
 
 @pytest.mark.asyncio

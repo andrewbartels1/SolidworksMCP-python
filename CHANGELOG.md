@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   item in the tree, which in an assembly is the Mates folder, so the axis
   came back as `Mates` and `pattern_components` couldn't find it. It now
   compares the tree's names before and after, wherever the axis lands.
+- **`insert_component` says where it puts a part**: `x`, `y` and `z` are
+  the component's centre (the middle of its bounding box), not its origin,
+  as SolidWorks places it. Only the descriptions changed.
 
 ## [2.1.0] - 2026-11-21
 

@@ -236,7 +236,10 @@ async def register_assembly_tools(
         Use it for a row of bolts or pins, or parts around a hub. `axis` names a
         reference axis (`create_axis` in the assembly); `count` includes the
         seeds. Linear takes `spacing` (mm); circular takes `angle` (degrees, 360
-        spaces them equally). Needs: an open assembly with the seeds and the axis.
+        spaces them equally). The row runs along the axis's own direction, which
+        SolidWorks picks (an x axis from `create_axis` runs toward -x), so check
+        the result with `verify_model`'s bounding box. Needs: an open assembly
+        with the seeds and the axis.
         Changes: adds a component pattern feature. Returns: `pattern` with the
         `feature` name, the component counts before and after and the `added`
         instances.

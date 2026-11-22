@@ -38,14 +38,17 @@ existing code, which item 40 will do.
   exploded view (`CreateExplodedView` when `GetExplodedViewNames` is empty),
   then per step selects the components (mark 1) and the default plane
   normal to the direction (Right for x, Top for y, Front for z; mark 2) and
-  calls `IConfiguration.AddExplodeStep2(distance, 0, reverse, 0, 0, False,
+  calls `IConfiguration.AddExplodeStep2(distance, 2, reverse, 0, 0, False,
   False, False)`. A step that returns nothing fails, naming the step.
 - Either way the view is shown (`ShowExploded2(True, name)`) and the reply
   gives its name, the step count and the assembly's bounding box before and
   after, so the explode is measured.
 
-The marks and `ExplDirIndex` 0 follow the API help's example; the live demo
-checks them by the bounding box growing along the step's direction.
+`ExplDirIndex` picks an axis of the selected plane's own frame, checked live
+on 2026-11-22: 0 and 1 lie in the plane (for the Top Plane, +x and -z), and
+2 is its normal, which is +x, +y or +z for the Right, Top and Front planes.
+Index 0 (the API help's example) moved the pins along x, not up. The live
+demo checks it by the bounding box growing along the step's direction.
 
 `set_exploded_view(exploded)` calls `ShowExploded2(exploded, name)` for the
 active configuration's first exploded view and reads `IsExploded` back.
@@ -55,13 +58,18 @@ With no exploded view it fails as `not_found`.
 
 `pattern_components` (`kind` `linear`, the default, or `circular`) builds a
 feature from a definition: `IFeatureManager.CreateDefinition`
-(`swFmLocalLPattern` 108 or `swFmLocalCirPattern` 109), sets
-`SeedComponentArray` to the seed components, the direction axis (`D1Axis`
-or `Axis`, an axis by name from `create_axis`), `D1Spacing` /
-`D1TotalInstances` or `Spacing` / `TotalInstances` (circular spacing in
-degrees, `EqualSpacing` when the angle is 360), then `CreateFeature`. The
-reply gives the feature's name and the component count before and after,
-which must grow by (count - 1) x seeds.
+(`swFmLocalLPattern` 108 or `swFmLocalCirPattern` 109) with the seeds
+selected under mark 1 and the axis (by name, from `create_axis`) under
+mark 2, sets `D1Spacing` / `D1TotalInstances` or `Spacing` /
+`TotalInstances` (circular spacing in radians, `EqualSpacing` when the angle
+is 360), then `CreateFeature`. The reply gives the feature's name and the
+component count before and after, which must grow by (count - 1) x seeds.
+
+Checked live on 2026-11-22: setting `SeedComponentArray` and `D1Axis` as
+properties instead leaves the axis unset (`GetD1AxisType` -1) and
+`CreateFeature` returns nothing; the selection is what it reads. The row
+runs along the axis's own direction (an x axis from `create_axis` runs
+toward -x).
 
 `mirror_components` calls `IAssemblyDoc.MirrorComponents3` with the plane
 (`Front Plane`, `Top Plane`, `Right Plane` or a plane's name), the
@@ -106,11 +114,12 @@ a spec change, made here.
 
 ## Risks / Trade-offs
 
-- [Explode-step marks or `ExplDirIndex` differ on SolidWorks 2026] → the
-  demo measures the bounding box per step; fix before sign-off.
-- [Component pattern definition properties need a different shape
-  (arrays of dispatch)] → `SeedComponentArray` takes the components as a
-  dispatch array (`com_utils`); the demo counts components.
+- [Explode-step marks or `ExplDirIndex` differ on SolidWorks 2026] → found
+  live: index 2 (the plane's normal), not 0. The demo measures it.
+- [Component pattern definition properties need a different shape] → found
+  live: the seeds and axis come from the selection (marks 1 and 2), not
+  from `SeedComponentArray` / `D1Axis`. The demo counts components and
+  checks the row's width.
 - [`AutoBalloon5` needs the view selected a particular way] → it is selected
   by name (`SelectByID2(view, "DRAWINGVIEW")`); the demo counts balloons.
 - [Replace with mates that no longer fit leaves mate errors] → the reply

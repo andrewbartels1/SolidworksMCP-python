@@ -7,7 +7,7 @@ step should have done:
 
 1. Four parts saved: a 120 x 60 x 8 base, a 30 mm and a 45 mm pin (8 mm
    across), and a 10 x 6 x 60 foot.
-2. An assembly: the base, one pin standing on it at x = -45, a foot under
+2. An assembly: the base, one pin standing on it at x = 45, a foot under
    its right end. ``create_axis`` x, then ``pattern_components``: four pins,
    30 mm apart.
 3. ``mirror_components``: the foot mirrored about the Right Plane.
@@ -45,7 +45,9 @@ BASE = (120.0, 8.0, 60.0)
 PIN_DIAMETER = 8.0
 SHORT_PIN, LONG_PIN = 30.0, 45.0
 FOOT = (10.0, 6.0, 60.0)
-PIN_X, PIN_SPACING, PIN_COUNT = -45.0, 30.0, 4
+#: The seed pin stands at the base's right end: SolidWorks runs this axis's
+#: pattern toward -x, so the four pins land at 45, 15, -15 and -45.
+PIN_X, PIN_SPACING, PIN_COUNT = 45.0, 30.0, 4
 LIFT = 40.0
 
 
@@ -142,13 +144,17 @@ async def test_a_pinned_base_drawn_exploded_with_balloons(
     # 2. The assembly, and the pin patterned along x.
     starting("An assembly: the base, a pin and a foot; the pin patterned to four")
     await _ok(await tools["create_assembly"]({"name": "pinned-base"}))
-    await _ok(await tools["insert_component"]({"file_path": base}))
+    # insert_component places each part's centre: the base sits on y = 0,
+    # the pin on the base, the foot under it.
+    await _ok(await tools["insert_component"]({"file_path": base, "y": BASE[1] / 2}))
     await _ok(
-        await tools["insert_component"]({"file_path": pin, "x": PIN_X, "y": BASE[1]})
+        await tools["insert_component"](
+            {"file_path": pin, "x": PIN_X, "y": BASE[1] + SHORT_PIN / 2}
+        )
     )
     await _ok(
         await tools["insert_component"](
-            {"file_path": foot, "x": BASE[0] / 2 - FOOT[0] / 2, "y": -FOOT[1]}
+            {"file_path": foot, "x": BASE[0] / 2 - FOOT[0] / 2, "y": -FOOT[1] / 2}
         )
     )
     names = await _components(tools)

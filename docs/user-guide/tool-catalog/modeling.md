@@ -849,9 +849,9 @@ Insert a part or sub-assembly file into the active assembly at a position in mm.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `file_path` | `str` | ✅ |  | Absolute path to the .sldprt or .sldasm to insert |
-| `x` | `float` | — | `0.0` | X position in millimetres |
-| `y` | `float` | — | `0.0` | Y position in millimetres |
-| `z` | `float` | — | `0.0` | Z position in millimetres |
+| `x` | `float` | — | `0.0` | X of the component's centre (its bounding box's middle, not its origin), in mm |
+| `y` | `float` | — | `0.0` | Y of the component's centre (its bounding box's middle, not its origin), in mm |
+| `z` | `float` | — | `0.0` | Z of the component's centre (its bounding box's middle, not its origin), in mm |
 
 **Sample call:**
 

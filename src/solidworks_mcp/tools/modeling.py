@@ -652,17 +652,26 @@ class InsertComponentInput(CompatInput):
 
     Attributes:
         file_path (str): Path to the part or sub-assembly.
-        x (float): X position in millimetres.
-        y (float): Y position in millimetres.
-        z (float): Z position in millimetres.
+        x (float): X of the component's centre (its bounding box's middle, not its origin), in mm.
+        y (float): Y of the component's centre (its bounding box's middle, not its origin), in mm.
+        z (float): Z of the component's centre (its bounding box's middle, not its origin), in mm.
     """
 
     file_path: str = Field(
         description="Absolute path to the .sldprt or .sldasm to insert"
     )
-    x: float = Field(default=0.0, description="X position in millimetres")
-    y: float = Field(default=0.0, description="Y position in millimetres")
-    z: float = Field(default=0.0, description="Z position in millimetres")
+    x: float = Field(
+        default=0.0,
+        description="X of the component's centre (its bounding box's middle, not its origin), in mm",
+    )
+    y: float = Field(
+        default=0.0,
+        description="Y of the component's centre (its bounding box's middle, not its origin), in mm",
+    )
+    z: float = Field(
+        default=0.0,
+        description="Z of the component's centre (its bounding box's middle, not its origin), in mm",
+    )
 
     def model_post_init(self, __context: Any) -> None:
         if not self.file_path.strip():

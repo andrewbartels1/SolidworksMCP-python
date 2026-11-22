@@ -28,6 +28,10 @@ from .io import (
 
 #: The default plane whose normal is each explode direction.
 _DIRECTION_PLANES = {"x": "Right Plane", "y": "Top Plane", "z": "Front Plane"}
+#: ``AddExplodeStep2``'s ``ExplDirIndex`` picks an axis of the selected
+#: plane's own frame: 0 and 1 lie in the plane (for the Top Plane, +x and -z),
+#: 2 is its normal, which is +x, +y or +z for the planes above (checked live).
+_EXPLODE_ALONG_NORMAL = 2
 #: ``swFeatureNameID_e``: local (component) linear and circular patterns.
 _LOCAL_LINEAR_PATTERN = 108
 _LOCAL_CIRCULAR_PATTERN = 109
@@ -177,7 +181,7 @@ class SolidWorksAssemblyMixin:
                     )
                     made = config.AddExplodeStep2(
                         step["distance"] / 1000.0,
-                        0,
+                        _EXPLODE_ALONG_NORMAL,
                         bool(step.get("reverse", False)),
                         0.0,
                         0,
@@ -269,19 +273,20 @@ class SolidWorksAssemblyMixin:
             assembly = _assembly(adapter)
             found = _find_components(adapter, assembly, components)
             before = _component_names(adapter, assembly)
+            # The definition takes its seeds and axis from the selection
+            # (seeds under mark 1, the axis under mark 2): set as properties
+            # instead, SolidWorks 2026 reads the axis as unset and refuses.
             model.ClearSelection2(True)
-            _select_named(adapter, axis, "AXIS", 0)
-            axis_object = _selected(adapter)
-            model.ClearSelection2(True)
+            _select_components(
+                adapter, [found[name] for name in components], _MARK_COMPONENTS
+            )
+            _select_named(adapter, axis, "AXIS", _MARK_DIRECTION)
             manager = _sw_type_info.flagged(model.FeatureManager, "IFeatureManager")
-            seeds = dispatch_array([found[name] for name in components])
             if kind == "circular":
                 data = _sw_type_info.flagged(
                     manager.CreateDefinition(_LOCAL_CIRCULAR_PATTERN),
                     "ILocalCircularPatternFeatureData",
                 )
-                data.SeedComponentArray = seeds
-                data.Axis = axis_object
                 data.TotalInstances = count
                 data.EqualSpacing = math.isclose(float(angle or 360.0), 360.0)
                 data.Spacing = math.radians(float(angle or 360.0))
@@ -290,11 +295,10 @@ class SolidWorksAssemblyMixin:
                     manager.CreateDefinition(_LOCAL_LINEAR_PATTERN),
                     "ILocalLinearPatternFeatureData",
                 )
-                data.SeedComponentArray = seeds
-                data.D1Axis = axis_object
                 data.D1TotalInstances = count
                 data.D1Spacing = float(spacing or 0.0) / 1000.0
             feature = manager.CreateFeature(data)
+            model.ClearSelection2(True)
             if feature is None:
                 raise Exception("SolidWorks refused the component pattern")
             after = _component_names(adapter, assembly)
