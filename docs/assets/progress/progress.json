@@ -2,8 +2,8 @@
  "tools": {
   "total": 157,
   "by_level": {
-   "stable": 143,
-   "beta": 6,
+   "stable": 149,
+   "beta": 0,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -33,8 +33,8 @@
    {
     "name": "add_balloons",
     "family": "drawing",
-    "level": "beta",
-    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "level": "stable",
+    "reason": "",
     "summary": "Number the parts in a drawing view with balloons, one per part."
    },
    {
@@ -341,8 +341,8 @@
    {
     "name": "create_exploded_view",
     "family": "assembly",
-    "level": "beta",
-    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "level": "stable",
+    "reason": "",
     "summary": "Explode the active assembly, automatically or step by step, and show it."
    },
    {
@@ -803,8 +803,8 @@
    {
     "name": "mirror_components",
     "family": "assembly",
-    "level": "beta",
-    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "level": "stable",
+    "reason": "",
     "summary": "Mirror assembly components about a plane, as instances of the same parts."
    },
    {
@@ -838,8 +838,8 @@
    {
     "name": "pattern_components",
     "family": "assembly",
-    "level": "beta",
-    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "level": "stable",
+    "reason": "",
     "summary": "Repeat assembly components in a row along an axis, or around one."
    },
    {
@@ -866,8 +866,8 @@
    {
     "name": "replace_component",
     "family": "assembly",
-    "level": "beta",
-    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "level": "stable",
+    "reason": "",
     "summary": "Swap an assembly component for another part or assembly file."
    },
    {
@@ -978,8 +978,8 @@
    {
     "name": "set_exploded_view",
     "family": "assembly",
-    "level": "beta",
-    "reason": "new in assembly depth; its live demo hasn't run yet.",
+    "level": "stable",
+    "reason": "",
     "summary": "Show the active assembly exploded, or collapse it."
    },
    {

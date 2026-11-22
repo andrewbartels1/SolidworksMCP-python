@@ -29,5 +29,5 @@
 ## 5. Live demo and sign-off
 
 - [x] 5.1 `tests/live/test_live_sw_assembly_depth.py`: a base plate, a 30 mm pin, a 45 mm pin and a foot made as parts; an assembly with the base fixed, one pin patterned to four along x, the foot mirrored about the Right Plane, the pins replaced by the long pin (all instances), the base hidden and shown and made transparent, the pins exploded 40 mm up; then a drawing with an exploded isometric view, a BOM and balloons. Each step checked: component counts, the bounding box, the balloon count against the BOM's rows; one refused call
-- [ ] 5.2 The user runs the demo; fix what it finds; record the GIF (captions held long enough to read)
-- [ ] 5.3 Promote the six tools to stable; commit; ask before pushing
+- [x] 5.2 The user runs the demo; fix what it finds; record the GIF (captions held long enough to read)
+- [x] 5.3 Promote the six tools to stable; commit; ask before pushing

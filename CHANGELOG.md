@@ -22,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a plane; `replace_component` swaps one (or every instance) for another file;
   `add_balloons` numbers a drawing view's parts. `set_component_state` hides,
   shows and makes components transparent, and `create_drawing_view` takes
-  `exploded`. Tool names may now start with `replace_`.
+  `exploded`. Tool names may now start with `replace_`. Stable, checked
+  live on SolidWorks 2026. Demo: a pinned base, patterned, mirrored,
+  swapped, exploded and ballooned, on the demos page.
 
 ### Fixed
 
