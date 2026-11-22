@@ -2873,7 +2873,7 @@ class TestReferenceGeometryOutcomes:
         adapter.currentModel.FeatureByName.return_value = _selectable_feature()
         adapter.currentModel.FeatureManager.GetFeatureCount.side_effect = [5, 6]
         adapter.currentModel.FeatureByPositionReverse.return_value = SimpleNamespace(
-            Name="Axis1"
+            Name="Axis1", GetTypeName2="RefAxis"
         )
 
         result = _create_axis_impl(adapter, "-Z")
@@ -2883,6 +2883,45 @@ class TestReferenceGeometryOutcomes:
         assert len(result.data["planes"]) == 2
         assert result.data["features_before"] == 5
         assert result.data["features_after"] == 6
+
+    def test_an_axis_in_an_assembly_is_named_past_the_mates_folder(
+        self, monkeypatch
+    ) -> None:
+        """An assembly keeps its Mates folder after the new axis."""
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = _selectable_feature()
+        adapter.currentModel.FeatureManager.GetFeatureCount.side_effect = [5, 6]
+        tail = [
+            SimpleNamespace(Name="Mates", GetTypeName2="MateGroup"),
+            SimpleNamespace(Name="Axis1", GetTypeName2="RefAxis"),
+        ]
+        adapter.currentModel.FeatureByPositionReverse.side_effect = tail.__getitem__
+
+        result = _create_axis_impl(adapter, "x")
+
+        assert result.data["name"] == "Axis1"
+
+    @pytest.mark.parametrize(
+        "last",
+        [
+            SimpleNamespace(Name="Mates", GetTypeName2="MateGroup"),
+            SimpleNamespace(Name="", GetTypeName2="RefAxis"),
+        ],
+    )
+    def test_no_readable_axis_near_the_end_of_the_tree_says_none(
+        self, monkeypatch, last: SimpleNamespace
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = MagicMock()
+        adapter.currentModel.FeatureByName.return_value = _selectable_feature()
+        adapter.currentModel.FeatureManager.GetFeatureCount.side_effect = [5, 6]
+        adapter.currentModel.FeatureByPositionReverse.return_value = last
+
+        result = _create_axis_impl(adapter, "x")
+
+        assert result.is_success
+        assert result.data["name"] is None
 
     def test_an_axis_whose_name_cannot_be_read_says_none(self, monkeypatch) -> None:
         adapter = _build_adapter(monkeypatch)

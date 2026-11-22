@@ -3187,6 +3187,38 @@ def _create_reference_plane_impl(
     )
 
 
+#: Folders an assembly keeps after its last feature (the Mates folder).
+_AXIS_SEARCH_SLACK = 3
+
+
+def _newest_axis_name(adapter: Any, added: int) -> str | None:
+    """The newest reference axis's name, read from the end of the tree.
+
+    In a part the new axis is the last feature, but an assembly keeps its
+    Mates folder after it, so the last few features are walked back until a
+    ``RefAxis``.
+
+    Args:
+        adapter: The connected adapter.
+        added: How many features the axis added.
+
+    Returns:
+        str | None: The axis's name, or None when none is found.
+    """
+    model = adapter.currentModel
+    for position in range(added + _AXIS_SEARCH_SLACK):
+        feature = adapter._attempt(
+            lambda p=position: model.FeatureByPositionReverse(p), default=None
+        )
+        if feature is None:
+            return None
+        _flag_feature_members(feature, "GetTypeName2", "Name")
+        if _read_member(feature, "GetTypeName2") == "RefAxis":
+            name = _read_member(feature, "Name")
+            return str(name) if name else None
+    return None
+
+
 def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, Any]]:
     """Create a reference axis along a principal direction.
 
@@ -3249,14 +3281,11 @@ def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, A
                 "unchanged."
             )
 
-        # The new axis is the last feature; its name is what create_reference_plane's
-        # `axis` takes. None if it can't be read, never invented.
-        newest = adapter._attempt(
-            lambda: adapter.currentModel.FeatureByPositionReverse(0), default=None
-        )
-        name = adapter._attempt(lambda: newest.Name, default=None) if newest else None
+        # Its name is what create_reference_plane's `axis` and
+        # pattern_components take. None if it can't be read, never invented.
+        name = _newest_axis_name(adapter, after - before)
         return {
-            "name": str(name) if name else None,
+            "name": name,
             "reference": key,
             "planes": [plane_a, plane_b],
             "features_before": before,
