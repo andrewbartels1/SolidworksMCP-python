@@ -8,6 +8,7 @@ import pytest
 from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
 from solidworks_mcp.tools.drawing import (
     AutoCenterMarksInput,
+    CreateDrawingViewInput,
     DimensionInput,
     DrawingCreationInput,
     DrawingViewInput,
@@ -573,3 +574,13 @@ async def test_add_balloons_numbers_a_view(mcp_server, mock_config) -> None:
     adapter.add_balloons.assert_awaited_once_with("Drawing View1", "top")
     assert reply["message"] == "Added 3 balloon(s) to Drawing View1"
     assert bad["error_type"] == "invalid_input"
+
+
+def test_a_drawing_view_leaves_scale_and_orientation_to_the_sheet_and_view_type() -> (
+    None
+):
+    """#256: no scale means the sheet's; no orientation means view_type's."""
+    made = CreateDrawingViewInput(model_path="C:/p/plate.sldprt", view_type="top")
+
+    assert made.scale is None
+    assert made.orientation is None

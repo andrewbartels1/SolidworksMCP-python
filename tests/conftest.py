@@ -147,7 +147,9 @@ def _no_solidworks_launch() -> Generator[None]:
 
 @pytest.fixture(autouse=True)
 def _no_real_type_library(
-    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """Keep the API lookup tools off this machine's SolidWorks type library.
 
@@ -168,6 +170,10 @@ def _no_real_type_library(
     monkeypatch.setattr(docs_discovery, "load_type_library", _no_library)
     monkeypatch.setattr(docs_discovery, "target_version", _no_library)
     monkeypatch.setattr(docs_discovery, "load_constants_library", _no_library)
+    # Never read or write the real ~/.solidworks_mcp index from a test.
+    monkeypatch.setattr(
+        docs_discovery, "USER_INDEX_DIR", tmp_path_factory.mktemp("user-index")
+    )
 
 
 @pytest.fixture(scope="session")

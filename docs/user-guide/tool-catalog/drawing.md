@@ -25,8 +25,8 @@ Place one named view of a part or assembly on the active drawing sheet.
 | `view_type` | `str` | ✅ | `` | Type of view (orthographic, isometric, section, detail) |
 | `position_x` | `float` | — | `100.0` | X position in drawing (mm) |
 | `position_y` | `float` | — | `200.0` | Y position in drawing (mm) |
-| `scale` | `float` | — | `1.0` | View scale factor |
-| `orientation` | `str` | — | `front` | View orientation (front, top, right, isometric) |
+| `scale` | `float?` | — | `None` | The view's own scale, e.g. `0.5` for 1:2 (`UseSheetScale` off, `ScaleDecimal`, read back as `scale_applied`); left out, the sheet's scale (`set_sheet_scale`) |
+| `orientation` | `str?` | — | `None` | View orientation (front, top, right, isometric); left out, a `view_type` that names one is used, else front |
 | `exploded` | `bool` | — | `False` | Show the assembly's exploded view (`create_exploded_view`) in this view (`IView.ShowExploded`) |
 
 **Sample call:**

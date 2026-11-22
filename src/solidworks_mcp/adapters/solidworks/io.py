@@ -3249,7 +3249,17 @@ class SolidWorksIOMixin:
             x = float(_first(data, "position_x", "x", default=100.0))
             y = float(_first(data, "position_y", "y", default=150.0))
 
-        requested = str(_first(data, "orientation", "view_type", default="front"))
+        # With no orientation, a view_type that names a view ("top",
+        # "isometric") is the orientation; any other ("orthographic") is front
+        # (#256: view_type alone used to leave every view a front view).
+        view_type = str(_first(data, "view_type", default="")).strip().lower()
+        requested = str(
+            _first(
+                data,
+                "orientation",
+                default=view_type if view_type in _NAMED_VIEWS else "front",
+            )
+        )
         view_name = _NAMED_VIEWS.get(requested.strip().lower())
         if view_name is None and requested.startswith("*"):
             view_name = requested
@@ -3322,17 +3332,25 @@ class SolidWorksIOMixin:
             added = [n for n in after if n not in before]
             new_view = added[-1] if added else after[-1]
 
-            scale_applied = False
+            # The view's own scale: UseSheetScale off, then ScaleDecimal,
+            # read back (#256: the view kept the sheet's scale, and
+            # scale_applied tested setattr's return value, always None).
+            scale_read = None
             if scale and view is not None:
                 wrapped = _as_com(adapter, view, "IView")
                 if wrapped is not None:
-                    scale_applied = (
-                        adapter._attempt(
-                            lambda: setattr(wrapped, "ScaleRatio", [scale, 1.0]),
-                            default=None,
-                        )
-                        is not None
+                    adapter._attempt(
+                        lambda: setattr(wrapped, "UseSheetScale", 0), default=None
                     )
+                    adapter._attempt(
+                        lambda: setattr(wrapped, "ScaleDecimal", scale), default=None
+                    )
+                    scale_read = adapter._attempt(
+                        lambda: float(wrapped.ScaleDecimal), default=None
+                    )
+            scale_applied = scale_read is not None and math.isclose(
+                scale_read, scale, rel_tol=1e-6
+            )
 
             shows_exploded = None
             if _first(data, "exploded", default=False):
@@ -3351,6 +3369,7 @@ class SolidWorksIOMixin:
                 "position": {"x": x, "y": y},
                 "scale": scale or None,
                 "scale_applied": scale_applied if scale else None,
+                "scale_read": scale_read,
                 "views_before": len(before),
                 "views_after": len(after),
             }

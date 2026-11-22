@@ -50,12 +50,23 @@ from .type_library import (
 # "2.1" adds the enums, so a "2.0" index is rebuilt once.
 INDEX_FORMAT = "2.1"
 
-#: Where lookups look for a saved index, in order.
-_INDEX_DIRS = (
+#: Where a built index is saved: the user's own data folder, beside the
+#: server's other data (``config.data_dir``). Relative to the working folder
+#: it failed with PermissionError when Claude Desktop started the server
+#: through uvx in a folder the user can't write to (#257).
+USER_INDEX_DIR = Path.home() / ".solidworks_mcp" / "docs-index"
+#: Folders an index was saved in before #257, still read.
+_LEGACY_INDEX_DIRS = (
     Path(".generated/docs-index"),
     Path("tests/.generated/solidworks_integration/docs-index"),
     Path("tests/.generated/docs-index"),
 )
+
+
+def _index_dirs() -> tuple[Path, ...]:
+    """Where lookups look for a saved index, in order: the user folder first."""
+    return (USER_INDEX_DIR, *_LEGACY_INDEX_DIRS)
+
 
 IndexStatus = Literal["ready", "rebuilt", "unavailable"]
 MemberType = Literal["method", "property"]
@@ -159,7 +170,7 @@ class SolidWorksDocsDiscovery:
 
     Args:
         output_dir (Path | None): Where the index is saved. Defaults to
-            ``.generated/docs-index``.
+            ``~/.solidworks_mcp/docs-index``.
         year (int | None): The SolidWorks year whose type library to read;
             None for the newest installed.
         strict_year (bool): True when the caller asked for ``year``, so a
@@ -183,7 +194,7 @@ class SolidWorksDocsDiscovery:
             year (int | None): The SolidWorks year to read, if any.
             strict_year (bool): True to fail when that year isn't installed.
         """
-        self.output_dir = output_dir or _INDEX_DIRS[0]
+        self.output_dir = output_dir or USER_INDEX_DIR
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.year = year
         self.strict_year = strict_year
@@ -346,7 +357,7 @@ class DiscoverDocsInput(CompatInput):
     output_dir: str | None = Field(
         default=None,
         description=(
-            "Folder to save the index in; default .generated/docs-index. The "
+            "Folder to save the index in; default ~/.solidworks_mcp/docs-index. The "
             "lookups only read the default folder, so another folder is for "
             "keeping a copy (pass it back as index_file)."
         ),
@@ -710,7 +721,7 @@ def _find_index_file(year: int) -> Path | None:
         Path | None: The first ``solidworks_docs_index_<year>.json`` in the
         index folders, or None.
     """
-    for directory in _INDEX_DIRS:
+    for directory in _index_dirs():
         candidate = directory / f"solidworks_docs_index_{year}.json"
         if candidate.is_file():
             return candidate

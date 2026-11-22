@@ -2218,9 +2218,9 @@ class TestPyWin32AdapterBranches:
         # removes material; the volume is put back for the mass check below.
         def _fillet(*_args):
             mass_props.Volume = 1.9e-9
-            return feature_obj
+            return 1  # IModelDoc2.FeatureFillet3 returns an int
 
-        feature_manager.FeatureFillet3 = Mock(side_effect=_fillet)
+        adapter.currentModel.FeatureFillet3 = Mock(side_effect=_fillet)
         fillet = await adapter.add_fillet(2.0, ["Edge1", "Edge2"])
         mass_props.Volume = 2.0e-9
         chamfer = await adapter.add_chamfer(1.5, ["Edge1"])

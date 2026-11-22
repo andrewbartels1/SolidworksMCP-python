@@ -4531,3 +4531,84 @@ class TestExplodedDrawingView:
         )
 
         assert result.data["exploded"] is False
+
+
+def _view_adapter(monkeypatch, view: object):  # noqa: ANN202
+    """A drawing that places ``view`` and reports one new view."""
+    adapter = _build_adapter(monkeypatch)
+    adapter.currentModel = MagicMock()
+    adapter.currentModel.GetType.return_value = 3
+    adapter.swApp = MagicMock()
+    adapter.swApp.OpenDoc6.return_value = MagicMock()
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.solidworks.io._dynamic",
+        SimpleNamespace(Dispatch=lambda obj: obj),
+    )
+    names = iter([[], ["Drawing View1"]])
+    monkeypatch.setattr(
+        "solidworks_mcp.adapters.solidworks.io._view_names",
+        lambda adapter, drawing: next(names),
+    )
+    adapter.currentModel.CreateDrawViewFromModelView3.return_value = view
+    return adapter
+
+
+class TestViewScaleAndViewType:
+    """#256: a view's own scale is set and read back; view_type names the view."""
+
+    @pytest.mark.asyncio
+    async def test_a_half_scale_view_reads_back(self, monkeypatch) -> None:
+        view = SimpleNamespace(UseSheetScale=1, ScaleDecimal=1.0)
+        adapter = _view_adapter(monkeypatch, view)
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, "orientation": "top", "scale": 0.5}
+        )
+
+        assert view.UseSheetScale == 0
+        assert result.data["scale_applied"] is True
+        assert result.data["scale_read"] == 0.5
+
+    @pytest.mark.asyncio
+    async def test_a_scale_solidworks_doesnt_keep_is_reported(
+        self, monkeypatch
+    ) -> None:
+        class _SheetScaled:
+            UseSheetScale = 1
+
+            @property
+            def ScaleDecimal(self) -> float:
+                return 1.0
+
+            @ScaleDecimal.setter
+            def ScaleDecimal(self, _value: float) -> None:
+                pass
+
+        adapter = _view_adapter(monkeypatch, _SheetScaled())
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, "scale": 0.75}
+        )
+
+        assert result.data["scale_applied"] is False
+        assert result.data["scale_read"] == 1.0
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("payload", "orientation"),
+        [
+            ({"view_type": "isometric"}, "*Isometric"),
+            ({"view_type": "orthographic"}, "*Front"),
+            ({"view_type": "isometric", "orientation": "top"}, "*Top"),
+            ({}, "*Front"),
+        ],
+    )
+    async def test_view_type_names_the_view_when_orientation_is_left_out(
+        self, monkeypatch, payload: dict, orientation: str
+    ) -> None:
+        adapter = _view_adapter(monkeypatch, SimpleNamespace())
+
+        result = await adapter.create_drawing_view({"model_path": __file__, **payload})
+
+        assert result.data["orientation"] == orientation
+        assert result.data["scale_read"] is None
