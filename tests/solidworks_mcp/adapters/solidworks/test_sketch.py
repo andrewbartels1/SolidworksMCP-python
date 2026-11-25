@@ -282,6 +282,86 @@ def test_no_sketch_object_has_no_constrained_status() -> None:
     assert sketch._constrained_status(_FakeSketchAdapter(), None) is None
 
 
+class TestRelationEntities:
+    """#269: the origin and a segment's end points can take a relation."""
+
+    ORIGIN_POINT = object()
+
+    def _adapter(self, selectable: bool = True) -> _FakeSketchAdapter:
+        adapter = _FakeSketchAdapter()
+        picked: list[tuple] = []
+        adapter.currentModel = SimpleNamespace(
+            ClearSelection2=lambda *_a: True,
+            Extension=SimpleNamespace(
+                SelectByID2=lambda *a: picked.append(a) or selectable
+            ),
+            SelectionManager=SimpleNamespace(
+                GetSelectedObject6=lambda *_a: self.ORIGIN_POINT
+            ),
+            picked=picked,
+        )
+        start, end = object(), object()
+        adapter._sketch_entities = {
+            "Line_1": SimpleNamespace(
+                GetStartPoint2=lambda: start, GetEndPoint2=lambda: end
+            ),
+            "Arc_2": SimpleNamespace(GetStartPoint2=lambda: None),
+        }
+        adapter.points = (start, end)  # type: ignore[attr-defined]
+        return adapter
+
+    def test_the_origin_by_identity(self) -> None:
+        adapter = self._adapter()
+
+        assert sketch._relation_entity(adapter, " Origin ") is self.ORIGIN_POINT
+        assert adapter.currentModel.picked[0][:2] == ("Point1@Origin", "EXTSKETCHPOINT")
+
+    def test_an_origin_that_wont_select(self) -> None:
+        with pytest.raises(LookupError, match="Point1@Origin"):
+            sketch._relation_entity(self._adapter(selectable=False), "origin")
+
+    def test_end_points(self) -> None:
+        adapter = self._adapter()
+        start, end = adapter.points  # type: ignore[attr-defined]
+
+        assert sketch._relation_entity(adapter, "Line_1.start") is start
+        assert sketch._relation_entity(adapter, "Line_1.END") is end
+        assert (
+            sketch._relation_entity(adapter, "Line_1")
+            is adapter._sketch_entities["Line_1"]
+        )
+
+    def test_a_segment_without_that_point(self) -> None:
+        with pytest.raises(Exception, match="'Arc_2' has no start point"):
+            sketch._relation_entity(self._adapter(), "Arc_2.start")
+
+    @pytest.mark.parametrize("entity_id", ["Line_9", "Line_9.start", "Line_1.middle"])
+    def test_unknown_ids_name_what_is_accepted(self, entity_id: str) -> None:
+        with pytest.raises(Exception, match=r"'origin'"):
+            sketch._relation_entity(self._adapter(), entity_id)
+
+    def test_a_corner_coincident_with_the_origin(self) -> None:
+        adapter = self._adapter()
+        relations: list[tuple] = []
+        relmgr = SimpleNamespace(
+            AddRelation=lambda ents, kind: relations.append((ents, kind)) or object()
+        )
+        adapter.currentSketchManager = SimpleNamespace()
+        adapter.currentModel.GetActiveSketch2 = lambda: SimpleNamespace(
+            RelationManager=relmgr
+        )
+
+        result = sketch._add_sketch_constraint_impl(
+            adapter, "Line_1.start", "origin", "coincident"
+        )
+
+        assert result.is_success, result.error
+        start, _end = adapter.points  # type: ignore[attr-defined]
+        entities, kind = relations[0]
+        assert list(getattr(entities, "value", entities)) == [start, self.ORIGIN_POINT]
+        assert kind == sketch.RELATION_NAME_MAP["coincident"]
+
+
 def _german_part(looked_up: list[str]) -> SimpleNamespace:
     """A German part's tree; FeatureByName finds only its own names."""
     names = ("Ebene vorne", "Ebene oben", "Ebene rechts")

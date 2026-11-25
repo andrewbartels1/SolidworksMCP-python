@@ -394,3 +394,55 @@ async def test_a_note_starts_at_its_position(scratch: Any) -> None:
     )
     assert note["status"] == "success", note
     assert extent and abs(extent[0] - 30) < 1.0, extent
+
+
+async def test_save_as_a_copy_keeps_the_original(scratch: Any, tmp_path: Path) -> None:
+    """#276: as_copy writes a copy and the original stays the open document."""
+    adapter = scratch.adapter
+    tools = await _tools(adapter)
+    await _box(tools, "TC_Original", 40, 20, 10)
+    original = await _saved(scratch, tmp_path / "TC_Original.SLDPRT")
+    copy = str(tmp_path / "TC_Original_copy.SLDPRT")
+    scratch.written_files.append(copy)
+
+    copied = await tools["save_as"]({"file_path": copy, "as_copy": True})
+    evidence("#276: save_as with as_copy", copied)
+    assert copied["status"] == "success", copied
+    assert Path(copy).exists()
+    assert copied["kept_original"] is True, copied
+    assert Path(copied["current_path"]).name.lower() == Path(original).name.lower()
+
+
+async def test_a_line_tied_to_the_origin_is_fully_defined(scratch: Any) -> None:
+    """#269: a sketch could only be fully defined with Fix."""
+    tools = await _tools(scratch.adapter)
+    await _ok(await tools["create_part"]({"name": "tied"}))
+    await _ok(await tools["create_sketch"]({"plane": "Front"}))
+    line = await _ok(await tools["add_line"]({"x1": 0, "y1": 0, "x2": 40, "y2": 0}))
+    line_id = line.get("entity_id") or line.get("line", {}).get("id") or "Line_1"
+    await _ok(
+        await tools["add_sketch_constraint"](
+            {"entity1": line_id, "relation_type": "horizontal"}
+        )
+    )
+    await _ok(await tools["add_sketch_dimension"]({"entity1": line_id, "value": 40}))
+    before = await _ok(await tools["check_sketch_fully_defined"]({}))
+    tied = await tools["add_sketch_constraint"](
+        {
+            "entity1": f"{line_id}.start",
+            "entity2": "origin",
+            "relation_type": "coincident",
+        }
+    )
+    after = await _ok(await tools["check_sketch_fully_defined"]({}))
+    evidence(
+        "#269: a line's start coincident with the origin",
+        {
+            "before": before["sketch"]["definition_state"],
+            "tie": tied.get("status"),
+            "after": after["sketch"]["definition_state"],
+        },
+    )
+    assert tied["status"] == "success", tied
+    assert before["sketch"]["definition_state"] == "under_defined"
+    assert after["sketch"]["definition_state"] == "fully_defined"

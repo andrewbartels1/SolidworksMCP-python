@@ -1018,6 +1018,17 @@ class TestMockAdapter:
         assert result.data["file_path"] == "test_saved.sldprt"
 
     @pytest.mark.asyncio
+    async def test_mock_save_copy_needs_a_model(self, mock_adapter):
+        """A copy without an open document is refused; with one it keeps it."""
+        await mock_adapter.connect()
+        refused = await mock_adapter.save_copy("copy.sldprt")
+        await mock_adapter.create_part("Original", "mm")
+        copied = await mock_adapter.save_copy("copy.sldprt")
+
+        assert refused.error == "No active model"
+        assert copied.data["kept_original"] is True
+
+    @pytest.mark.asyncio
     async def test_mock_adapter_modeling_operations(self, mock_adapter):
         """Test mock adapter modeling operations."""
         await mock_adapter.connect()

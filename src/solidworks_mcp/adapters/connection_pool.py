@@ -535,6 +535,12 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "save_file", lambda adapter: adapter.save_file(file_path)
         )
 
+    async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Write a copy and keep the original open, using pool."""
+        return await self._execute_with_pool(
+            "save_copy", lambda adapter: adapter.save_copy(file_path)
+        )
+
     async def create_base_flange(
         self,
         thickness: float,

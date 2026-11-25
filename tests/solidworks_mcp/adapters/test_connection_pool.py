@@ -1792,6 +1792,7 @@ _SKETCH_PASSTHROUGHS = [
     ("mirror_components", (["foot-1"], "Right Plane")),
     ("replace_component", ("pin-1", "C:/p/pin45.sldprt", True)),
     ("pack_and_go_assembly", ("C:/a/asm.sldasm", "C:/out")),  # #267
+    ("save_copy", ("C:/out/copy.sldprt",)),  # #276
     ("set_component_appearance", ("base-1", False, True)),
     ("add_balloons", ("Drawing View1", "circle")),
     ("add_arc", (0.0, 0.0, 1.0, 0.0, 0.0, 1.0, "tangent", None)),

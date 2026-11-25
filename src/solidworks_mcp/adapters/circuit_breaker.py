@@ -513,6 +513,14 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"file_path": file_path},
         )
 
+    async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Write a copy and keep the original open, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "save_copy",
+            lambda: self.adapter.save_copy(file_path),
+            input_dict={"file_path": file_path},
+        )
+
     async def create_base_flange(
         self,
         thickness: float,

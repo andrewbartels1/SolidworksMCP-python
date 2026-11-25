@@ -1733,6 +1733,29 @@ class MockSolidWorksAdapter(
             execution_time=0.02,
         )
 
+    async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Mock writing a copy; the open document keeps its path.
+
+        Args:
+            file_path (str): Where the copy goes.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The copy's path and the open one.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "file_path": file_path,
+                "current_path": self._current_model.path,
+                "kept_original": True,
+            },
+        )
+
     async def add_line(
         self, x1: float, y1: float, x2: float, y2: float
     ) -> AdapterResult[str]:

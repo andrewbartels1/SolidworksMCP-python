@@ -434,6 +434,20 @@ class SolidWorksAdapter(ABC):
             error="save_file is not implemented by this adapter",
         )
 
+    async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Write a copy of the active document and keep the original open.
+
+        Args:
+            file_path (str): Where to write the copy.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The result produced by the operation.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="save_copy is not implemented by this adapter",
+        )
+
     async def create_base_flange(
         self,
         thickness: float,

@@ -1270,6 +1270,73 @@ def _set_sketch_text_impl(
     )
 
 
+_UNKNOWN_ENTITY = (
+    "Unknown sketch entity '{id}'. Use the IDs returned by add_line, add_arc, "
+    "add_circle, add_spline or add_centerline, '<id>.start' or '<id>.end' for a "
+    "line's or arc's end point, or 'origin'."
+)
+
+
+def _sketch_origin_point(adapter: Any) -> Any:
+    """The part's origin as a point the open sketch can relate to (#269).
+
+    Selected as ``Point1@<origin>`` (``EXTSKETCHPOINT``), the origin found by
+    identity so any language works, and read back from the selection; the
+    selection is cleared again. ``ISketchRelationManager.AddRelation`` takes
+    it (seen live on SW 2026: a line end coincident with it).
+
+    Raises:
+        LookupError: When the origin can't be selected.
+    """
+    model = adapter.currentModel
+    origin = entity_name(adapter, "Origin")
+    adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+    picked = adapter._attempt(
+        lambda: model.Extension.SelectByID2(
+            f"Point1@{origin}", "EXTSKETCHPOINT", 0, 0, 0, False, 0, _null_callout(), 0
+        ),
+        default=False,
+    )
+    point = None
+    if picked:
+        selection = _sw_type_info.flagged(model.SelectionManager, "ISelectionMgr")
+        point = adapter._attempt(lambda: selection.GetSelectedObject6(1, -1), None)
+    adapter._attempt(lambda: model.ClearSelection2(True), default=None)
+    if point is None:
+        raise LookupError(
+            f"The sketch origin ('Point1@{origin}') couldn't be selected."
+        )
+    return point
+
+
+def _relation_entity(adapter: Any, entity_id: str) -> Any:
+    """The sketch object a relation takes for ``entity_id``.
+
+    A registered id (``Line_1``), ``<id>.start`` or ``<id>.end`` (a line's or
+    arc's end point), or ``origin``.
+
+    Raises:
+        Exception: An id the sketch doesn't have, naming what it accepts.
+    """
+    key = entity_id.strip()
+    if key.lower() == "origin":
+        return _sketch_origin_point(adapter)
+    base, _, end = key.rpartition(".")
+    if base and end.lower() in ("start", "end"):
+        segment = adapter._sketch_entities.get(base)
+        if segment is not None:
+            getter = "GetStartPoint2" if end.lower() == "start" else "GetEndPoint2"
+            _flag_members(adapter, segment, getter)
+            point = adapter._attempt(lambda: getattr(segment, getter)(), None)
+            if point is not None:
+                return point
+            raise Exception(f"'{base}' has no {end.lower()} point.")
+    found = adapter._sketch_entities.get(key)
+    if found is None:
+        raise Exception(_UNKNOWN_ENTITY.format(id=entity_id))
+    return found
+
+
 def _add_sketch_constraint_impl(
     adapter: Any,
     entity1: str,
@@ -1346,27 +1413,11 @@ def _add_sketch_constraint_impl(
                 "'symmetric' takes a third entity (the centerline)"
             )
 
-        entity1_obj = adapter._sketch_entities.get(entity1)
-        if entity1_obj is None:
-            raise Exception(
-                f"Unknown sketch entity '{entity1}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
-            )
-
-        entities = [entity1_obj]
+        entities = [_relation_entity(adapter, entity1)]
         if entity2:
-            entity2_obj = adapter._sketch_entities.get(entity2)
-            if entity2_obj is None:
-                raise Exception(
-                    f"Unknown sketch entity '{entity2}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
-                )
-            entities.append(entity2_obj)
+            entities.append(_relation_entity(adapter, entity2))
         if entity3:
-            entity3_obj = adapter._sketch_entities.get(entity3)
-            if entity3_obj is None:
-                raise Exception(
-                    f"Unknown sketch entity '{entity3}'. Use IDs returned by add_line/add_arc/add_circle/add_spline/add_centerline."
-                )
-            entities.append(entity3_obj)
+            entities.append(_relation_entity(adapter, entity3))
 
         # Flag IModelDoc2 + ISketch + ISketchRelationManager so late-binding
         # resolves GetActiveSketch2, RelationManager, and AddRelation as

@@ -89,6 +89,9 @@ _NAMED_VIEWS: dict[str, str] = {
 #: Points to millimetres. Note schemas express text height in points.
 _POINTS_TO_MM = 25.4 / 72.0
 
+#: ``swSaveAsOptions_e.swSaveAsOptions_Copy``: save a copy, keep the original.
+_SAVE_AS_COPY = 2
+
 #: How far (mm) a note's top-left may sit from where it was asked for.
 _NOTE_TOLERANCE_MM = 0.5
 
@@ -2188,6 +2191,69 @@ class SolidWorksIOMixin:
         return cast(
             AdapterResult[None],
             adapter._handle_com_operation("save_file", _save),
+        )
+
+    async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Write a copy of the active document and keep working on the original.
+
+        ``IModelDoc2.SaveAs3(path, 0, swSaveAsOptions_Copy)``: File > Save As
+        with "Save as copy and continue" (#276). The open document keeps its
+        own path, so an assembly using it still uses it.
+
+        Args:
+            file_path: Where to write the copy; not the document's own path.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``file_path``, ``current_path``
+            (the path the open document has afterwards) and
+            ``kept_original`` (whether that is still its own path).
+        """
+        adapter = self._adapter(self)
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        resolved = os.path.abspath(file_path)
+
+        def _path() -> str:
+            return str(
+                adapter._attempt(
+                    lambda: adapter._get_attr_or_call(
+                        adapter.currentModel, "GetPathName"
+                    ),
+                    default="",
+                )
+                or ""
+            )
+
+        def _same(a: str, b: str) -> bool:
+            return os.path.normcase(os.path.abspath(a)) == os.path.normcase(
+                os.path.abspath(b)
+            )
+
+        def _copy() -> dict[str, Any]:
+            before = _path()
+            if before and _same(before, resolved):
+                raise ValueError(
+                    f"{resolved} is the open document's own path; save it with "
+                    "save_file, or give the copy another path."
+                )
+            os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
+            returned = adapter.currentModel.SaveAs3(resolved, 0, _SAVE_AS_COPY)
+            if not os.path.exists(resolved):
+                raise Exception(
+                    f"No copy was written at {resolved} (SaveAs3 returned {returned})."
+                )
+            after = _path()
+            return {
+                "file_path": resolved,
+                "current_path": after or None,
+                "kept_original": _same(after, before) if before and after else None,
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("save_copy", _copy),
         )
 
     async def rebuild_model(

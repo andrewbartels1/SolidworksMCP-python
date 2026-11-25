@@ -1285,6 +1285,84 @@ class TestSaveFileLegacyFallback:
         model.Save.assert_called_once()
 
 
+class TestSaveCopy:
+    """#276: a copy is written; the open document keeps its own path."""
+
+    @staticmethod
+    def _model(own: str, writes: bool = True, follows: bool = False) -> Any:
+        state = {"path": own}
+
+        def save_as3(path: str, version: int, options: int) -> bool:
+            state["options"] = options
+            if writes:
+                Path(path).write_text("copy")
+            if follows:
+                state["path"] = path
+            return writes
+
+        return SimpleNamespace(
+            GetPathName=lambda: state["path"], SaveAs3=save_as3, state=state
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_copy_is_written_and_the_original_kept(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        own = str(tmp_path / "part.sldprt")
+        adapter.currentModel = self._model(own)
+        copy = tmp_path / "out" / "variant.sldprt"
+
+        result = await adapter.save_copy(str(copy))
+
+        assert result.data == {
+            "file_path": str(copy),
+            "current_path": own,
+            "kept_original": True,
+        }
+        assert adapter.currentModel.state["options"] == 2  # swSaveAsOptions_Copy
+
+    @pytest.mark.asyncio
+    async def test_a_document_that_follows_the_copy_says_so(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = self._model(str(tmp_path / "a.sldprt"), follows=True)
+
+        result = await adapter.save_copy(str(tmp_path / "b.sldprt"))
+
+        assert result.data["kept_original"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_never_saved_document_has_no_original_to_keep(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = self._model("")
+
+        result = await adapter.save_copy(str(tmp_path / "b.sldprt"))
+
+        assert result.data["kept_original"] is None
+        assert result.data["current_path"] is None
+
+    @pytest.mark.asyncio
+    async def test_its_own_path_and_an_unwritten_copy_are_errors(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        own = str(tmp_path / "part.sldprt")
+        adapter.currentModel = self._model(own)
+        same = await adapter.save_copy(own)
+        adapter.currentModel = self._model(own, writes=False)
+        unwritten = await adapter.save_copy(str(tmp_path / "x.sldprt"))
+        adapter.currentModel = None
+        nothing = await adapter.save_copy(str(tmp_path / "y.sldprt"))
+
+        assert "the open document's own path" in (same.error or "")
+        assert "No copy was written" in (unwritten.error or "")
+        assert nothing.error == "No active model"
+
+
 class TestViewNamesHelper:
     def test_skips_unwrappable_views(self, monkeypatch) -> None:
         adapter = _build_adapter(monkeypatch)
