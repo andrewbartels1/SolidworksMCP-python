@@ -75,6 +75,19 @@ def _dynamic_dispatch(arg: Any) -> Any:
     return _dynamic_module.Dispatch(arg)
 
 
+def _install_l10n(app: Any) -> None:
+    """Let English default names (planes, origin, standard views) resolve on
+    non-English SolidWorks; see :mod:`.solidworks.l10n`."""
+    if not PYWIN32_AVAILABLE:
+        return
+    try:
+        from .solidworks import l10n
+
+        l10n.install(app)
+    except Exception as exc:  # pragma: no cover - never block connecting
+        logger.warning("[l10n] fallback not installed: {}", exc)
+
+
 from loguru import logger  # noqa: E402
 
 T = TypeVar("T")
@@ -366,6 +379,7 @@ class _ComSessionCoordinator:
                 app = _dynamic_dispatch(raw) if raw is not None else None
                 if app is not None:
                     self._adapter.swApp = app
+                    _install_l10n(app)
                     return app
             except pywintypes.com_error as active_error:
                 last_error = active_error
@@ -374,6 +388,7 @@ class _ComSessionCoordinator:
                 app = _dynamic_dispatch("SldWorks.Application")
                 if app is not None:
                     self._adapter.swApp = app
+                    _install_l10n(app)
                     return app
             except pywintypes.com_error as dispatch_error:
                 last_error = dispatch_error

@@ -1090,6 +1090,33 @@ Found 2026-11-18 building the equations demo.
 
 ---
 
+## 39. Default plane, origin and standard view names are translated on non-English installs
+
+**Symptom:** on SolidWorks 2026 French, `create_sketch` with `plane: "Top"` fails with
+`Failed to select plane: Top Plane`, and drawing views named `*Isometric` are not created.
+
+**Cause:** the default features and named views carry the UI language's names:
+`Plan de face`, `Plan de dessus`, `Plan de droite`, `Origine`, `*Face`, `*Dessus`,
+`*Isométrique`, … `FeatureByName`, `SelectByID2` and `CreateDrawViewFromModelView3` match
+names exactly, so the English names find nothing.
+
+**Fix:** `adapters/solidworks/l10n.py` hooks late-bound dispatch once, when the adapter
+connects. The call always runs first with the name it was given, so English documents
+behave as before. Only when it fails and the name is an English default, it is retried
+with the document's own name:
+
+- the default planes are the first three `RefPlane` features before the
+  `OriginProfileFeature`, in Front, Top, Right order, in every language;
+- `GetModelViewNames` lists the ten standard views first, in a fixed order;
+- a built-in French table is the last resort.
+
+A `@component@assembly` suffix is kept. Unit tests:
+`tests/solidworks_mcp/adapters/solidworks/test_l10n.py`.
+
+Found 2026-11-22 on SolidWorks 2026 SP0, French.
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests
