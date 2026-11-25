@@ -13,6 +13,7 @@ from typing import Any, cast
 from ...utils.sw_dependencies import dependency_paths
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
+from . import default_entities
 from .configurations import THIS_CONFIGURATION, configuration_scope
 from .face_selection import mate_entity_label
 
@@ -2966,8 +2967,13 @@ class SolidWorksIOMixin:
                         adapter, model, wrapped, component_name, point, index > 0
                     )
                     continue
+                # A default plane is found in the component's own tree, in
+                # any language (#262).
+                local_name = default_entities.entity_name(
+                    adapter, entity_name, owner=wrapped
+                )
                 feature = adapter._attempt(
-                    lambda w=wrapped, e=entity_name: w.FeatureByName(e), default=None
+                    lambda w=wrapped, e=local_name: w.FeatureByName(e), default=None
                 )
                 if feature is None:
                     raise Exception(
@@ -3250,17 +3256,15 @@ class SolidWorksIOMixin:
             y = float(_first(data, "position_y", "y", default=150.0))
 
         # With no orientation, a view_type that names a view ("top",
-        # "isometric") is the orientation; any other ("orthographic") is front
-        # (#256: view_type alone used to leave every view a front view).
-        view_type = str(_first(data, "view_type", default="")).strip().lower()
+        # "isometric", or a model view's own "*Name") is the orientation; any
+        # other ("orthographic") is front (#256: view_type alone used to leave
+        # every view a front view; #262: "*Isometrisch" fell back to front).
+        view_type = str(_first(data, "view_type", default="")).strip()
+        names_a_view = view_type.lower() in _NAMED_VIEWS or view_type.startswith("*")
         requested = str(
-            _first(
-                data,
-                "orientation",
-                default=view_type if view_type in _NAMED_VIEWS else "front",
-            )
-        )
-        view_name = _NAMED_VIEWS.get(requested.strip().lower())
+            _first(data, "orientation", default=view_type if names_a_view else "front")
+        ).strip()
+        view_name = _NAMED_VIEWS.get(requested.lower())
         if view_name is None and requested.startswith("*"):
             view_name = requested
         if view_name is None:
@@ -3314,9 +3318,12 @@ class SolidWorksIOMixin:
                     default=None,
                 )
 
+            # A standard view goes by the model's own name for it, read from
+            # its view list by position, so it is right in any language (#262).
+            local_view = default_entities.standard_view_name(adapter, opened, view_name)
             view = adapter._attempt(
                 lambda: drawing.CreateDrawViewFromModelView3(
-                    path, view_name, x / 1000.0, y / 1000.0, 0.0
+                    path, local_view, x / 1000.0, y / 1000.0, 0.0
                 ),
                 default=None,
             )
@@ -3326,7 +3333,7 @@ class SolidWorksIOMixin:
                 raise Exception(
                     f"View was not created - the sheet still has {len(after)} "
                     f"view(s). Check that '{model_path}' opens on its own and "
-                    f"that '{view_name}' is a valid named view for it."
+                    f"that '{local_view}' is a valid named view for it."
                 )
 
             added = [n for n in after if n not in before]

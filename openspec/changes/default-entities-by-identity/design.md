@@ -1,6 +1,6 @@
 ## Context
 
-#261 (merged 2026-11-25) added `adapters/solidworks/l10n.py`: on connect it
+PR #261 (merged 2026-11-25) added `adapters/solidworks/l10n.py`: on connect it
 replaces `win32com.client.dynamic.CDispatch.__getattr__` so that
 `FeatureByName`, `SelectByID2` and `CreateDrawViewFromModelView3` retry a
 failed English default name with a local one, learned from the active
@@ -23,15 +23,24 @@ are read, never guessed, already).
 
 ### 1. One resolver, in `adapters/solidworks/default_entities.py`
 
-- `default_planes(model) -> DefaultPlanes` walks the tree once with
-  `walk_feature_tree` and takes the first three `RefPlane` features before
-  `OriginProfileFeature` (Front, Top, Right) and the origin. Fewer than
-  three means none are known.
-- `plane_name(adapter, name, model=None) -> str` returns the document's
-  name for a default plane (`Front`, `Top`, `Right`, `XY`, `XZ`, `YZ`,
-  `Front Plane`, ..., any case), or `name` unchanged when it isn't one. A
+- `read_defaults(adapter, owner) -> DefaultEntities` walks forward from
+  `FirstFeature` to the `OriginProfileFeature` and takes the `RefPlane`
+  features before it (the first three are Front, Top, Right) and the origin.
+  It does not use `walk_feature_tree`: that walks the whole tree and then
+  every feature again with `FeatureByPositionReverse`, too slow for every
+  call; the origin sits near the top.
+- `entity_name(adapter, name, owner=None) -> str` returns the document's
+  name for a default plane (`Front`, `Top`, `Right`, `XY` = Front, `XZ` =
+  Top, `YZ` = Right as in SolidWorks' Y-up orientation, `Front Plane`, ...,
+  any case) or the origin, or `name` unchanged when it isn't one. A
   `@component@assembly` suffix reads that component's tree
-  (`IComponent2.FirstFeature`) and keeps the suffix.
+  (`GetComponentByName`, then its `FirstFeature`) and keeps the suffix.
+- A tree that can't be read (the walk never reaches the origin) keeps the
+  English name, as before; one that reaches its origin with fewer than three
+  planes fails.
+- `create_sketch` mapped `XY` to Top and `XZ` to Front, against SolidWorks
+  and `face_selection`; corrected, and recorded in the CHANGELOG as a
+  behaviour change.
 - Every call reads the tree it needs, so there is nothing to keep in step;
   the walk costs about a millisecond per feature and stops at the origin
   (near the top of the tree).

@@ -236,6 +236,35 @@ async def test_explode_steps_select_components_and_the_direction_plane() -> None
 
 
 @pytest.mark.asyncio
+async def test_an_explode_on_a_german_assembly_uses_its_own_plane() -> None:
+    # #262: the assembly's Top plane is "Ebene oben".
+    adapter = _Adapter()
+    model = adapter.currentModel
+    planes = ("Ebene vorne", "Ebene oben", "Ebene rechts")
+    model.known |= set(planes)
+    first: Any = SimpleNamespace(
+        GetTypeName2=lambda: "OriginProfileFeature",
+        Name="Ursprung",
+        GetNextFeature=lambda: None,
+    )
+    for plane in reversed(planes):
+        first = SimpleNamespace(
+            GetTypeName2=lambda: "RefPlane",
+            Name=plane,
+            GetNextFeature=lambda n=first: n,
+        )
+    tree = first
+    model.FirstFeature = lambda: tree
+
+    result = await adapter.create_exploded_view(
+        [{"components": ["pin-1"], "direction": "y", "distance": 40.0}]
+    )
+
+    assert result.is_success, result.error
+    assert ("SelectByID2", "Ebene oben", "PLANE", 2) in model.calls
+
+
+@pytest.mark.asyncio
 async def test_a_refused_step_names_it_and_a_missing_component_fails_first() -> None:
     refused = _Adapter()
     refused.currentModel.step_result = None

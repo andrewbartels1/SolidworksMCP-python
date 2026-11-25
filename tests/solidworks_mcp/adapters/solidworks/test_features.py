@@ -2884,11 +2884,33 @@ class TestReferenceGeometryOutcomes:
         model = MagicMock()
         model.FeatureByName.return_value = _selectable_feature()
         model.FeatureManager.GetFeatureCount.side_effect = [5, 6]
+        made = {"axis": False}
+        model.InsertAxis2.side_effect = lambda *_a: made.update(axis=True) or True
+        # Every read before InsertAxis2 sees ``before`` (the plane lookup reads
+        # the tree too), every read after it ``after``.
         type(model).FirstFeature = PropertyMock(
-            side_effect=[self._tree(*before), self._tree(*after)]
+            side_effect=lambda: self._tree(*(after if made["axis"] else before))
         )
         adapter.currentModel = model
         return adapter
+
+    def test_an_axis_on_a_french_part_selects_its_own_planes(self, monkeypatch) -> None:
+        # #262: the English plane names don't exist on a translated part.
+        part = [
+            ("RefPlane", "Plan de face"),
+            ("RefPlane", "Plan de dessus"),
+            ("RefPlane", "Plan de droite"),
+            ("OriginProfileFeature", "Origine"),
+        ]
+        adapter = self._axis_adapter(monkeypatch, part, [*part, ("RefAxis", "Axe1")])
+
+        result = _create_axis_impl(adapter, "z")
+
+        assert result.data["name"] == "Axe1"
+        looked_up = [
+            c.args[0] for c in adapter.currentModel.FeatureByName.call_args_list
+        ]
+        assert looked_up == ["Plan de dessus", "Plan de droite"]
 
     def test_axis_reports_its_planes(self, monkeypatch) -> None:
         part = [("RefPlane", "Top Plane"), ("Extrusion", "Boss-Extrude1")]

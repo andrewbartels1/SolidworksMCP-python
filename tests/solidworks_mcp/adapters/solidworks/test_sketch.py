@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -233,6 +234,61 @@ def test_create_sketch_reports_plane_selection_failure() -> None:
     result = sketch._create_sketch_impl(adapter, "Missing")
     assert result.status == AdapterResultStatus.ERROR
     assert "Failed to select plane" in (result.error or "")
+
+
+def _german_part(looked_up: list[str]) -> SimpleNamespace:
+    """A German part's tree; FeatureByName finds only its own names."""
+    names = ("Ebene vorne", "Ebene oben", "Ebene rechts")
+    origin = SimpleNamespace(
+        GetTypeName2=lambda: "OriginProfileFeature",
+        Name="Ursprung",
+        GetNextFeature=lambda: None,
+    )
+    first: Any = origin
+    for name in reversed(names):
+        first = SimpleNamespace(
+            GetTypeName2=lambda: "RefPlane", Name=name, GetNextFeature=lambda n=first: n
+        )
+    tree = first
+
+    def _by_name(name: str) -> Any:
+        looked_up.append(name)
+        return SimpleNamespace(Select2=lambda *_a: True) if name in names else None
+
+    return SimpleNamespace(
+        FirstFeature=lambda: tree,
+        FeatureByName=_by_name,
+        Extension=SimpleNamespace(SelectByID2=lambda *args: False),
+        SketchManager=SimpleNamespace(InsertSketch=lambda *_args: None),
+        GetActiveSketch2=lambda: None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("plane", "opened_on"),
+    [("Top", "Ebene oben"), ("Front Plane", "Ebene vorne"), ("YZ", "Ebene rechts")],
+)
+def test_a_sketch_on_a_german_part_opens_on_its_own_plane(plane, opened_on) -> None:
+    """#262: ``Top`` failed on German SolidWorks ("Typenkonflikt")."""
+    adapter = _FakeSketchAdapter()
+    looked_up: list[str] = []
+    adapter.currentModel = _german_part(looked_up)
+
+    assert sketch._create_sketch_impl(adapter, plane).is_success
+    assert looked_up == [opened_on]
+
+
+def test_a_missing_plane_is_never_swapped_for_a_default() -> None:
+    """Before #262 a plane that wasn't found fell through to Top/Front/Right."""
+    adapter = _FakeSketchAdapter()
+    looked_up: list[str] = []
+    adapter.currentModel = _german_part(looked_up)
+
+    result = sketch._create_sketch_impl(adapter, "Plane7")
+
+    assert result.status == AdapterResultStatus.ERROR
+    assert "Failed to select plane: Plane7" in (result.error or "")
+    assert looked_up == ["Plane7"]
 
 
 def test_basic_entity_functions_require_active_sketch() -> None:
@@ -2241,11 +2297,13 @@ class TestPyWin32AdapterBranches:
             call.args
             for call in extension.SelectByID2.call_args_list
             if len(call.args) >= 9
-            and call.args[0] == "Top Plane"
+            # XY is the Front plane in SolidWorks' Y-up orientation (#262).
+            and call.args[0] == "Front Plane"
             and call.args[1] == "PLANE"
         ]
         assert plane_select_calls, "Expected plane selection call for sketch creation"
-        assert any(call_args[7] in ("", None, 0) for call_args in plane_select_calls)
+        # The callout is a VT_DISPATCH null, never a bare None (runbook #11).
+        assert all(call_args[7] is not None for call_args in plane_select_calls)
         assert feature_manager.FeatureExtrusion3.called
         assert feature_manager.FeatureExtruThin2.called
         assert feature_manager.FeatureRevolve2.called
@@ -2330,25 +2388,10 @@ class TestPyWin32AdapterBranches:
             raising=False,
         )
 
-        class _PlaneFeature:
-            """Test suite for PlaneFeature."""
-
-            def Select2(self, *_args):
-                """Test helper for Select2."""
-                return True
-
-        feature_calls = {"count": 0}
-
-        def _feature_by_name(_name):
-            """Test helper for feature by name."""
-            feature_calls["count"] += 1
-            if feature_calls["count"] == 1:
-                raise RuntimeError("feature lookup failed")
-            return _PlaneFeature()
-
+        # The name lookup raises; SelectByID2 then selects the plane.
         adapter.currentModel = SimpleNamespace(
-            FeatureByName=_feature_by_name,
-            Extension=SimpleNamespace(SelectByID2=Mock(return_value=False)),
+            FeatureByName=Mock(side_effect=RuntimeError("feature lookup failed")),
+            Extension=SimpleNamespace(SelectByID2=Mock(return_value=True)),
             SketchManager=SimpleNamespace(
                 InsertSketch=Mock(side_effect=[_FakeComError("variant"), None])
             ),

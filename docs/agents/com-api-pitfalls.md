@@ -1092,28 +1092,39 @@ Found 2026-11-18 building the equations demo.
 
 ## 39. Default plane, origin and standard view names are translated on non-English installs
 
-**Symptom:** on SolidWorks 2026 French, `create_sketch` with `plane: "Top"` fails with
-`Failed to select plane: Top Plane`, and drawing views named `*Isometric` are not created.
+**Symptom:** on SolidWorks 2026 French or 2025 German, `create_sketch` with
+`plane: "Top"` fails with `Failed to select plane: Top Plane` (on German, with
+`Typenkonflikt`, the bare-`None` callout of pitfall 1), and drawing views named
+`*Isometric` are not created.
 
-**Cause:** the default features and named views carry the UI language's names:
-`Plan de face`, `Plan de dessus`, `Plan de droite`, `Origine`, `*Face`, `*Dessus`,
-`*Isométrique`, … `FeatureByName`, `SelectByID2` and `CreateDrawViewFromModelView3` match
-names exactly, so the English names find nothing.
+**Cause:** the default planes and the origin carry the template's names, and the
+standard views the UI language's: `Plan de dessus` / `Ebene oben`, `Origine` /
+`Ursprung`, `*Isométrique` / `*Isometrisch`. A user can rename the planes too.
+`FeatureByName`, `SelectByID2` and `CreateDrawViewFromModelView3` match names
+exactly, so the English names find nothing.
 
-**Fix:** `adapters/solidworks/l10n.py` hooks late-bound dispatch once, when the adapter
-connects. The call always runs first with the name it was given, so English documents
-behave as before. Only when it fails and the name is an English default, it is retried
-with the document's own name:
+**Fix:** find them by identity, per call, in the document being worked on
+(`adapters/solidworks/default_entities.py`), never by a translation table:
 
-- the default planes are the first three `RefPlane` features before the
-  `OriginProfileFeature`, in Front, Top, Right order, in every language;
-- `GetModelViewNames` lists the ten standard views first, in a fixed order;
-- a built-in French table is the last resort.
+- `entity_name(adapter, name)`: `Front`, `Top`, `Right`, `XY` (Front), `XZ`
+  (Top), `YZ` (Right), `Front Plane`…, `Origin`, any case, are the first three
+  `RefPlane` features before the `OriginProfileFeature` (Front, Top, Right
+  order) and that origin, in every language. A `@component@assembly` suffix
+  reads that component's tree. Any other name is used as given. A tree that
+  reaches its origin with fewer than three planes fails `not_found`, listing
+  them and the install's language.
+- `standard_view_name(adapter, model, "*Isometric")`: `GetModelViewNames`
+  lists the ten standard views first, in a fixed order (normal to, front,
+  back, left, right, top, bottom, isometric, trimetric, dimetric); the view is
+  taken from the model's list by its position. Where a call takes an ID
+  (`ShowNamedView2("", id)`), use the `swStandardViews_e` ID instead.
 
-A `@component@assembly` suffix is kept. Unit tests:
-`tests/solidworks_mcp/adapters/solidworks/test_l10n.py`.
+Call `entity_name` wherever a plane name reaches SolidWorks. Unit tests:
+`tests/solidworks_mcp/adapters/solidworks/test_default_entities.py`.
 
-Found 2026-11-22 on SolidWorks 2026 SP0, French.
+Found 2026-11-22 on SolidWorks 2026 SP0, French (#261), and 2025 German (#262).
+The first fix, in #261, was a process-wide hook on pywin32's dispatch; the
+per-call lookup replaced it so no COM call outside a default name changes.
 
 ---
 

@@ -4,10 +4,26 @@
 A tool that is given a default plane SHALL find it in the document's own
 feature tree by type and order (the first three reference planes are Front,
 Top and Right; the origin is the origin feature), not by its English name.
-`Front`, `Top`, `Right`, `XY` (Top), `XZ` (Front), `YZ` (Right) and the
-full English names (`Front Plane`...) all name a default plane, in any
-case. Any other name is used as given. A `@component@assembly` suffix
-finds the plane in that component's tree.
+`Front`, `Top`, `Right`, `XY` (Front), `XZ` (Top), `YZ` (Right), as in
+SolidWorks' Y-up default orientation, and the full English names (`Front
+Plane`...) all name a default plane, in any case. Any other name is used as
+given, and a plane that isn't found is never replaced by another one. A
+`@component@assembly` suffix finds the plane in that component's tree.
+
+#### Scenario: A sketch on a German part
+- **WHEN** a part's default planes are named `Ebene vorne`, `Ebene oben` and
+  `Ebene rechts` (#262) and `create_sketch` is called with `plane` `Top`
+- **THEN** the sketch opens on `Ebene oben`
+
+#### Scenario: XY is the Front plane
+- **WHEN** `create_sketch` is called with `plane` `XY`
+- **THEN** the sketch opens on the Front plane, the plane of the X and Y axes
+
+#### Scenario: A plane that isn't there
+- **WHEN** `create_sketch` is called with `plane` `Plane7` and the part has no
+  such plane
+- **THEN** the call fails naming `Plane7`, and no sketch opens on a default
+  plane
 
 #### Scenario: A sketch on a translated part
 - **WHEN** a part's default planes are named `Plan de face`,
@@ -39,6 +55,28 @@ list, in its position for that view, so it is right in any language.
 - **WHEN** `create_drawing_view` asks for `isometric` and the model's view
   list names it `*Isométrique`
 - **THEN** the view is placed from `*Isométrique`
+
+#### Scenario: A view named by the user
+- **WHEN** `create_drawing_view` is given `view_type` or `orientation`
+  `*Isometrisch` (#262)
+- **THEN** the view is placed from `*Isometrisch`, not from the front view
+
+#### Scenario: The drawing package on a German install
+- **WHEN** `generate_drawing_package` places its isometric view
+- **THEN** it uses the model's own isometric name, and finds the front view
+  by the model's own front name
+
+### Requirement: A BOM placed by the anchor stays inside the border
+`insert_bom_table` with no position SHALL keep the table inside the drawing
+border, taken as 10 mm in from the sheet's edge (ISO 5457's frame), moving it
+by the least distance; a table too large for that is kept on the sheet. A
+table placed at a given position is never moved.
+
+#### Scenario: A template whose anchor is in the corner
+- **WHEN** the sheet format's BOM anchor puts the table across the border in
+  the top-left corner (#262, a German SolidWorks 2025 template)
+- **THEN** the table is moved inside the border and `moved_onto_sheet` is
+  true
 
 ### Requirement: No process-wide change to COM
 Resolving default names SHALL NOT change how COM calls behave outside the

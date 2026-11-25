@@ -80,6 +80,31 @@ class TestViewRoles:
         roles = std.view_roles({"A": 1, "B": 2}, {"A": None, "B": self.FRONT}, {})
         assert roles == {"A": "front"}
 
+    def test_the_front_by_the_models_own_name(self) -> None:
+        # #262: a German front view is "*Vorne", which never says "front".
+        views = {"V1": 1, "V2": 2}
+        outlines = {"V1": (0.1, 0.17, 0.16, 0.2), "V2": self.FRONT}
+        orientations = {"V1": "*Oben", "V2": "*Vorne"}
+
+        roles = std.view_roles(views, outlines, orientations, "*Vorne")
+
+        assert roles == {"V2": "front", "V1": "plan"}
+
+
+@pytest.mark.asyncio
+async def test_the_isometric_takes_the_models_own_name(files, monkeypatch) -> None:
+    local = {"*Front": "*Vorne", "*Isometric": "*Isometrisch"}
+    monkeypatch.setattr(
+        std._default_entities,
+        "standard_view_name",
+        lambda _adapter, _model, english: local[english],
+    )
+    drawing = _Drawing()
+
+    await _adapter(files, drawing).create_standard_drawing(files.part)
+
+    assert drawing.iso_args[1] == "*Isometrisch"
+
 
 # ---- fake SolidWorks ----------------------------------------------------------------
 
@@ -266,7 +291,8 @@ class _Drawing:
         self.views["Drawing View3"] = _View((0.2, 0.1, 0.23, 0.13), "*Right")
         return True
 
-    def CreateDrawViewFromModelView3(self, *_args):  # noqa: N802
+    def CreateDrawViewFromModelView3(self, *args):  # noqa: N802
+        self.iso_args = args
         if self.make != "no iso":
             self.views["Drawing View4"] = _View((0.28, 0.2, 0.34, 0.25), "*Isometric")
 

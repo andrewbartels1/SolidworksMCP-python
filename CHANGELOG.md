@@ -35,6 +35,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`insert_component` says where it puts a part**: `x`, `y` and `z` are
   the component's centre (the middle of its bounding box), not its origin,
   as SolidWorks places it. Only the descriptions changed.
+- **Default planes, the origin and standard views work in any language**
+  (#262, German SolidWorks 2025; #261, French). `Front`, `Top`, `Right`,
+  `XY`, `XZ`, `YZ`, `Front Plane`... and `Origin` are found by their place in
+  the document's own tree (the first three reference planes before the
+  origin), in sketches, reference planes, axes, mirrors, patterns, mates,
+  explode steps and `select_feature`; a renamed default plane is found too.
+  Drawing views take the model's own name for a standard view
+  (`*Isometrisch`), in `create_drawing_view` and `generate_drawing_package`.
+  This replaces #261's process-wide hook on pywin32 and its French table, and
+  the hard-coded Spanish, Chinese and Japanese plane names. A document
+  without its default planes fails as `not_found`, naming its planes and the
+  install's language.
+- **`create_sketch` no longer sketches on the wrong plane.** A plane that
+  wasn't found fell through to Top, Front or Right; it is now an error. Its
+  last-resort `SelectByID2` passed a bare `None` callout, a type mismatch
+  (`Typenkonflikt` on German, #262).
+- **`create_sketch` with `XY`, `XZ` or `YZ` opens on the right plane**: in
+  SolidWorks' default orientation `XY` is the Front plane and `XZ` the Top
+  plane, as `select_face_edges` already had it. `XY` used to open on Top and
+  `XZ` on Front. **If you passed `XY` or `XZ`, your sketch moves plane.**
+- **`create_drawing_view` uses a `view_type` that starts with `*` as given**
+  (#262): `view_type: "*Isometrisch"` used to fall back to the front view.
+- **`insert_bom_table` without a position keeps the table inside the drawing
+  border** (#262): one placed by the sheet format's anchor is slid 10 mm in
+  from the sheet's edge (ISO 5457's frame), not just onto the sheet, where it
+  crossed the border.
 
 ## [2.1.0] - 2026-11-21
 

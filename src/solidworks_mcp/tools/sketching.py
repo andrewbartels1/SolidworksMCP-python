@@ -37,8 +37,9 @@ class CreateSketchInput(CompatInput):
     plane: str | None = Field(
         default=None,
         description=(
-            "Sketch plane name (e.g., 'Top', 'Front', 'Right', 'XY', 'XZ', 'YZ', "
-            "or a plane made by create_reference_plane). Give this or face_point"
+            "Sketch plane name: 'Front' (XY), 'Top' (XZ), 'Right' (YZ), found "
+            "in any language, or a plane made by create_reference_plane. Give "
+            "this or face_point"
         ),
     )
     face_point: list[float] | None = Field(

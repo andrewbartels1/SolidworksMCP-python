@@ -27,6 +27,7 @@ from typing import Any
 from .com_utils import as_list, selection_count
 from .com_utils import attempt as _attempt
 from .com_utils import flag as _flag
+from .default_entities import entity_name
 
 #: Outward direction for each accepted ``side`` token (case-insensitive).
 #: Aliases follow SolidWorks' default orientation: Front = XY (+Z),
@@ -342,7 +343,9 @@ class FaceEdgeSelector:
     def plane_geometry(
         self, plane: str
     ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-        """Return ``(origin, normal)`` of a named reference plane."""
+        """Return ``(origin, normal)`` of a named reference plane; a default
+        plane is found by its place in the tree, in any language (#262)."""
+        plane = entity_name(self._adapter, plane, owner=self._model)
         feature = _attempt(self._adapter, lambda: self._model.FeatureByName(plane))
         if feature is None:
             raise LookupError(f"No reference plane named {plane!r}.")

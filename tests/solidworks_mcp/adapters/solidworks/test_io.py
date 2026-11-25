@@ -3920,6 +3920,56 @@ class TestAssemblyAndDrawingSuccessPaths:
         assert result.data["moved_components"] == ["part-2"]
         assert result.data["geometry_moved"] is True
 
+    @pytest.mark.asyncio
+    async def test_a_mate_finds_each_components_own_default_plane(
+        self, monkeypatch
+    ) -> None:
+        # #262: a French component's Front plane is "Plan de face".
+        adapter = self._document(monkeypatch, 2)
+        monkeypatch.setattr(
+            _io_module, "_dynamic", SimpleNamespace(Dispatch=lambda obj: obj)
+        )
+        looked_up: list[str] = []
+
+        def _component(name: str, planes: tuple[str, ...]) -> SimpleNamespace:
+            first: Any = SimpleNamespace(
+                GetTypeName2=lambda: "OriginProfileFeature",
+                Name="Origine",
+                GetNextFeature=lambda: None,
+            )
+            for plane in reversed(planes):
+                first = SimpleNamespace(
+                    GetTypeName2=lambda: "RefPlane",
+                    Name=plane,
+                    GetNextFeature=lambda n=first: n,
+                )
+            tree = first
+
+            def _by_name(entity: str) -> Any:
+                looked_up.append(entity)
+                return SimpleNamespace(Select2=lambda append, mark: True)
+
+            return SimpleNamespace(
+                Name2=name, FirstFeature=lambda: tree, FeatureByName=_by_name
+            )
+
+        french = ("Plan de face", "Plan de dessus", "Plan de droite")
+        adapter.currentModel.GetComponents.return_value = [
+            _component("part-1", french),
+            _component("part-2", ("Front", "Top", "Right")),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 2
+        adapter.currentModel.AddMate5.return_value = SimpleNamespace()
+        monkeypatch.setattr(_io_module, "_byref_int", lambda: SimpleNamespace(value=1))
+        monkeypatch.setattr(_io_module, "_component_transforms", lambda _a, _asm: {})
+
+        result = await adapter.add_mate(
+            "part-1", "part-2", entity_a="Front Plane", entity_b="Top Plane"
+        )
+
+        assert result.is_success, result.error
+        assert looked_up == ["Plan de face", "Top"]
+
     @staticmethod
     def _face_mate(monkeypatch, handle: Any, found: bool = True) -> PyWin32Adapter:
         """A two-component assembly whose 'pin-1' has one face, at ``handle``."""
@@ -4612,3 +4662,51 @@ class TestViewScaleAndViewType:
 
         assert result.data["orientation"] == orientation
         assert result.data["scale_read"] is None
+
+
+#: A German model's view list: the ten standard views first, then its own.
+_GERMAN_VIEWS = (
+    "*Normal auf",
+    "*Vorne",
+    "*Hinten",
+    "*Links",
+    "*Rechts",
+    "*Oben",
+    "*Unten",
+    "*Isometrisch",
+    "*Trimetrisch",
+    "*Dimetrisch",
+    "*Meine Ansicht",
+)
+
+
+class TestViewsInAnyLanguage:
+    """#262: on a German install every English view name failed."""
+
+    @pytest.mark.asyncio
+    async def test_a_standard_view_takes_the_models_own_name(self, monkeypatch) -> None:
+        adapter = _view_adapter(monkeypatch, SimpleNamespace())
+        adapter.swApp.OpenDoc6.return_value = SimpleNamespace(
+            GetModelViewNames=lambda: _GERMAN_VIEWS
+        )
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, "orientation": "isometric"}
+        )
+
+        assert result.is_success
+        placed = adapter.currentModel.CreateDrawViewFromModelView3.call_args.args
+        assert placed[1] == "*Isometrisch"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("field", ["view_type", "orientation"])
+    async def test_a_starred_name_is_used_as_given(self, monkeypatch, field) -> None:
+        adapter = _view_adapter(monkeypatch, SimpleNamespace())
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, field: "*Meine Ansicht"}
+        )
+
+        assert result.data["orientation"] == "*Meine Ansicht"
+        placed = adapter.currentModel.CreateDrawViewFromModelView3.call_args.args
+        assert placed[1] == "*Meine Ansicht"

@@ -545,17 +545,32 @@ class TestBomTableLandsOnTheSheet:
         assert _Harness()._table_box(table) is None
 
     @pytest.mark.asyncio
-    async def test_a_table_on_the_sheet_reports_its_box(self) -> None:
+    async def test_a_table_inside_the_border_reports_its_box(self) -> None:
+        adapter = _drawing_harness()
+        adapter.drawing.views["Drawing View1"].bom_result = _Table((0.05, 0.05))
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["table_box_mm"] == [50.0, 50.0, 110.0, 65.0]
+        assert result.data["moved_onto_sheet"] is False
+
+    @pytest.mark.asyncio
+    async def test_an_anchored_table_in_the_corner_is_slid_inside_the_border(
+        self,
+    ) -> None:
+        # #262: on the sheet but across its border, in the corner.
         adapter = _drawing_harness()
         adapter.drawing.views["Drawing View1"].bom_result = _Table()
 
         result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
 
-        assert result.data["table_box_mm"] == [0.0, 0.0, 60.0, 15.0]
-        assert result.data["moved_onto_sheet"] is False
+        assert result.data["table_box_mm"] == [10.0, 10.0, 70.0, 25.0]
+        assert result.data["moved_onto_sheet"] is True
 
     @pytest.mark.asyncio
-    async def test_an_anchored_table_off_the_top_is_slid_onto_the_sheet(self) -> None:
+    async def test_an_anchored_table_off_the_top_is_slid_inside_the_border(
+        self,
+    ) -> None:
         # The ISO A3 format's anchor (20, 287) mm, growing up: live on SW 2026.
         adapter = _drawing_harness()
         table = _Table((0.020, 0.287), anchor=3)
@@ -564,7 +579,7 @@ class TestBomTableLandsOnTheSheet:
         result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
 
         assert result.data["moved_onto_sheet"] is True
-        assert result.data["table_box_mm"] == [20.0, 282.0, 80.0, 297.0]
+        assert result.data["table_box_mm"] == [20.0, 272.0, 80.0, 287.0]
 
     @pytest.mark.asyncio
     async def test_an_anchored_table_off_the_left_and_bottom_is_slid_on(self) -> None:
@@ -574,7 +589,32 @@ class TestBomTableLandsOnTheSheet:
 
         result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
 
-        assert result.data["table_box_mm"] == [0.0, 0.0, 60.0, 15.0]
+        assert result.data["table_box_mm"] == [10.0, 10.0, 70.0, 25.0]
+
+    @pytest.mark.asyncio
+    async def test_a_table_wider_than_the_border_is_slid_onto_the_sheet(self) -> None:
+        # 410 mm wide: too wide for the 400 mm inside the border, not the sheet.
+        adapter = _drawing_harness()
+        wide = _Table((0.02, 0.0))
+        wide.GetColumnWidth = lambda _i: 0.1025  # type: ignore[method-assign]
+        adapter.drawing.views["Drawing View1"].bom_result = wide
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["moved_onto_sheet"] is True
+        assert result.data["table_box_mm"] == [10.0, 0.0, 420.0, 15.0]
+
+    @pytest.mark.asyncio
+    async def test_a_wide_table_already_on_the_sheet_is_left_alone(self) -> None:
+        adapter = _drawing_harness()
+        wide = _Table((0.005, 0.0))
+        wide.GetColumnWidth = lambda _i: 0.1025  # type: ignore[method-assign]
+        adapter.drawing.views["Drawing View1"].bom_result = wide
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["moved_onto_sheet"] is False
+        assert result.data["table_box_mm"] == [5.0, 0.0, 415.0, 15.0]
 
     @pytest.mark.asyncio
     async def test_a_table_placed_off_the_sheet_is_an_error(self) -> None:

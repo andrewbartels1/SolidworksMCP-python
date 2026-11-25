@@ -26,6 +26,7 @@ from .configurations import (
     THIS_CONFIGURATION,
     configuration_scope,
 )
+from .default_entities import entity_name
 
 
 class SolidWorksFeaturesMixin:
@@ -922,7 +923,9 @@ def _select_named_feature(
     Args:
         adapter: A connected adapter with a valid ``currentModel``.
         name: Feature name (e.g. ``"Sketch1"`` or ``"Helix/Spiral1"``).  Any
-            ``@document`` qualifier is stripped before lookup.
+            ``@document`` qualifier is stripped before lookup. A default
+            plane (``"Top Plane"``, ``"Right"``...) or the origin is found by
+            its place in the tree, in any language (#262).
         mark: Selection mark — 1=profile, 2=guide curve, 4=sweep path.
         append: ``True`` to add to the current selection set, ``False`` to
             replace it.
@@ -930,7 +933,7 @@ def _select_named_feature(
     Returns:
         bool: ``True`` when the feature was found and selected.
     """
-    bare = name.split("@", 1)[0]
+    bare = entity_name(adapter, name.split("@", 1)[0])
     feature = adapter._attempt(
         lambda: adapter.currentModel.FeatureByName(bare), default=None
     )
@@ -2395,7 +2398,7 @@ def _select_feature_by_name(adapter: Any, name: str, append: bool = False) -> An
         Any: The selected ``IFeature``, or ``None`` when it does not exist or
         could not be selected.
     """
-    bare = name.split("@", 1)[0]
+    bare = entity_name(adapter, name.split("@", 1)[0])
     if not append:
         adapter._attempt(
             lambda: adapter.currentModel.ClearSelection2(True), default=None
@@ -2977,6 +2980,7 @@ def _select_reference_entity(
     Returns:
         bool: True when the entity was selected.
     """
+    reference = entity_name(adapter, reference)
     if _select_named_feature(adapter, reference, mark, append=append):
         return True
 

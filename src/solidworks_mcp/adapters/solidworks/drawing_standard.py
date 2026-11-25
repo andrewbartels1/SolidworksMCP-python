@@ -43,6 +43,7 @@ from datetime import date as _date
 from typing import TYPE_CHECKING, Any, cast
 
 from ..base import AdapterResult, AdapterResultStatus
+from . import default_entities as _default_entities
 from . import dimension_layout as _layout
 from .com_utils import double_array as _double_array
 from .features import _null_callout
@@ -150,6 +151,13 @@ def gtol_problem(
     if len(letters) > 3 or any(len(d) != 1 or not d.isalpha() for d in letters):
         return "at most three datums, each a single letter"
     return None
+
+
+#: How far inside the sheet edge the drawing border runs: ISO 5457's frame
+#: is at least 10 mm in. A table placed by the sheet format's anchor is kept
+#: inside it (#262: on a German SW 2025 template the BOM sat in the top-left
+#: corner across the border).
+BORDER_INSET = 0.010
 
 
 def _grow(box: tuple[float, ...], by: float) -> Box:
@@ -387,26 +395,35 @@ def note_lines(material: str | None, extra: list[str] | None) -> list[str]:
 
 
 def view_roles(
-    views: dict[str, Any], outlines: dict[str, Box | None], orientations: dict[str, str]
+    views: dict[str, Any],
+    outlines: dict[str, Box | None],
+    orientations: dict[str, str],
+    front_name: str = "*Front",
 ) -> dict[str, str]:
     """Name each orthographic view's role: ``front``, ``plan`` or ``side``.
 
-    The front is the view whose orientation says "front" (else the first);
-    a view centred above the front is the plan, any other is the side.
+    The front is the view whose orientation is the model's front view
+    (``front_name``) or says "front" (else the first); a view centred above
+    the front is the plan, any other is the side.
 
     Args:
         views: View name -> ``IView``, in creation order.
         outlines: View name -> outline, ``None`` when unreadable.
         orientations: View name -> orientation name, e.g. ``*Front``.
+        front_name: The model's own name for its front view (``*Vorne`` on
+            German), from its view list.
 
     Returns:
         dict[str, str]: View name -> role; a view whose outline is unknown
         gets no role.
     """
     names = list(views)
-    front = next(
-        (n for n in names if "front" in orientations.get(n, "").lower()), names[0]
-    )
+
+    def _is_front(name: str) -> bool:
+        orientation = orientations.get(name, "")
+        return orientation == front_name or "front" in orientation.lower()
+
+    front = next((n for n in names if _is_front(n)), names[0])
     role = {front: "front"}
     fo = outlines.get(front)
     for name in names:
@@ -680,7 +697,8 @@ class SolidWorksDrawingStandardMixin:
         it hung below the sheet (measured live on SW 2026). The table's box is
         read back and must lie on the sheet. An anchor near the top of the
         sheet (the ISO A3 format's) makes it grow off the top, so a table
-        placed by the anchor is slid back onto the sheet; one placed at a
+        placed by the anchor is slid inside the border (``BORDER_INSET`` in
+        from the edge), or just onto the sheet when it is larger; one placed at a
         given ``x_mm``/``y_mm`` is never moved. With no template the library
         default ``bom-standard.sldbomtbt`` from the BOM templates folder is
         used.
@@ -784,16 +802,16 @@ class SolidWorksDrawingStandardMixin:
         box = self._table_box(table)
         sheet = self._sheet_bounds(drawing)
         on_sheet = _grow(sheet, 1e-6) if sheet else None
+        # Inside the border when it fits there, else just on the sheet.
+        framed = _grow(sheet, -BORDER_INSET) if sheet else None
         moved = False
-        if (
-            use_anchor
-            and box
-            and on_sheet
-            and not _layout.inside(box, on_sheet)
-            and self._slide_onto_sheet(table, box, sheet)
-        ):
-            moved = True
-            box = self._table_box(table)
+        if use_anchor and box and framed and on_sheet:
+            if not _layout.inside(box, _grow(framed, 1e-6)):
+                moved = self._slide_onto_sheet(table, box, framed)
+            if not moved and not _layout.inside(box, on_sheet):
+                moved = self._slide_onto_sheet(table, box, sheet)
+            if moved:
+                box = self._table_box(table)
         box_mm = [round(c * 1000, 1) for c in box] if box else None
         if box and on_sheet and not _layout.inside(box, on_sheet):
             raise RuntimeError(
@@ -1375,7 +1393,14 @@ class SolidWorksDrawingStandardMixin:
             n: str(self._attempt(lambda v=v: v.GetOrientationName(), default="") or "")
             for n, v in s.views.items()
         }
-        s.role = view_roles(s.views, outlines, orientations)
+        # The model's own names for its standard views, so the front and the
+        # isometric are found in any language (#262).
+        model = self._attempt(
+            lambda: self.swApp.GetOpenDocumentByName(s.path), default=None
+        )
+        local_front = _default_entities.standard_view_name(self, model, "*Front")
+        local_iso = _default_entities.standard_view_name(self, model, "*Isometric")
+        s.role = view_roles(s.views, outlines, orientations, local_front)
         # Orthographic views show hidden edges dashed (a through hole in the
         # front and side views); the isometric stays as it is.
         hidden = {n: self._show_hidden_lines(v) for n, v in s.views.items()}
@@ -1383,7 +1408,7 @@ class SolidWorksDrawingStandardMixin:
             before_iso = set(_view_names(self, drawing))
             self._attempt(
                 lambda: drawing.CreateDrawViewFromModelView3(
-                    s.path, "*Isometric", *_ISO_DROP_POINT, 0.0
+                    s.path, local_iso, *_ISO_DROP_POINT, 0.0
                 ),
                 default=None,
             )

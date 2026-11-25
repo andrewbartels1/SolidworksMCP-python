@@ -41,6 +41,15 @@ at the call sites, for each document, with no global hook.
   name says the language, so a report from a new language is easy to read.
 - The hard-coded Spanish, Chinese and Japanese plane aliases in
   `create_sketch` go: the helper covers every language.
+- From #262 (German SolidWorks 2025, the same failure): `create_sketch`'s
+  `SelectByID2` fallback passes `_null_callout()` instead of a bare `None`
+  (the `Typenkonflikt`), and no longer falls through to any default plane
+  when the one asked for isn't found; `create_drawing_view` uses a `*`-named
+  `view_type` as given; `generate_drawing_package` places its isometric by
+  the model's own name; `insert_bom_table` with no position keeps the table
+  inside the drawing border. `create_sketch`'s `XY`/`XZ` are corrected to
+  Front/Top, as in SolidWorks.
+- This change closes #262.
 
 Not in this change: Z-up part templates (some French templates put the Top
 plane on XY); the selftest's expectations assume Y-up. That is its own
