@@ -1202,6 +1202,38 @@ class TestAddMateErrorBranches:
         assert "Expected 2 selected entities" in (result.error or "")
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("status", "says"),
+        [
+            (2, "can't take this mate type"),
+            (3, "try alignment 'closest'"),
+            (4, "selection is wrong"),
+            (5, "over-defined"),
+            (0, "Check the two entities"),
+        ],
+    )
+    async def test_a_refusal_says_why(self, monkeypatch, status, says) -> None:
+        """#264: status 5 on SolidWorks 2024 is an over-defined assembly."""
+        adapter = self._assembly_adapter(monkeypatch)
+        self._identity_dynamic(monkeypatch)
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="part-1", FeatureByName=lambda e: feature),
+            SimpleNamespace(Name2="part-2", FeatureByName=lambda e: feature),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 2
+        adapter.currentModel.AddMate5.return_value = SimpleNamespace()
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._byref_int",
+            lambda: SimpleNamespace(value=status),
+        )
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert f"(error status {status})" in (result.error or "")
+        assert says in (result.error or "")
+
+    @pytest.mark.asyncio
     async def test_errors_when_solidworks_rejects_the_mate(self, monkeypatch) -> None:
         """error_status=2 mirrors the documented real measurement: this build
         reports 1 for success, so anything else (including a successful-looking

@@ -43,6 +43,19 @@ _MATE_ALIGNMENTS: dict[str, int] = {
     "closest": 2,
 }
 
+#: What each ``swAddMateError_e`` refusal means, and what to try.
+_MATE_ERRORS: dict[int, str] = {
+    2: "The two entities can't take this mate type.",
+    3: "The alignment doesn't fit these entities; try alignment 'closest'.",
+    4: "The selection is wrong for this mate: check both entities.",
+    5: (
+        "The mate conflicts with the mates already there (over-defined). A "
+        "concentric mate's 'aligned' compares the cylinders' axis "
+        "directions, which depend on how each feature was built and can flip "
+        "the part against an earlier mate; try alignment 'closest' (#264)."
+    ),
+}
+
 
 #: ``swDwgTemplates_e`` / ``swDwgPaperSizes_e`` values (read from swconst.tlb).
 _SW_DWG_TEMPLATE_NONE = 13
@@ -3025,10 +3038,14 @@ class SolidWorksIOMixin:
             # swAddMateError_e reports 1 for success on this build (measured:
             # a mate that demonstrably moved a component returned 1).
             if mate is None or (error_status not in (None, 1)):
+                reason = (
+                    _MATE_ERRORS.get(error_status)
+                    if isinstance(error_status, int)
+                    else None
+                ) or "Check the two entities can actually satisfy this mate type."
                 raise Exception(
                     f"SolidWorks rejected the {mate_key} mate "
-                    f"(error status {error_status!r}). Check the two entities "
-                    "can actually satisfy this mate type."
+                    f"(error status {error_status!r}). {reason}"
                 )
 
             transforms_after = _component_transforms(adapter, assembly)

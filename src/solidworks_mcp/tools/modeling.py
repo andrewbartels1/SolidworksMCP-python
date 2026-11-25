@@ -875,7 +875,13 @@ class AddMateInput(CompatInput):
         ),
     )
     alignment: str = Field(
-        default="aligned", description="aligned, anti_aligned or closest"
+        default="aligned",
+        description=(
+            "aligned, anti_aligned or closest. For flat faces it compares their "
+            "outward normals; for concentric it compares the cylinders' axis "
+            "directions, which depend on how each feature was built, so use "
+            "closest there"
+        ),
     )
     distance: float = Field(
         default=0.0, description="Distance in millimetres, for a distance mate"
