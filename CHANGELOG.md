@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-24
+
 ### Added
 
 - **Assembly depth** (queue item 33): an assembly to the drawing a shop
@@ -61,6 +63,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   border** (#262): one placed by the sheet format's anchor is slid 10 mm in
   from the sheet's edge (ISO 5457's frame), not just onto the sheet, where it
   crossed the border.
+- **The selftest's assembly area seats the pin on SolidWorks 2024** (#264):
+  its concentric mate now takes alignment `closest`. With `aligned`, which
+  compares the hole's and the pin's axis directions (set by how each feature
+  was built, not by the geometry), SolidWorks 2024 flipped the pin, and the
+  flush-bottoms coincident mate was then over-defined (error status 5).
+- **`add_mate` says why SolidWorks refused a mate**: each `swAddMateError_e`
+  status is named (over-defined, wrong alignment, wrong selection, wrong mate
+  type), and an over-defined concentric mate suggests `closest`. The
+  `alignment` description says the same.
 
 ## [2.1.0] - 2026-11-21
 
