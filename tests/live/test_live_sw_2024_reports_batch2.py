@@ -265,6 +265,48 @@ async def test_a_pin_concentric_with_a_hole_wizard_hole(
     assert mate["status"] == "success", mate
 
 
+def _hole_cylinders(adapter: Any) -> list[dict[str, Any]]:
+    """Every cylindrical face of the part: axis point and radius, mm."""
+    from solidworks_mcp.adapters import sw_type_info
+    from solidworks_mcp.adapters.solidworks.com_utils import as_list
+
+    def read() -> list[dict[str, Any]]:
+        model = sw_type_info.flagged(adapter.currentModel, "IPartDoc")
+        out = []
+        for body in as_list(model.GetBodies2(0, True)):
+            body = sw_type_info.flagged(body, "IBody2")
+            for face in as_list(body.GetFaces()):
+                face = sw_type_info.flagged(face, "IFace2")
+                surface = sw_type_info.flagged(face.GetSurface(), "ISurface")
+                if not surface.IsCylinder():
+                    continue
+                p = [float(v) * 1000 for v in as_list(surface.CylinderParams)]
+                out.append(
+                    {
+                        "axis_point_mm": [round(v, 4) for v in p[:3]],
+                        "axis_dir": [round(v, 4) for v in p[3:6]],
+                        "radius_mm": round(p[6], 4),
+                    }
+                )
+        return out
+
+    result = adapter._handle_com_operation("probe_hole_cylinders", read)
+    assert result.is_success, result.error
+    return list(result.data)
+
+
+async def test_a_hole_wizard_hole_sits_at_its_point(scratch: Any) -> None:
+    """A Ø6 hole asked for at (-20, 20, -12) has its axis at x=-20, z=-12."""
+    tools = await _tools(scratch.adapter)
+    hole = await _drilled_block(tools)
+    cylinders = _hole_cylinders(scratch.adapter)
+    evidence("hole at (-20, 20, -12), Ø6", {"hole": hole, "cylinders": cylinders})
+    assert len(cylinders) == 1, cylinders
+    (cylinder,) = cylinders
+    x, _y, z = cylinder["axis_point_mm"]
+    assert abs(x - -20) < 1e-3 and abs(z - -12) < 1e-3, cylinder
+
+
 async def test_a_section_view_lands_at_its_position(
     scratch: Any, tmp_path: Path
 ) -> None:

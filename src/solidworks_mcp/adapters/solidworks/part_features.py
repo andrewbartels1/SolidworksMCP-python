@@ -271,18 +271,28 @@ def _position_sketch(adapter: Any, feature: Any, first_m: list[float]) -> Any:
     raise LookupError("The hole's position sketch couldn't be found.")
 
 
-def _add_hole_positions(
+#: How far (metres) the first hole's sketch point may be from the requested
+#: point before it is moved onto it. The Hole Wizard puts the hole where the
+#: face was picked, and the pick lands about 0.04 mm off (seen live on 2026).
+_HOLE_AT_POINT_M = 1e-7
+
+
+def _place_holes(
     adapter: Any,
     model: Any,
     feature: Any,
     first_mm: list[float],
     positions_mm: list[list[float]],
 ) -> int:
-    """Put a hole at every point of ``positions_mm`` (Hole Wizard positions).
+    """Put the first hole exactly at ``first_mm`` and one at each position.
 
-    Each point is added to the hole's position sketch, as clicking sketch
-    points on the Hole Wizard's Positions tab does; closing the sketch
-    rebuilds the hole at every point.
+    ``HoleWizard5`` puts the hole where ``SelectByID2`` picked the face, which
+    lands about 0.04 mm from the point asked for. So the hole's position
+    sketch is edited: its first point is moved onto the exact point
+    (``ISketchPoint.SetCoords``), and each further point is added, as
+    clicking points on the Hole Wizard's Positions tab does. Closing the
+    sketch rebuilds the hole at every point. With nothing to move or add the
+    sketch isn't opened.
 
     Args:
         adapter: The connected adapter.
@@ -296,11 +306,12 @@ def _add_hole_positions(
 
     Raises:
         ValueError: A point that is off the face's plane.
-        RuntimeError: When the sketch didn't take every point.
+        RuntimeError: When the first point didn't move or the sketch didn't
+            take every point.
     """
-    sketch_feature, sketch = _position_sketch(
-        adapter, feature, [_mm(v) for v in first_mm]
-    )
+    first_m = [_mm(v) for v in first_mm]
+    sketch_feature, sketch = _position_sketch(adapter, feature, first_m)
+    target = _to_sketch(adapter, sketch, first_m)
     local = [_to_sketch(adapter, sketch, [_mm(v) for v in p]) for p in positions_mm]
     for point, at in zip(positions_mm, local, strict=True):
         if abs(at[2]) > _PICK_TOLERANCE_M:
@@ -308,17 +319,33 @@ def _add_hole_positions(
                 f"Position {list(point)} mm is {abs(at[2]) * 1000:.3f} mm off the "
                 "face the hole is on; give points on that face."
             )
+    first = _nearest_point(adapter, sketch, target)
+    off = math.dist(_coords(first), [target[0], target[1], 0.0])
+    if off <= _HOLE_AT_POINT_M and not local:
+        return len(_sketch_points(adapter, sketch))
     model.ClearSelection2(True)
     sw_type_info.flagged(sketch_feature, "IFeature").Select2(False, 0)
     model.EditSketch()
     manager = sw_type_info.flagged(model.SketchManager, "ISketchManager")
     manager.AddToDB = True  # no snapping onto the first hole
     try:
+        if off > _HOLE_AT_POINT_M:
+            sw_type_info.flagged(first, "ISketchPoint").SetCoords(
+                target[0], target[1], 0.0
+            )
         for x, y, _z in local:
             manager.CreatePoint(x, y, 0.0)
     finally:
         manager.AddToDB = False
         manager.InsertSketch(True)
+    moved_off = math.dist(
+        _coords(_nearest_point(adapter, sketch, target)), [target[0], target[1], 0.0]
+    )
+    if moved_off > _HOLE_AT_POINT_M:
+        raise RuntimeError(
+            f"The hole is {moved_off * 1000:.3f} mm from {list(first_mm)} mm and "
+            "couldn't be moved onto it."
+        )
     count = len(_sketch_points(adapter, sketch))
     expected = 1 + len(positions_mm)
     if count != expected:
@@ -327,6 +354,21 @@ def _add_hole_positions(
             f"{len(positions_mm)}; expected {expected}."
         )
     return count
+
+
+def _coords(point: Any) -> list[float]:
+    """An ``ISketchPoint``'s ``[x, y, z]``, sketch metres."""
+    return [float(point.X), float(point.Y), float(point.Z)]
+
+
+def _nearest_point(adapter: Any, sketch: Any, at: list[float]) -> Any:
+    """The ``ISketchPoint`` of ``sketch`` nearest ``at`` (sketch metres).
+
+    ``_position_sketch`` already found a point within the pick tolerance, so
+    the sketch has at least one point.
+    """
+    points = as_list(adapter._attempt(lambda: sketch.GetSketchPoints2(), default=None))
+    return min(points, key=lambda p: math.dist(_coords(p), [at[0], at[1], 0.0]))
 
 
 def _feature_name(adapter: Any, feature: Any) -> str | None:
@@ -791,11 +833,13 @@ class SolidWorksPartFeaturesMixin:
     ) -> AdapterResult[dict[str, Any]]:
         """Hole Wizard holes at points on a flat face (``HoleWizard5``).
 
-        The face is selected at ``face_point`` with ``SelectByID2``, and the
-        hole is placed at that selection point. Dimensions not given are -1,
-        which leaves them to the standard's table for the size. Each point of
-        ``positions`` is added to the hole's position sketch, so one feature
-        holds every hole (:func:`_add_hole_positions`). A simple hole that
+        The face is selected at ``face_point`` with ``SelectByID2``, and
+        SolidWorks puts the hole where the pick landed, about 0.04 mm off; the
+        hole's position sketch point is then moved exactly onto
+        ``face_point``. Dimensions not given are -1, which leaves them to the
+        standard's table for the size. Each point of ``positions`` is added to
+        the same position sketch, so one feature holds every hole
+        (:func:`_place_holes`). A simple hole that
         SolidWorks won't make through all is made blind through the part
         (:func:`_through_depth_m`).
 
@@ -886,11 +930,7 @@ class SolidWorksPartFeaturesMixin:
                 if hole_type == "tapped" and end_condition == "blind" and depth
                 else None
             )
-            count = (
-                _add_hole_positions(adapter, model, feature, list(face_point), extra)
-                if extra
-                else 1
-            )
+            count = _place_holes(adapter, model, feature, list(face_point), extra)
             made["name"] = None  # finished: nothing to clean up
             data: dict[str, Any] = {
                 "name": name,
