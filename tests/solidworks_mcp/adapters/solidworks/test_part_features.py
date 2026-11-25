@@ -332,11 +332,55 @@ async def test_cosmetic_thread_keeps_the_volume(picks: list[Any]) -> None:
 
     result = await adapter.add_cosmetic_thread([5, 0, 20], "M10x1.5", 10, "blind", 15)
 
+    # M10x1.5 is ISO coarse, which the table names "M10" (#274).
     adapter.manager.InsertCosmeticThread3.assert_called_once_with(
-        8, "Machine Threads", "M10x1.5", 0.01, 0, 0.015, "M10x1.5"
+        8, "Machine Threads", "M10", 0.01, 0, 0.015, "M10"
     )
     assert result.data["volume_change"] == 0.0
+    assert result.data["size"] == "M10x1.5"
     assert picks[0][3:] == (False, 0, "EDGE")
+
+
+@pytest.mark.parametrize(
+    ("size", "standard", "table"),
+    [
+        ("M8x1.25", "iso", "M8"),
+        ("m8 X 1.25", "din", "M8"),
+        ("M8x1.0", "iso", "M8x1.0"),  # fine: kept
+        ("M8", "iso", "M8"),
+        ("M2.5x0.45", "iso", "M2.5"),
+        ("M8x1.25", "ansi_metric", "M8x1.25"),  # another table
+        ("1/4-20", "ansi_inch", "1/4-20"),
+        ("M9x1.25", "iso", "M9x1.25"),  # no such coarse size
+    ],
+)
+def test_thread_table_size(size: str, standard: str, table: str) -> None:
+    assert pf.thread_table_size(size, standard) == table
+
+
+def _thread(stored: str | None, callout: str | None = None) -> Any:
+    data = SimpleNamespace(Size=stored, ThreadCallout=callout or stored)
+    return SimpleNamespace(Name="Cosmetic Thread1", GetDefinition=lambda: data)
+
+
+@pytest.mark.asyncio
+async def test_a_thread_reports_what_solidworks_stored(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 1000.0], feature=_thread("M8"))
+
+    result = await adapter.add_cosmetic_thread([5, 0, 20], "M8x1.25", 8, "blind", 10)
+
+    assert result.data["stored_size"] == "M8"
+    assert result.data["callout"] == "M8"
+    assert "warning" not in result.data
+
+
+@pytest.mark.asyncio
+async def test_a_thread_stored_as_another_size_warns(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 1000.0], feature=_thread("M8x1.0"))
+
+    result = await adapter.add_cosmetic_thread([5, 0, 20], "M8x0.75", 8, "blind", 10)
+
+    assert "stored the thread as M8x1.0, not M8x0.75" in result.data["warning"]
 
 
 @pytest.mark.asyncio

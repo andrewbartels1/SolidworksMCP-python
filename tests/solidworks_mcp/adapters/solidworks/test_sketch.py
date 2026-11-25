@@ -236,6 +236,52 @@ def test_create_sketch_reports_plane_selection_failure() -> None:
     assert "Failed to select plane" in (result.error or "")
 
 
+@pytest.mark.parametrize(
+    ("raw", "state", "fully"),
+    [
+        (2, "under_defined", False),
+        (3, "fully_defined", True),
+        (4, "over_defined", False),
+        (1, "unknown", None),
+    ],
+)
+def test_check_sketch_reads_get_constrained_status(raw, state, fully) -> None:
+    """#268: the old probes named members SolidWorks doesn't have."""
+    adapter = _FakeSketchAdapter()
+    adapter.currentModel = SimpleNamespace(GetActiveSketch2=lambda: None)
+    adapter.currentSketch = SimpleNamespace(GetConstrainedStatus=lambda: raw)
+
+    result = sketch._check_sketch_fully_defined_impl(adapter)
+
+    assert result.data["definition_state"] == state
+    assert result.data["is_fully_defined"] is fully
+    assert result.data["source"] == "ISketch.GetConstrainedStatus"
+    assert result.data["raw_status"] == raw
+
+
+def test_check_sketch_by_name_reads_the_features_sketch() -> None:
+    adapter = _FakeSketchAdapter()
+    sketch_obj = SimpleNamespace(GetConstrainedStatus=lambda: 3)
+    feature = SimpleNamespace(GetSpecificFeature2=lambda: sketch_obj)
+    adapter.currentModel = SimpleNamespace(
+        FeatureByName=lambda name: feature if name == "Sketch1" else None
+    )
+
+    result = sketch._check_sketch_fully_defined_impl(adapter, "Sketch1")
+
+    assert result.data["definition_state"] == "fully_defined"
+
+
+@pytest.mark.parametrize("raw", [None, True, 99, "3"])
+def test_an_unreadable_constrained_status_falls_back(raw) -> None:
+    sketch_obj = SimpleNamespace(GetConstrainedStatus=lambda: raw)
+    assert sketch._constrained_status(_FakeSketchAdapter(), sketch_obj) is None
+
+
+def test_no_sketch_object_has_no_constrained_status() -> None:
+    assert sketch._constrained_status(_FakeSketchAdapter(), None) is None
+
+
 def _german_part(looked_up: list[str]) -> SimpleNamespace:
     """A German part's tree; FeatureByName finds only its own names."""
     names = ("Ebene vorne", "Ebene oben", "Ebene rechts")
@@ -479,6 +525,30 @@ def test_sketch_linear_pattern_calls_com_with_converted_args() -> None:
     assert call_args[2] == 5.0 / 1000.0  # SpacingX in metres
     # AngleX == atan2(0, 1) == 0 for direction (1, 0)
     assert call_args[4] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("direction", "angle_x", "angle_y"),
+    [
+        ((1, 0), 0.0, 0.5),
+        ((0, -1), 1.5, 0.0),  # #272: -90° was refused
+        ((-1, 0), 1.0, 1.5),
+        ((0, 1), 0.5, 1.0),
+    ],
+)
+def test_sketch_linear_pattern_angles_are_never_negative(
+    direction, angle_x, angle_y
+) -> None:
+    """Angles in turns of π: [0, 2π), whatever the direction's signs."""
+    adapter, create_pattern, *_ = _make_pattern_adapter()
+
+    assert sketch._sketch_linear_pattern_impl(
+        adapter, ["Line_1"], *direction, 8.0, 3
+    ).is_success
+
+    args = create_pattern.call_args.args
+    assert args[4] == pytest.approx(angle_x * math.pi)
+    assert args[5] == pytest.approx(angle_y * math.pi)
 
 
 def test_sketch_linear_pattern_validates_inputs() -> None:

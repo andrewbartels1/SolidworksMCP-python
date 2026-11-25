@@ -18,6 +18,7 @@ COM argument lists and enum values come from the installed type libraries
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -65,6 +66,61 @@ HOLE_END_CONDITIONS: dict[str, int] = {"blind": 0, "through_all": 1}
 
 #: ``swCosmeticThreadType_e``.
 THREAD_END_TYPES: dict[str, int] = {"blind": 0, "up_to_next": 1, "through": 2}
+
+#: ISO 261 coarse pitches (mm) by nominal diameter. SolidWorks' ISO and DIN
+#: thread tables name a coarse thread without its pitch ("M8"); asked for
+#: "M8x1.25", they store the first pitched M8 row, M8x1.0 (#274, live on
+#: SW 2026).
+ISO_COARSE_PITCH: dict[float, float] = {
+    1.0: 0.25, 1.2: 0.25, 1.4: 0.3, 1.6: 0.35, 2.0: 0.4, 2.5: 0.45, 3.0: 0.5,
+    3.5: 0.6, 4.0: 0.7, 5.0: 0.8, 6.0: 1.0, 7.0: 1.0, 8.0: 1.25, 10.0: 1.5,
+    12.0: 1.75, 14.0: 2.0, 16.0: 2.0, 18.0: 2.5, 20.0: 2.5, 22.0: 2.5,
+    24.0: 3.0, 27.0: 3.0, 30.0: 3.5, 33.0: 3.5, 36.0: 4.0, 39.0: 4.0,
+    42.0: 4.5, 45.0: 4.5, 48.0: 5.0, 52.0: 5.0, 56.0: 5.5, 60.0: 5.5,
+    64.0: 6.0,
+}  # fmt: skip
+
+#: Standards whose thread tables list coarse threads without a pitch.
+_METRIC_THREAD_STANDARDS = {"iso", "din"}
+
+
+def thread_table_size(size: str, standard: str) -> str:
+    """The spelling SolidWorks' thread table has for ``size``.
+
+    ``M8x1.25`` is the ISO coarse M8, which the ISO and DIN tables list as
+    ``M8``; any other size (a fine pitch, an inch size) is kept.
+    """
+    if standard not in _METRIC_THREAD_STANDARDS:
+        return size
+    pitched = re.fullmatch(
+        r"\s*[Mm]\s*(\d+(?:\.\d+)?)\s*[xX]\s*(\d+(?:\.\d+)?)\s*", size
+    )
+    if not pitched:
+        return size
+    diameter, pitch = float(pitched.group(1)), float(pitched.group(2))
+    if ISO_COARSE_PITCH.get(diameter) == pitch:
+        return f"M{pitched.group(1)}"
+    return size
+
+
+def _stored_thread(adapter: Any, feature: Any) -> dict[str, str | None]:
+    """The size and callout SolidWorks stored for a cosmetic thread."""
+    data = adapter._attempt(
+        lambda: sw_type_info.flagged(
+            sw_type_info.flagged(feature, "IFeature").GetDefinition(),
+            "ICosmeticThreadFeatureData",
+        ),
+        default=None,
+    )
+    size = adapter._attempt(lambda: data.Size, default=None) if data else None
+    callout = (
+        adapter._attempt(lambda: data.ThreadCallout, default=None) if data else None
+    )
+    return {
+        "stored_size": str(size) if size else None,
+        "callout": str(callout) if callout else None,
+    }
+
 
 #: Selection marks.
 _MARK_DIR1 = 1
@@ -888,6 +944,8 @@ class SolidWorksPartFeaturesMixin:
         """
         adapter: Any = self
 
+        table_size = thread_table_size(size, standard)
+
         def build() -> dict[str, Any]:
             model = adapter.currentModel
             model.ClearSelection2(True)
@@ -896,24 +954,37 @@ class SolidWorksPartFeaturesMixin:
             feature = manager.InsertCosmeticThread3(
                 HOLE_STANDARDS[standard],  # Standard
                 "Machine Threads",  # StandardType
-                size,  # Size
+                table_size,  # Size, as the thread table spells it
                 _mm(diameter),  # Diameter
                 THREAD_END_TYPES[end_type],  # EndType
                 _mm(depth) if depth is not None else 0.0,  # Depth
-                size,  # Note
+                table_size,  # Note
             )
             if feature is None:
                 raise RuntimeError(
                     "InsertCosmeticThread3 made no thread; pick a point on a "
                     "circular edge of a hole or shaft."
                 )
-            return {
+            data: dict[str, Any] = {
                 "name": _feature_name(adapter, feature),
                 "size": size,
                 "diameter_mm": float(diameter),
                 "end_type": end_type,
                 "depth_mm": depth,
+                **_stored_thread(adapter, feature),
             }
+            stored = data["stored_size"]
+            if (
+                stored
+                and stored.replace(" ", "").lower()
+                != table_size.replace(" ", "").lower()
+            ):
+                data["warning"] = (
+                    f"SolidWorks stored the thread as {stored}, not {size}; its "
+                    "thread table has no such size. Check the size against the "
+                    f"{standard} table."
+                )
+            return data
 
         return await self._measured("add_cosmetic_thread", build, must_change=False)
 

@@ -14,7 +14,13 @@ from ...utils.sw_dependencies import dependency_paths
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
 from . import default_entities
-from .configurations import THIS_CONFIGURATION, configuration_scope
+from .com_utils import string_array
+from .configurations import (
+    SPECIFY_CONFIGURATION,
+    THIS_CONFIGURATION,
+    configuration_scope,
+)
+from .configurations import _names as _configuration_names
 from .face_selection import mate_entity_label
 
 try:
@@ -82,6 +88,50 @@ _NAMED_VIEWS: dict[str, str] = {
 
 #: Points to millimetres. Note schemas express text height in points.
 _POINTS_TO_MM = 25.4 / 72.0
+
+#: How far (mm) a note's top-left may sit from where it was asked for.
+_NOTE_TOLERANCE_MM = 0.5
+
+
+def _note_extent_mm(adapter: Any, note: Any) -> list[float] | None:
+    """A note's ``[left, bottom, right, top]`` on the sheet, mm, or None."""
+    flagged = _sw_type_info.flagged(note, "INote")
+    raw = adapter._attempt(lambda: list(flagged.GetExtent()), default=None)
+    if not raw or len(raw) < 5:
+        return None
+    return [round(float(v) * 1000.0, 2) for v in (raw[0], raw[1], raw[3], raw[4])]
+
+
+def _note_top_left(
+    adapter: Any, note: Any, annotation: Any, x: float, y: float
+) -> list[float] | None:
+    """Put a note's top-left corner at (x, y) mm, wherever it is anchored.
+
+    ``IAnnotation.SetPosition`` puts the top-left there on SW 2026; on SW
+    2024 the note was centred on the point instead and ran off the sheet
+    (#275). The note's extent is read back and the note moved by the
+    difference, so it lands the same on both.
+
+    Returns:
+        list[float] | None: The note's extent after the move, mm; ``None``
+        when it can't be read.
+    """
+    extent = _note_extent_mm(adapter, note)
+    if extent is None:
+        return None
+    dx, dy = x - extent[0], y - extent[3]
+    if abs(dx) <= _NOTE_TOLERANCE_MM and abs(dy) <= _NOTE_TOLERANCE_MM:
+        return extent
+    pos = adapter._attempt(lambda: list(annotation.GetPosition()), default=None)
+    if not pos or len(pos) < 2:
+        return extent
+    adapter._attempt(
+        lambda: annotation.SetPosition(
+            float(pos[0]) + dx / 1000.0, float(pos[1]) + dy / 1000.0, 0.0
+        ),
+        default=None,
+    )
+    return _note_extent_mm(adapter, note)
 
 
 def _payload(data: Any) -> dict[str, Any]:
@@ -1948,8 +1998,19 @@ class SolidWorksIOMixin:
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
+            old_m = adapter._attempt(lambda: dimension.SystemValue, default=None)
 
             value_m = value / 1000.0
+            if (
+                option == THIS_CONFIGURATION
+                and names
+                and len(_configuration_names(adapter)) > 1
+            ):
+                # A dimension never yet set per configuration takes a
+                # SystemValue write in every configuration (#266, seen on SW
+                # 2024 and 2026), so with several configurations "this" names
+                # the active one, as an explicit list does.
+                option, array = SPECIFY_CONFIGURATION, string_array(names)
             if option == THIS_CONFIGURATION:
                 # SetValue3 has gen_py parameter mapping issues on SW 2025.
                 # SystemValue (in meters) is reliable.
@@ -1975,7 +2036,15 @@ class SolidWorksIOMixin:
                 )
             if rebuilt is None:
                 raise Exception("Failed to set dimension")
-            return {"configurations": names}
+            return {
+                "configurations": names,
+                "old_value": (
+                    round(float(old_m) * 1000.0, 6)
+                    if isinstance(old_m, (int, float))
+                    else None
+                ),
+                "new_value": value,
+            }
 
         return cast(
             AdapterResult[dict[str, Any]],
@@ -3577,21 +3646,7 @@ class SolidWorksIOMixin:
                     "InsertNote returned nothing - the note was not created."
                 )
 
-            positioned = False
-            annotation = adapter._attempt(
-                lambda: _sw_type_info.flagged(note, "INote").GetAnnotation(),
-                default=None,
-            )
-            if annotation is not None:
-                positioned = bool(
-                    adapter._attempt(
-                        lambda: _sw_type_info.flagged(
-                            annotation, "IAnnotation"
-                        ).SetPosition(x / 1000.0, y / 1000.0, 0.0),
-                        default=False,
-                    )
-                )
-
+            # The size first: it changes the note's extent.
             if font_mm:
                 adapter._attempt(
                     lambda: _sw_type_info.flagged(note, "INote").SetTextFormat(
@@ -3600,11 +3655,29 @@ class SolidWorksIOMixin:
                     default=None,
                 )
 
+            positioned = False
+            annotation = adapter._attempt(
+                lambda: _sw_type_info.flagged(note, "INote").GetAnnotation(),
+                default=None,
+            )
+            if annotation is not None:
+                annotation = _sw_type_info.flagged(annotation, "IAnnotation")
+                positioned = bool(
+                    adapter._attempt(
+                        lambda: annotation.SetPosition(x / 1000.0, y / 1000.0, 0.0),
+                        default=False,
+                    )
+                )
+            extent = (
+                _note_top_left(adapter, note, annotation, x, y) if positioned else None
+            )
+
             adapter._attempt(lambda: model.EditRebuild3(), default=None)
             return {
                 "text": text,
                 "position": {"x": x, "y": y},
                 "positioned": positioned,
+                "extent_mm": extent,
                 "font_size_points": font_points or None,
             }
 

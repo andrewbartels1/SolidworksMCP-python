@@ -18,7 +18,7 @@ from ..base import (
     SolidWorksFeature,
     SweepParameters,
 )
-from .com_utils import as_list
+from .com_utils import as_list, selection_count
 from .com_utils import attempt as _attempt
 from .com_utils import flag as _flag
 from .configurations import (
@@ -557,6 +557,11 @@ def _create_extrusion_impl(
         # A named sketch is found and selected first; without a name the
         # sketch exit_sketch just closed is still selected, as before.
         requested = getattr(params, "sketch_name", None) or None
+        if requested is None and selection_count(adapter, adapter.currentModel) == 0:
+            # Nothing is selected: exit_sketch renamed the sketch (renaming
+            # clears the selection), so the sketch it closed is selected by
+            # its tracked name, as create_cut_extrude does (#270).
+            requested = getattr(adapter, "_last_sketch_name", None) or None
         sketch_used = (
             _resolve_profile_sketch(adapter, requested, purpose="extrude")
             if requested

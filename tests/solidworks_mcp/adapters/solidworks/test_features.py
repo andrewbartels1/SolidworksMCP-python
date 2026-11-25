@@ -3178,6 +3178,49 @@ def test_solid_extrusion_honours_mid_plane(params: ExtrusionParameters) -> None:
     assert result.data.parameters["end_condition"] == "MidPlane"
 
 
+def _renamed_sketch_adapter(selected: int, picked: list) -> _FakeFeatureAdapter:
+    """A part whose sketch exit_sketch renamed SK_Base; ``selected`` entities."""
+    adapter = _extrusion_adapter(
+        FeatureExtrusion3=lambda *a: SimpleNamespace(Name="Boss-Extrude1")
+    )
+    sketch = SimpleNamespace(
+        GetTypeName2=lambda: "ProfileFeature",
+        Name="SK_Base",
+        GetNextFeature=lambda: None,
+    )
+    adapter.currentModel.FirstFeature = lambda: sketch
+    adapter.currentModel.ClearSelection2 = lambda *_a: True
+    adapter.currentModel.SelectionManager = SimpleNamespace(
+        GetSelectedObjectCount2=lambda _mark: selected
+    )
+    adapter.currentModel.Extension = SimpleNamespace(
+        SelectByID2=lambda name, *_a: picked.append(name) or True
+    )
+    adapter._last_sketch_name = "SK_Base"
+    return adapter
+
+
+def test_an_extrusion_after_a_renamed_sketch_selects_it_by_name() -> None:
+    """#270: renaming the sketch on exit cleared the selection."""
+    picked: list[str] = []
+    adapter = _renamed_sketch_adapter(0, picked)
+
+    result = features._create_extrusion_impl(adapter, ExtrusionParameters(depth=20))
+
+    assert result.is_success, result.error
+    assert picked == ["SK_Base"]
+
+
+def test_an_extrusion_with_the_sketch_still_selected_selects_nothing() -> None:
+    picked: list[str] = []
+    adapter = _renamed_sketch_adapter(1, picked)
+
+    result = features._create_extrusion_impl(adapter, ExtrusionParameters(depth=20))
+
+    assert result.is_success, result.error
+    assert picked == []
+
+
 def test_legacy_solid_extrusion_also_honours_mid_plane() -> None:
     calls: list[tuple] = []
 

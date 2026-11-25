@@ -4234,10 +4234,69 @@ class TestAssemblyAndDrawingSuccessPaths:
             "text": "MATERIAL: AISI 1018",
             "position": {"x": 120.0, "y": 40.0},
             "positioned": True,
+            "extent_mm": None,  # a MagicMock has no extent
             "font_size_points": 12.0,
         }
         annotation.SetPosition.assert_called_once_with(0.12, 0.04, 0.0)
         note.SetTextFormat.assert_called_once()
+
+    @staticmethod
+    def _note(extents: list, position: Any = (0.03, 0.04, 0.0)) -> Any:
+        """A note whose extent reads ``extents`` in turn (metres)."""
+        moves: list[tuple] = []
+        annotation = SimpleNamespace(
+            SetPosition=lambda *a: moves.append(a) or True,
+            GetPosition=lambda: position,
+        )
+        reads = iter(extents)
+        return SimpleNamespace(
+            GetAnnotation=lambda: annotation,
+            GetExtent=lambda: next(reads),
+            SetTextFormat=lambda *_a: True,
+            moves=moves,
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_note_already_at_its_top_left_is_left(self, monkeypatch) -> None:
+        # Live on SW 2026: SetPosition puts the top-left at the point.
+        adapter = self._document(monkeypatch, 3)
+        note = self._note([(0.0299, 0.0356, 0.0, 0.0964, 0.0402, 0.0)])
+        adapter.currentModel.InsertNote.return_value = note
+
+        result = await adapter.add_note({"text": "X", "position": [30.0, 40.0]})
+
+        assert result.data["extent_mm"] == [29.9, 35.6, 96.4, 40.2]
+        assert note.moves == [(0.03, 0.04, 0.0)]
+
+    @pytest.mark.asyncio
+    async def test_a_centred_note_is_moved_to_its_top_left(self, monkeypatch) -> None:
+        # #275 on SW 2024: the note was centred on the point.
+        adapter = self._document(monkeypatch, 3)
+        note = self._note(
+            [
+                (-0.0033, 0.0378, 0.0, 0.0633, 0.0422, 0.0),
+                (0.03, 0.0356, 0.0, 0.0966, 0.04, 0.0),
+            ]
+        )
+        adapter.currentModel.InsertNote.return_value = note
+
+        result = await adapter.add_note({"text": "X", "position": [30.0, 40.0]})
+
+        assert note.moves[1] == pytest.approx((0.0633, 0.0378, 0.0))
+        assert result.data["extent_mm"] == [30.0, 35.6, 96.6, 40.0]
+
+    @pytest.mark.asyncio
+    async def test_a_note_whose_position_cant_be_read_is_left(
+        self, monkeypatch
+    ) -> None:
+        adapter = self._document(monkeypatch, 3)
+        note = self._note([(-0.0033, 0.0378, 0.0, 0.0633, 0.0422, 0.0)], position=None)
+        adapter.currentModel.InsertNote.return_value = note
+
+        result = await adapter.add_note({"text": "X", "position": [30.0, 40.0]})
+
+        assert len(note.moves) == 1
+        assert result.data["extent_mm"] == [-3.3, 37.8, 63.3, 42.2]
 
     @pytest.mark.asyncio
     async def test_list_drawing_views_returns_the_view_names(self, monkeypatch) -> None:
@@ -4558,11 +4617,36 @@ async def test_set_dimension_in_named_configurations(monkeypatch) -> None:
     unknown = await adapter.set_dimension("D1@Boss-Extrude1", 80.0, ["Short"])
 
     dimension.SetSystemValue3.assert_any_call(0.08, 3, ("ARRAY", "Long"))
-    assert done.data == {"configurations": ["Long"]}
+    assert done.data == {
+        "configurations": ["Long"],
+        "old_value": None,
+        "new_value": 80.0,
+    }
     assert "SetSystemValue3 refused D1@Boss-Extrude1 in Default, Long" in (
         refused.error or ""
     )
     assert "No configuration named 'Short'" in (unknown.error or "")
+
+
+@pytest.mark.asyncio
+async def test_this_configuration_names_the_active_one_when_there_are_several(
+    monkeypatch,
+) -> None:
+    """#266: a SystemValue write went to every configuration."""
+    adapter = _build_adapter(monkeypatch)
+    monkeypatch.setattr(_io_module, "string_array", lambda names: ("ARRAY", *names))
+    dimension = SimpleNamespace(SetSystemValue3=Mock(return_value=0), SystemValue=0.01)
+    adapter.currentModel = _ConfiguredModel(Parameter=Mock(return_value=dimension))
+
+    done = await adapter.set_dimension("D1@Boss-Extrude1", 25.0)
+
+    dimension.SetSystemValue3.assert_called_once_with(0.025, 3, ("ARRAY", "Default"))
+    assert dimension.SystemValue == 0.01  # not written directly
+    assert done.data == {
+        "configurations": ["Default"],
+        "old_value": 10.0,
+        "new_value": 25.0,
+    }
 
 
 class TestExplodedDrawingView:

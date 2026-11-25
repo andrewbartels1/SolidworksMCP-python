@@ -106,6 +106,9 @@ def cb_with_mock():
     inner.set_component_appearance = AsyncMock(
         return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
     )
+    inner.pack_and_go_assembly = AsyncMock(
+        return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
+    )
     inner.add_balloons = AsyncMock(
         return_value=AdapterResult(status=AdapterResultStatus.SUCCESS, data={})
     )
@@ -1221,6 +1224,7 @@ _ESSENTIALS = [
     ("pattern_components", (["pin-1"], "Axis1", 4, "linear", 25.0, None)),
     ("mirror_components", (["foot-1"], "Right Plane")),
     ("replace_component", ("pin-1", "C:/p/pin45.sldprt", True)),
+    ("pack_and_go_assembly", ("C:/a/asm.sldasm", "C:/out")),  # #267
     ("set_component_appearance", ("base-1", False, True)),
     ("add_balloons", ("Drawing View1", "circle")),
 ]

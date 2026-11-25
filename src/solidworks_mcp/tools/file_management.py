@@ -1309,21 +1309,22 @@ async def register_file_management_tools(
                 "Set overwrite=True to replace them."
             )
 
-        result = await adapter.pack_and_go_assembly(  # type: ignore[attr-defined]
+        result = await adapter.pack_and_go_assembly(
             source_path=str(source),
             target_dir=str(out_dir),
         )
 
         require_success(result)
+        packed = result.data or {}
 
         report: dict[str, Any] = {
             "status": "success",
             "method": "dependency_copy",
             "execution_time": result.execution_time,
-            **result.data,
+            **packed,
         }
         warnings: list[str] = []
-        unsaved = result.data.get("unsaved_changes") or []
+        unsaved = packed.get("unsaved_changes") or []
         if unsaved:
             warnings.append(
                 f"{', '.join(unsaved)} had unsaved changes, which are not in the "

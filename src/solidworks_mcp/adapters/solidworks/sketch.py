@@ -10,6 +10,7 @@ from typing import Any, cast
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
 from .com_utils import as_list, double_array
+from .com_utils import flag as _flag_members
 from .default_entities import entity_name
 from .features import _null_callout
 
@@ -2117,11 +2118,13 @@ def _sketch_linear_pattern_impl(
         try:
             _select_sketch_entities(adapter, entities, mark=0)
 
-            angle_x = math.atan2(direction_y, direction_x)
+            # Angles in [0, 2π): atan2 gives -π/2 for (0, -1), which
+            # SolidWorks refuses (#272); the same direction as 3π/2 works.
+            angle_x = math.atan2(direction_y, direction_x) % math.tau
             # Direction 2 (Y) goes 90° from direction 1; NumY=1 keeps it
             # single-row so the second-axis spacing/angle aren't actually
             # consumed, but SW still wants well-formed values.
-            angle_y = angle_x + math.pi / 2.0
+            angle_y = (angle_x + math.pi / 2.0) % math.tau
 
             ok = adapter.currentSketchManager.CreateLinearSketchStepAndRepeat(
                 count,  # NumX
@@ -2788,6 +2791,42 @@ def _probe_to_flag(source: str, raw: Any) -> bool | None:
     return _to_bool(raw)
 
 
+#: ``swConstrainedStatus_e`` -> (definition_state, is_fully_defined).
+_CONSTRAINED_STATES: dict[int, tuple[str, bool | None]] = {
+    1: ("unknown", None),
+    2: ("under_defined", False),
+    3: ("fully_defined", True),
+    4: ("over_defined", False),
+    5: ("no_solution", False),
+    6: ("invalid_solution", False),
+    7: ("autosolve_off", None),
+}
+
+
+def _constrained_status(adapter: Any, sketch_obj: Any) -> dict[str, Any] | None:
+    """The sketch's state from ``ISketch.GetConstrainedStatus`` (#268).
+
+    Returns:
+        dict[str, Any] | None: ``is_fully_defined``, ``definition_state``,
+        ``source`` and ``raw_status``; ``None`` when it can't be read.
+    """
+    if sketch_obj is None:
+        return None
+    _flag_members(adapter, sketch_obj, "GetConstrainedStatus")
+    raw = adapter._attempt(lambda: sketch_obj.GetConstrainedStatus(), default=None)
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return None
+    if raw not in _CONSTRAINED_STATES:
+        return None
+    state, fully = _CONSTRAINED_STATES[raw]
+    return {
+        "is_fully_defined": fully,
+        "definition_state": state,
+        "source": "ISketch.GetConstrainedStatus",
+        "raw_status": raw,
+    }
+
+
 def _state_from_bool(flag: bool | None) -> str:
     """Convert a nullable bool flag to a descriptive state string.
 
@@ -2882,6 +2921,7 @@ def _check_sketch_fully_defined_impl(
             )
             if not sketch_feature:
                 raise Exception(f"Sketch not found: {sketch_name}")
+            _flag_members(adapter, sketch_feature, "GetSpecificFeature2")
             sketch_obj = adapter._attempt(
                 lambda: sketch_feature.GetSpecificFeature2(), default=None
             )
@@ -2896,6 +2936,7 @@ def _check_sketch_fully_defined_impl(
                     ),
                     default=None,
                 )
+                _flag_members(adapter, sketch_feature, "GetSpecificFeature2")
                 sketch_obj = adapter._attempt(
                     lambda: sketch_feature.GetSpecificFeature2(), default=None
                 )
@@ -2903,6 +2944,10 @@ def _check_sketch_fully_defined_impl(
 
         if sketch_obj is None and sketch_feature is None:
             raise Exception("No active sketch found")
+
+        constrained = _constrained_status(adapter, sketch_obj)
+        if constrained is not None:
+            return {"sketch_name": resolved_name, **constrained}
 
         probes: list[tuple[str, Any]] = []
 

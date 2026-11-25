@@ -1614,6 +1614,15 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             lambda: self.adapter.replace_component(component, file_path, all_instances),
         )
 
+    async def pack_and_go_assembly(
+        self, source_path: str, target_dir: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Copy an assembly and its files into one folder, through circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "pack_and_go_assembly",
+            lambda: self.adapter.pack_and_go_assembly(source_path, target_dir),
+        )
+
     async def set_component_appearance(
         self,
         component: str,

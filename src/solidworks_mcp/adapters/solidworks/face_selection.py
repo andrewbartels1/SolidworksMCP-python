@@ -50,7 +50,11 @@ EDGE_TYPES = ("all", "linear", "circular")
 
 _PARALLEL = 0.999  # |cos| threshold for "same direction"
 _ON_PLANE_M = 1e-6  # metres
-_ON_FACE_M = 1e-5  # metres (0.01 mm) for point-on-face
+#: A point is on the nearest face when this close (metres, 0.1 mm). 0.01 mm
+#: missed a Hole Wizard hole's wall, 0.043 mm from the reporter's point
+#: (#271); the nearest face is always the one taken, so this only decides
+#: whether a point counts as on a face at all.
+_ON_FACE_M = 1e-4
 
 
 # ---- pure helpers ---------------------------------------------------------
