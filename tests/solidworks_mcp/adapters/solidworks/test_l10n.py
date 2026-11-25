@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sys
+import types
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -119,3 +122,138 @@ def test_original_error_reraised_when_nothing_matches() -> None:
     call = l10n._retrying(boom, object(), "CreateDrawViewFromModelView3")
     with pytest.raises(RuntimeError, match="COM failure"):
         call("part.sldprt", "*Isometric", 0.1, 0.1, 0.0)
+
+
+def test_a_member_exposed_as_a_method_is_called() -> None:
+    class _Doc:
+        def GetModelViewNames(self) -> list[str]:  # noqa: N802 - COM name
+            return ["*Front"]
+
+    assert l10n._value(_Doc().GetModelViewNames) == ["*Front"]
+
+
+class _Raises:
+    """A COM object whose every member read fails."""
+
+    def __getattr__(self, name: str) -> Any:
+        raise RuntimeError(f"COM: {name}")
+
+
+def test_an_unreadable_tree_or_view_list_learns_nothing() -> None:
+    l10n.learn_from_tree(_Raises())
+    l10n.learn_views(_Raises())
+
+    assert l10n._learned == {}
+
+
+class _NoNext:
+    """A plane whose next feature can't be read."""
+
+    Name = "Plan de face"
+    GetTypeName2 = "RefPlane"
+
+    @property
+    def GetNextFeature(self) -> Any:  # noqa: N802 - COM name
+        raise OSError("COM")
+
+
+def test_a_tree_walk_stops_at_its_end_or_an_unreadable_feature() -> None:
+    planes = _Feat("Plan de face", "RefPlane", _Feat("Plan de dessus", "RefPlane"))
+
+    for first in (planes, _Raises(), _NoNext()):
+        l10n.learn_from_tree(SimpleNamespace(FirstFeature=first))
+
+    assert l10n._learned == {}
+
+
+def test_the_active_document_is_read_when_nothing_is_learned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(l10n, "_app", SimpleNamespace(ActiveDoc=_Model({})))
+
+    assert l10n.local_candidates("*Isometric") == ["*Isométrique"]
+    assert l10n._learned["Top Plane"] == "Plan de dessus"
+
+
+@pytest.mark.parametrize(
+    "app",
+    [None, _Raises(), SimpleNamespace(ActiveDoc=None)],
+    ids=["no-app", "unreadable", "no-document"],
+)
+def test_no_active_document_falls_back_to_the_table(
+    monkeypatch: pytest.MonkeyPatch, app: Any
+) -> None:
+    monkeypatch.setattr(l10n, "_app", app)
+
+    assert l10n.local_candidates("Top Plane") == ["Plan de dessus"]
+
+
+def test_a_failure_without_a_name_is_passed_on_unchanged() -> None:
+    def fails(*_args: Any) -> Any:
+        raise RuntimeError("no name")
+
+    returns_none = l10n._retrying(lambda *_a: None, object(), "FeatureByName")
+    raises = l10n._retrying(fails, object(), "FeatureByName")
+
+    assert returns_none(7) is None
+    with pytest.raises(RuntimeError, match="no name"):
+        raises()
+
+
+def test_a_failed_retry_tries_the_next_name_then_returns_the_first_result() -> None:
+    seen: list[str] = []
+
+    def select(name: str, *_rest: Any) -> bool:
+        seen.append(name)
+        if name == "Plan de face":
+            raise RuntimeError("COM")
+        return False
+
+    l10n.reset_for_tests([("Front Plane", "Plan de face")])
+    call = l10n._retrying(select, object(), "SelectByID2")
+
+    assert call("Front Plane", "PLANE") is False
+    assert seen == ["Front Plane", "Plan de face"]
+
+
+class _CDispatch:
+    """Stands in for ``win32com.client.dynamic.CDispatch``."""
+
+    def __getattr__(self, attr: str) -> Any:
+        if attr == "FeatureByName":
+            return lambda name: "FR-TOP" if name == "Plan de dessus" else None
+        return f"value of {attr}"
+
+
+def _fake_win32com(monkeypatch: pytest.MonkeyPatch, cdispatch: type) -> None:
+    client = types.ModuleType("win32com.client")
+    client.dynamic = SimpleNamespace(CDispatch=cdispatch)  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "win32com.client", client)
+    monkeypatch.setattr(l10n, "_installed", False)
+    monkeypatch.setattr(l10n, "_app", None)
+
+
+def test_install_hooks_the_named_calls_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    cdispatch = type("CDispatch", (_CDispatch,), {})
+    monkeypatch.setattr(cdispatch, "__getattr__", _CDispatch.__getattr__)
+    _fake_win32com(monkeypatch, cdispatch)
+    app = object()
+
+    l10n.install(app)
+    hooked = cdispatch.__getattr__
+    l10n.install()
+    obj = cdispatch()
+
+    assert l10n._app is app
+    assert cdispatch.__getattr__ is hooked
+    assert obj.FeatureByName("Top Plane") == "FR-TOP"
+    assert obj.Visible == "value of Visible"
+
+
+def test_install_without_pywin32_does_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "win32com.client", None)
+    monkeypatch.setattr(l10n, "_installed", False)
+
+    l10n.install()
+
+    assert l10n._installed is False
