@@ -27,6 +27,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `exploded`. Tool names may now start with `replace_`. Stable, checked
   live on SolidWorks 2026. Demo: a pinned base, patterned, mirrored,
   swapped, exploded and ballooned, on the demos page.
+- **A compatibility layer for COM calls that differ between SolidWorks
+  releases** (`adapters/solidworks/compat.py`). Each call is made exactly as
+  before, so SolidWorks 2026 is unchanged; only when SolidWorks answers
+  "Member not found" is it retried as the other dispatch kind (a method on
+  one release can be a property on another). The equation tools go through
+  it (#265: all three failed with "Member not found" on SolidWorks 2024).
+  The selftest summary names every member that needed the retry, so a
+  report from a release we don't have says what differs there.
+- **Relations to the sketch origin and to end points** (#269):
+  `add_sketch_constraint` takes `origin` and `<id>.start` / `<id>.end` (a
+  line's or arc's end point), so a corner can be tied to the origin and a
+  sketch fully defined without Fix. The origin is found by identity, so any
+  language works.
+- **`save_as` with `as_copy`** (#276): writes a copy and keeps the original
+  open, as Save As's "Save as copy and continue" does, so assemblies keep
+  using the original. The reply has `current_path` and `kept_original`.
 
 ### Fixed
 
@@ -60,9 +76,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`create_drawing_view` uses a `view_type` that starts with `*` as given**
   (#262): `view_type: "*Isometrisch"` used to fall back to the front view.
 - **`insert_bom_table` without a position keeps the table inside the drawing
-  border** (#262): one placed by the sheet format's anchor is slid 10 mm in
-  from the sheet's edge (ISO 5457's frame), not just onto the sheet, where it
-  crossed the border.
+  border** (#262): a table on the sheet format's anchor can't be moved
+  (`SetPosition` returns `False`, the anchor can't be cleared; seen live on
+  SolidWorks 2026), so the old slide onto the sheet never moved it, and
+  `moved_onto_sheet` said it had. A table that lands across the border is now
+  inserted again, unanchored, 10 mm in from the sheet's edge (ISO 5457's
+  frame), or just on the sheet when it is larger.
+- **The SolidWorks 2024 reports #266-#275**, each reproduced live on
+  SolidWorks 2026 first, so they were ours:
+  - `pack_and_go_assembly` failed with `AttributeError` before reaching
+    SolidWorks: the circuit breaker and connection pool didn't forward it
+    (#267). A test now checks both forward every adapter method.
+  - `set_dimension`'s first change with `configurations: "this"` reached
+    every configuration (#266); with several configurations it now names the
+    active one. `old_value` is reported.
+  - `check_sketch_fully_defined` always said `unknown` (#268); it reads
+    `ISketch.GetConstrainedStatus` (`under_defined`, `fully_defined`,
+    `over_defined`...).
+  - `create_extrusion` without `sketch_name` failed after `create_sketch`
+    named the sketch (#270): the rename cleared the selection.
+  - `add_mate` couldn't find a Hole Wizard hole's wall (#271): a point within
+    0.1 mm of a face is now on it (was 0.01 mm).
+  - `sketch_linear_pattern` failed for a negative direction (#272).
+  - `create_section_view` left the view on its parent (#273); it is freed from
+    the parent's alignment and moved, and `at_position` says if it got there.
+  - `add_cosmetic_thread` with `M8x1.25` stored `M8x1.0` (#274): the ISO and
+    DIN tables name a coarse thread without its pitch (`M8`), so that is sent;
+    the stored size and callout are read back.
+  - `add_note`'s position is the note's top-left corner (#275); its extent is
+    read back and the note moved there, as SolidWorks 2026 already places it
+    and 2024 didn't.
+  - `save_as` no longer says it saves a copy (#276).
 - **The selftest's assembly area seats the pin on SolidWorks 2024** (#264):
   its concentric mate now takes alignment `closest`. With `aligned`, which
   compares the hole's and the pin's axis directions (set by how each feature

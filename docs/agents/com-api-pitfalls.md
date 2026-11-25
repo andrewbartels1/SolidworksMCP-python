@@ -1128,6 +1128,76 @@ per-call lookup replaced it so no COM call outside a default name changes.
 
 ---
 
+## 40. A table on the sheet format's anchor can't be moved
+
+**Symptom:** `IAnnotation.SetPosition` on a BOM inserted with `UseAnchorPoint`
+returns `False` and the table stays put; setting `ITableAnnotation.Anchored =
+False` is ignored. Code that didn't check the return value reported a move that
+never happened (#262).
+
+**Fix:** decide where it goes, delete it (select its `BomFeat` feature,
+`Extension.DeleteSelection2(0)`) and insert it again unanchored at that point. An
+unanchored table moves with `SetPosition` as expected. Measured live on
+SolidWorks 2026, 2026-11-24 (`drawing_standard.bom_target`).
+
+---
+
+## 41. A section view stays aligned with its parent
+
+**Symptom:** `CreateSectionViewAt5(x, y, ...)` puts the view on the parent's x
+(or y), whatever x was given (#273, SolidWorks 2024 and 2026).
+
+**Fix:** `IView.RemoveAlignment()`, then `IView.Position` as an explicit
+`VARIANT(VT_ARRAY | VT_R8)` (pitfall 31), then once more by what the outline still
+misses (a view's position point need not be its outline's centre). Read the outline
+back to confirm (`drawing_pack._pack_place`).
+
+---
+
+## 42. ISO and DIN thread tables name a coarse thread without its pitch
+
+**Symptom:** `InsertCosmeticThread3(..., "M8x1.25", ...)` stores `M8x1.0`: the
+first pitched M8 row (#274). `"M8X1.25"` and `"M8 x 1.25"` do the same.
+
+**Fix:** send the coarse designation (`M8`), which the table stores as `M8` with
+callout `M8`; a fine pitch keeps its pitch (`M8x1.0`). Read
+`ICosmeticThreadFeatureData.Size` and `ThreadCallout` back.
+`IFeature.ModifyDefinition` with a new `Size` raised under late binding, so it has
+to be right on creation. The Hole Wizard library does the same match
+(`hole_library.match_size`).
+
+---
+
+## 43. A note's position is its top-left on 2026, its centre on 2024
+
+**Symptom:** `IAnnotation.SetPosition(x, y)` on a new note puts its top-left
+corner there on SolidWorks 2026 (extent read back: left 29.9 mm for x = 30), but
+centred it on SolidWorks 2024, so a note near the left edge ran off the sheet
+(#275).
+
+**Fix:** read `INote.GetExtent()` after placing it and move it by the difference,
+so it lands the same on both (`io._note_top_left`). The general rule for a
+release difference in *where* something lands: place, measure, correct.
+
+---
+
+## 44. The same member answers as another dispatch kind on another release
+
+**Symptom:** `COM error ... (-2147352573, 'Member not found.')` on a member every
+release has (#265: every `IEquationMgr` call on SolidWorks 2024, all passing on
+2026). Indexed properties such as `Equation(i)`, `Value(i)` and
+`GlobalVariable(i)` are generated as methods by makepy and flagged as methods; a
+release whose dispatch only answers them as properties says "Member not found".
+
+**Fix:** `compat.invoke(obj, name, *args)` / `compat.read(obj, name)` make the
+call as before and only on "Member not found" retry through `IDispatch.Invoke`
+with `DISPATCH_METHOD | DISPATCH_PROPERTYGET`. Every member that needed it is in
+`compat.fallbacks`, which the selftest summary prints, so a report from a release
+we don't have names it. Route calls on interfaces reported broken on another
+release through it; 2026 is unchanged because the first try is the same call.
+
+---
+
 ## Adapter wiring traps — not COM, same silent-failure shape
 
 These are not SolidWorks issues, but they fail the same way: the code imports, the tests
