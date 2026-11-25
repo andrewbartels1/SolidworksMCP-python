@@ -3268,9 +3268,10 @@ def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, A
             ),
         )
 
-    plane_a, plane_b = _AXIS_PLANE_PAIRS[key]
-
     def _axis_operation() -> dict[str, Any]:
+        # The document's own names for the two planes, so the reply says
+        # which planes were really used (#262).
+        plane_a, plane_b = (entity_name(adapter, p) for p in _AXIS_PLANE_PAIRS[key])
         before = _feature_count(adapter)
         names_before = {name for _, name in _tree_features(adapter)}
         adapter._attempt(

@@ -326,7 +326,11 @@ def _select_sketch_plane(adapter: Any, plane: str) -> None:
             raise Exception(
                 f"Failed to select plane: {actual_plane} ({selection_error})"
             )
-        raise Exception(f"Failed to select plane: {actual_plane}")
+        raise LookupError(
+            f"Failed to select plane: {actual_plane}: not found in the "
+            "document. Use Front, Top, Right, or a plane's name from "
+            "list_features."
+        )
 
 
 def _select_sketch_face(adapter: Any, face_point: tuple[float, float, float]) -> None:

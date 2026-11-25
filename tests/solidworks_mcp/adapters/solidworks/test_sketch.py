@@ -287,7 +287,7 @@ def test_a_missing_plane_is_never_swapped_for_a_default() -> None:
     result = sketch._create_sketch_impl(adapter, "Plane7")
 
     assert result.status == AdapterResultStatus.ERROR
-    assert "Failed to select plane: Plane7" in (result.error or "")
+    assert "Failed to select plane: Plane7: not found" in (result.error or "")
     assert looked_up == ["Plane7"]
 
 

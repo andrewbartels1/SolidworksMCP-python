@@ -175,7 +175,7 @@ async def test_the_standard_view_list(scratch: Any, tmp_path: Path) -> None:
     scratch.written_files.append(part)
     await _ok(await tools["create_drawing"]({"name": "plaque-vues"}))
     iso = await tools["create_drawing_view"](
-        {"model_path": part, "orientation": "isometric", "position_x": 200}
+        {"model_path": part, "view_type": "isometric", "position_x": 200}
     )
     evidence("an isometric view of the translated part", iso.get("data") or iso)
     assert iso["status"] == "success", iso

@@ -2911,6 +2911,7 @@ class TestReferenceGeometryOutcomes:
             c.args[0] for c in adapter.currentModel.FeatureByName.call_args_list
         ]
         assert looked_up == ["Plan de dessus", "Plan de droite"]
+        assert result.data["planes"] == ["Plan de dessus", "Plan de droite"]
 
     def test_axis_reports_its_planes(self, monkeypatch) -> None:
         part = [("RefPlane", "Top Plane"), ("Extrusion", "Boss-Extrude1")]
