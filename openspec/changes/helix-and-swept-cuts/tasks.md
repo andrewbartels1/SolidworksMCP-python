@@ -1,6 +1,6 @@
 ## 1. Live probe (before the build)
 
-- [ ] 1.1 With the user's OK, one short probe on new documents: `InsertHelix` on a closed, selected sketch; the start point at `start_angle` 0 and 90; `InsertCutSwept5` with marks 1 and 4; `CircularProfile` with only the path selected. Record the answers in this design
+- [x] 1.1 With the user's OK, one short probe on new documents: `InsertHelix` on a closed, selected sketch; the start point at `start_angle` 0 and 90; `InsertCutSwept5` with marks 1 and 4; `CircularProfile` with only the path selected. Record the answers in this design
 
 ## 2. Adapter (COM) in a new `adapters/solidworks/swept.py`
 
@@ -28,6 +28,6 @@
 
 ## 6. Live demo and sign-off
 
-- [ ] 6.1 `tests/live/test_live_sw_helix_and_swept_cuts.py`: a compression spring (a 20 mm helix, pitch 6, height 48; a 2 mm wire by `circular_profile_diameter`; volume 1,579.14 mm³) and a threaded rod (a rod, a helix on it, a triangular thread profile at the helix's start, `create_cut_sweep`; the volume removed against the hand calculation); one refused call each
+- [ ] 6.1 `tests/live/test_live_sw_helix_and_swept_cuts.py`: a compression spring (a 20 mm helix, pitch 6, height 48; a 2 mm wire by `circular_profile_diameter`; volume 1,586.2 mm³, the circle's area times the reported length) and a threaded rod (a rod, a helix on it, a triangular thread profile at the helix's start, `create_cut_sweep`; the volume removed against the hand calculation); one refused call each
 - [ ] 6.2 The user runs the demo; fix what it finds; record the GIF (captions held long enough to read)
 - [ ] 6.3 Promote the two tools to stable; commit; ask before pushing

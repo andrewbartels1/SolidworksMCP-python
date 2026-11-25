@@ -67,25 +67,36 @@ from the general tools).
 
 ### 3. What the live demo has to settle
 
-Four details are unknown until SolidWorks runs them, and a short probe
-settles them before the build:
+Four details were unknown until SolidWorks ran them. A probe on
+2026-11-24 (SolidWorks 2026) settled them:
 
-1. Does `InsertHelix` take a **closed, selected** sketch (the tool's flow),
-   or only an open one, as the regression test uses?
-2. Where does a helix start at `start_angle` 0, relative to the sketch's
-   axes (the regression test's helix on the Top plane started at
-   (r, 0, 0))?
-3. Does `InsertCutSwept5` take the same marks (profile 1, path 4)?
-4. Does `CircularProfile` sweep a circle with only the path selected?
+1. `InsertHelix` takes a **closed, selected** sketch. It returns nothing;
+   the new feature's type is `Helix` (named `Helix/Spiral1`).
+2. The start point, end point and length are **read from the helix**, not
+   worked out: `IFeature.GetSpecificFeature2` (flagged `IFeature` first) is
+   an `IReferenceCurve`; its `GetFirstSegment` edge gives the vertices and,
+   through `GetCurveParams3` and `ICurve.GetLength3`, the length (504.924
+   mm for 8 turns of a 20 mm helix at pitch 6, as the formula gives). On a
+   Top-plane circle, `start_angle` 0 starts at +z and 90 at +x, so 90 puts
+   the start on the Front plane. The worked-out length in section 1 becomes
+   the fallback only.
+3. `InsertCutSwept5` takes the same marks (profile 1, path 4): a 0.8 mm
+   circle at the start of a helix on a 10 mm rod removed 117.4 mm³.
+4. `CircularProfile` sweeps with only the path selected (mark 4). The
+   circle is perpendicular to the path, so the volume is the circle's area
+   times the path's length: a 2 mm wire along that helix is 1,585.9 mm³
+   (pi x 1^2 x 504.92 = 1,586.2), not the Pappus figure in section 4.
 
 ### 4. The demo's arithmetic
 
-A profile in a plane that contains the helix's axis, swept along the helix,
-sweeps the same volume as a turn about the axis per revolution: V = A x 2
-pi x r_c x n, where A is the profile's area and r_c its centroid's distance
-from the axis (Pappus). A 2 mm wire on a 20 mm helix of 8 turns is
-pi x 1^2 x 2 pi x 10 x 8 = 1,579.14 mm^3. A thread cut is checked the same
-way, over the turns that lie wholly inside the rod.
+A circular profile is perpendicular to the path, so a wire's volume is
+the circle's area times the helix's length (which the tool reports): a 2 mm
+wire on a 20 mm helix of 8 turns at pitch 6 is pi x 1^2 x 504.92 = 1,586.2
+mm^3. A sketch profile in a plane that contains the helix's axis sweeps the
+same volume as a turn about the axis per revolution: V = A x 2 pi x r_c x
+n, where A is the profile's area and r_c its centroid's distance from the
+axis (Pappus); a thread cut is checked that way, over the turns that lie
+wholly inside the rod.
 
 ## Risks / Trade-offs
 
