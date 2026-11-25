@@ -43,8 +43,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`save_as` with `as_copy`** (#276): writes a copy and keeps the original
   open, as Save As's "Save as copy and continue" does, so assemblies keep
   using the original. The reply has `current_path` and `kept_original`.
+- **`create_revolve` revolves about a sketch line by its id**: `axis_entity`
+  takes the id `add_centerline` (or `add_line`) returned, such as
+  `Centerline_1`, as well as a reference axis from `create_axis`. The line is
+  selected by its name in the closed sketch (`Line1@Sketch1`, as
+  `EXTSKETCHSEGMENT`) with mark 4, the mark `FeatureRevolve2` reads its axis
+  from. An id counts only for the sketch `exit_sketch` closed last, since every
+  sketch numbers its ids from 1.
 
 ### Fixed
+
+- **`create_hole` puts the hole exactly at `face_point`.** SolidWorks puts a
+  Hole Wizard hole where the face was picked, and the pick landed about
+  0.04 mm off: a Ø6 hole asked for at (-20, 20, -12) mm had its axis at
+  (-20.043, -12.039) on SolidWorks 2026. The hole's position sketch point is
+  now moved onto the exact point (`ISketchPoint.SetCoords`) and read back; a
+  hole that can't be moved is removed and the call fails.
+- **Save As and Save a Copy are kept apart in the code and the tool
+  descriptions.** The exports passed `SaveAs3` option 2 with a comment calling
+  it Silent; 2 is `swSaveAsOptions_Copy` (Silent is 1). Copy is what an export
+  should do, so the value is unchanged; the options are now named once
+  (`com_utils.SAVE_AS_COPY`, `SAVE_AS_SILENT`), and the `export_*`
+  descriptions say they write a copy and leave the open document on its own
+  file, where they said "like File > Save As".
 
 - **`create_axis` in an assembly names the new axis.** It read the last
   item in the tree, which in an assembly is the Mates folder, so the axis
@@ -112,6 +133,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compares the hole's and the pin's axis directions (set by how each feature
   was built, not by the geometry), SolidWorks 2024 flipped the pin, and the
   flush-bottoms coincident mate was then over-defined (error status 5).
+- **The U-joint replay is no longer a live test**: it is
+  `tests/live/demo_ujoint_replay.py`, run only by name to record the demo.
+  How each of its 294 calls ends on today's server is in
+  `tests/live/data/ujoint/replay_2026-11-25.json`, and the nine that end
+  differently from the recorded session are explained in
+  `tests/live/data/ujoint/differences.md`: all nine come from names the agent
+  made up, which the old server accepted silently.
 - **`add_mate` says why SolidWorks refused a mate**: each `swAddMateError_e`
   status is named (over-defined, wrong alignment, wrong selection, wrong mate
   type), and an over-defined concentric mate suggests `closest`. The

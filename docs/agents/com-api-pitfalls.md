@@ -1317,3 +1317,30 @@ Found 2026-09-05 wiring `execute_macro` end-to-end against live SW 2026 (issue #
 | Does a method return IFeature? | Check return type: `(9, 0)` = VT_DISPATCH (object); `(24, 0)` = VT_I4 (integer) |
 | Full COM threading rules | See "COM threading architecture" in [CLAUDE.md](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/CLAUDE.md) |
 | Runbook for live debugging | See "Troubleshooting Runbook" section in [CLAUDE.md](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/CLAUDE.md) |
+
+---
+
+## 45. A Hole Wizard hole sits where the face was picked, not at the point
+
+**Symptom:** `HoleWizard5` after `SelectByID2("", "FACE", x, y, z, ...)` makes
+the hole about 0.04 mm from (x, y, z): a Ø6 hole asked for at (-20, 20, -12) mm
+had its axis at (-20.043, -12.039) on SolidWorks 2026, radius exact. The hole
+goes where the selection point landed, and the pick is not exact.
+
+**Fix:** after the hole is made, find its position sketch (the sub-feature
+sketch with a point near the pick), move that point onto the exact point with
+`ISketchPoint.SetCoords` inside `EditSketch` / `InsertSketch(True)`, and read
+it back (`part_features._place_holes`).
+
+---
+
+## 46. A closed sketch's line selects by name as `EXTSKETCHSEGMENT`
+
+**Symptom:** after `InsertSketch(True)`,
+`SelectByID2("Line1@Sketch1", "SKETCHSEGMENT", ...)` returns `False` (seen live
+on SolidWorks 2026), so a revolve can't be given the sketch's centreline as its
+axis that way.
+
+**Fix:** read the segment's name (`ISketchSegment.GetName()`, e.g. `Line1`)
+while the handle is held and select `"Line1@Sketch1"` as `EXTSKETCHSEGMENT`,
+appended with mark 4 for `FeatureRevolve2` (`features._select_sketch_axis`).

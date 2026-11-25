@@ -21,4 +21,13 @@
 - [x] 4.1 Unit suite at 100% coverage, ruff, mypy, mkdocs strict
 - [x] 4.2 Every test in the live file passes on SolidWorks 2026
 - [ ] 4.3 The user reviews; the reporter reruns the selftest and the reports on 2024 (the user posts replies)
-- [ ] 4.4 Ask: `create_hole` places a hole ~0.04 mm off its point; export `SaveAs3` option 2 is Copy, not Silent
+- [x] 4.4 Asked: the hole offset is to be fixed now; Save As and Save a Copy kept apart
+
+## 5. Follow-ups from the full live run (2026-11-25)
+
+- [x] 5.1 `create_hole` moves the hole's position sketch point exactly onto `face_point` (`_place_holes`); live: axis at (-20.000, -12.000), was (-20.043, -12.039)
+- [x] 5.2 `create_revolve` takes a sketch line's id as `axis_entity` (`EXTSKETCHSEGMENT` by name, mark 4); live: the verify_model revolve adds 12566.37 mm3
+- [x] 5.3 `SaveAs3` / `SaveAs2` options named (`SAVE_AS_COPY`, `SAVE_AS_SILENT`); export descriptions say they write a copy
+- [x] 5.4 The U-joint replay leaves the live suite (`demo_ujoint_replay.py`); its calls and today's answers are recorded, the nine differences explained
+- [x] 5.5 The measure live test reads a face's centre, not an edge point
+- [x] 5.6 Rerun the live files that make holes and revolves: 7 files pass; `drawing_pack` failed once in `arrange_dimensions` (one auto-dimension outside the frame) and passed on rerun, a follow-up

@@ -46,9 +46,31 @@ with several configurations; `create_extrusion` selects by name only when
 nothing is selected; the note and section-view corrections do nothing when
 already in place.
 
+### 4. Follow-ups from the full live run
+
+- **Hole position.** `HoleWizard5` puts the hole where `SelectByID2` picked
+  the face, 0.04 mm from the point asked for. The hole's position sketch is
+  edited afterwards: its point is set to the exact point and read back. The
+  sketch is only opened when something moves or is added, and a hole that
+  won't move is removed, as a failed extra position already was.
+- **Revolve about a sketch line.** `exit_sketch` keeps the closed sketch's
+  ids with its name; `create_revolve` uses an id only for that sketch, since
+  every sketch numbers its ids from 1. A made-up word such as `centerline`
+  is still refused: guessing would hide the agent's mistake, as the old
+  server's silent fallbacks did in the U-joint session.
+- **Save As versus a copy.** The option values stay as they are (the exports
+  already wrote copies); only their names, comments and descriptions change.
+- **The U-joint replay** depends on the model and the prompting, and takes
+  over ten minutes, so it isn't a test. Its record of how each call ends today
+  is checked in, and the demo compares against that record when it is
+  recorded.
+
 ## Risks / Trade-offs
 
 - [The retry hides a real missing member] → it only retries on "Member not
   found" and re-raises the retry's own error, which names the member.
+- [Moving the hole edits a sketch after the feature is made] → the edit is the
+  same one extra positions already used live; it runs only when the point is
+  more than 0.0001 mm off.
 - [Widening the face tolerance picks a face for a point slightly off it] →
   0.1 mm is far below any feature size; the nearest face still wins.
