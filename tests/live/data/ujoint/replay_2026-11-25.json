@@ -1,0 +1,3431 @@
+[
+ {
+  "call": 1,
+  "tool": "get_model_info",
+  "args": {},
+  "recorded_status": "error",
+  "replayed_status": "error",
+  "replayed_message": "No active model",
+  "error_type": "no_active_document"
+ },
+ {
+  "call": 2,
+  "tool": "create_part",
+  "args": {
+   "name": "bracket",
+   "units": "mm"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new part: Part231"
+ },
+ {
+  "call": 3,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Right"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch1' on Right plane"
+ },
+ {
+  "call": 4,
+  "tool": "add_line",
+  "args": {
+   "x1": 0,
+   "y1": 0,
+   "x2": 0,
+   "y2": 82.55
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (0.0, 0.0) to (0.0, 82.55)"
+ },
+ {
+  "call": 5,
+  "tool": "add_line",
+  "args": {
+   "x1": 0,
+   "y1": 82.55,
+   "x2": -57.15,
+   "y2": 82.55
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (0.0, 82.55) to (-57.15, 82.55)"
+ },
+ {
+  "call": 6,
+  "tool": "add_line",
+  "args": {
+   "x1": -57.15,
+   "y1": 82.55,
+   "x2": -57.15,
+   "y2": 88.9
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-57.15, 82.55) to (-57.15, 88.9)"
+ },
+ {
+  "call": 7,
+  "tool": "add_line",
+  "args": {
+   "x1": -57.15,
+   "y1": 88.9,
+   "x2": 6.35,
+   "y2": 88.9
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-57.15, 88.9) to (6.35, 88.9)"
+ },
+ {
+  "call": 8,
+  "tool": "add_line",
+  "args": {
+   "x1": 6.35,
+   "y1": 88.9,
+   "x2": 6.35,
+   "y2": -6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (6.35, 88.9) to (6.35, -6.35)"
+ },
+ {
+  "call": 9,
+  "tool": "add_line",
+  "args": {
+   "x1": 6.35,
+   "y1": -6.35,
+   "x2": -46.7612,
+   "y2": -6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (6.35, -6.35) to (-46.7612, -6.35)"
+ },
+ {
+  "call": 10,
+  "tool": "add_line",
+  "args": {
+   "x1": -46.7612,
+   "y1": -6.35,
+   "x2": -81.2954,
+   "y2": 22.6276
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-46.7612, -6.35) to (-81.2954, 22.6276)"
+ },
+ {
+  "call": 11,
+  "tool": "add_line",
+  "args": {
+   "x1": -81.2954,
+   "y1": 22.6276,
+   "x2": -77.2137,
+   "y2": 27.492
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-81.2954, 22.6276) to (-77.2137, 27.492)"
+ },
+ {
+  "call": 12,
+  "tool": "add_line",
+  "args": {
+   "x1": -77.2137,
+   "y1": 27.492,
+   "x2": -44.45,
+   "y2": 0
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-77.2137, 27.492) to (-44.45, 0.0)"
+ },
+ {
+  "call": 13,
+  "tool": "add_line",
+  "args": {
+   "x1": -44.45,
+   "y1": 0,
+   "x2": 0,
+   "y2": 0
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-44.45, 0.0) to (0.0, 0.0)"
+ },
+ {
+  "call": 14,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 15,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch1",
+   "depth": 38.1,
+   "end_condition": "MidPlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude1"
+ },
+ {
+  "call": 16,
+  "tool": "select_face_edges",
+  "args": {
+   "point": [
+    0,
+    88.9,
+    30
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Selected 4 edge(s) (linear) on the face at [0.0, 88.9, 25.4] mm"
+ },
+ {
+  "call": 17,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Top"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch2' on Top plane"
+ },
+ {
+  "call": 18,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": -38.1,
+   "radius": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, -38.1) with radius 6.35mm"
+ },
+ {
+  "call": 19,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 20,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch2",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude1"
+ },
+ {
+  "call": 21,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Top Plane",
+   "offset": 82.55
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane1"
+ },
+ {
+  "call": 22,
+  "tool": "select_face_edges",
+  "args": {
+   "plane": "Plane1"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Selected 5 edge(s) (circular, linear) on the face at [0.0, 82.55, 28.575] mm"
+ },
+ {
+  "call": 23,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Front Plane",
+   "offset": 57.15
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane2"
+ },
+ {
+  "call": 24,
+  "tool": "select_face_edges",
+  "args": {
+   "plane": "Plane2"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Selected 4 edge(s) (linear) on the face at [0.0, 85.725, 57.15] mm"
+ },
+ {
+  "call": 25,
+  "tool": "delete_feature",
+  "args": {
+   "name": "Plane2"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Deleted Plane2"
+ },
+ {
+  "call": 26,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Front Plane",
+   "offset": 38.1
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane3"
+ },
+ {
+  "call": 27,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Top Plane",
+   "offset": 89.9
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane4"
+ },
+ {
+  "call": 28,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "face:0,0.013746,0.060831",
+   "offset": 1
+  },
+  "recorded_status": "error",
+  "replayed_status": "error",
+  "replayed_message": "Failed to create reference plane: Error in create_reference_plane: Failed to select reference plane/face: face:0,0.013746,0.060831. Use an existing plane name (e.g. 'Front Plane'), or face_point for a face.",
+  "error_type": "operation_failed"
+ },
+ {
+  "call": 29,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane1",
+   "new_name": "ArmUnderside"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane1 to ArmUnderside"
+ },
+ {
+  "call": 30,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane3",
+   "new_name": "HoleAxisPlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane3 to HoleAxisPlane"
+ },
+ {
+  "call": 31,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane4",
+   "new_name": "CrankBottomPlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane4 to CrankBottomPlane"
+ },
+ {
+  "call": 32,
+  "tool": "verify_model",
+  "args": {
+   "bounding_box_mm": [
+    38.1,
+    95.25,
+    87.6454
+   ],
+   "volume_mm3": 56922.83,
+   "solid_body_count": 1,
+   "relative_tolerance": 0.001
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification passed: 3 of 3 checks passed"
+ },
+ {
+  "call": 33,
+  "tool": "save_part",
+  "args": {
+   "file_path": "{out}/bracket.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Part saved as: bracket.SLDPRT"
+ },
+ {
+  "call": 34,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 35,
+  "tool": "create_part",
+  "args": {
+   "name": "Yoke_male",
+   "units": "mm"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new part: Part232"
+ },
+ {
+  "call": 36,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Top"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch1' on Top plane"
+ },
+ {
+  "call": 37,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 19.05
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 19.05mm"
+ },
+ {
+  "call": 38,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 39,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch1",
+   "depth": 47.625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude1"
+ },
+ {
+  "call": 40,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Right"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch2' on Right plane"
+ },
+ {
+  "call": 41,
+  "tool": "add_line",
+  "args": {
+   "x1": -25,
+   "y1": -1,
+   "x2": 25,
+   "y2": -1
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-25.0, -1.0) to (25.0, -1.0)"
+ },
+ {
+  "call": 42,
+  "tool": "add_line",
+  "args": {
+   "x1": 25,
+   "y1": -1,
+   "x2": 25,
+   "y2": 29.21
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (25.0, -1.0) to (25.0, 29.21)"
+ },
+ {
+  "call": 43,
+  "tool": "add_line",
+  "args": {
+   "x1": 25,
+   "y1": 29.21,
+   "x2": 19.05,
+   "y2": 29.21
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (25.0, 29.21) to (19.05, 29.21)"
+ },
+ {
+  "call": 44,
+  "tool": "add_arc",
+  "args": {
+   "center_x": 19.05,
+   "center_y": 19.685,
+   "start_x": 19.05,
+   "start_y": 29.21,
+   "end_x": 9.525,
+   "end_y": 19.685
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added a center arc from (19.05, 29.21) to (9.525, 19.685)"
+ },
+ {
+  "call": 45,
+  "tool": "add_line",
+  "args": {
+   "x1": 9.525,
+   "y1": 19.685,
+   "x2": 9.525,
+   "y2": 9.525
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (9.525, 19.685) to (9.525, 9.525)"
+ },
+ {
+  "call": 46,
+  "tool": "add_arc",
+  "args": {
+   "center_x": 0,
+   "center_y": 9.525,
+   "start_x": -9.525,
+   "start_y": 9.525,
+   "end_x": 9.525,
+   "end_y": 9.525
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added a center arc from (-9.525, 9.525) to (9.525, 9.525)"
+ },
+ {
+  "call": 47,
+  "tool": "add_line",
+  "args": {
+   "x1": -9.525,
+   "y1": 9.525,
+   "x2": -9.525,
+   "y2": 19.685
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-9.525, 9.525) to (-9.525, 19.685)"
+ },
+ {
+  "call": 48,
+  "tool": "add_arc",
+  "args": {
+   "center_x": -19.05,
+   "center_y": 19.685,
+   "start_x": -9.525,
+   "start_y": 19.685,
+   "end_x": -19.05,
+   "end_y": 29.21
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added a center arc from (-9.525, 19.685) to (-19.05, 29.21)"
+ },
+ {
+  "call": 49,
+  "tool": "add_line",
+  "args": {
+   "x1": -19.05,
+   "y1": 29.21,
+   "x2": -25,
+   "y2": 29.21
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-19.05, 29.21) to (-25.0, 29.21)"
+ },
+ {
+  "call": 50,
+  "tool": "add_line",
+  "args": {
+   "x1": -25,
+   "y1": 29.21,
+   "x2": -25,
+   "y2": -1
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (-25.0, 29.21) to (-25.0, -1.0)"
+ },
+ {
+  "call": 51,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 52,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch2",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude1"
+ },
+ {
+  "call": 53,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Front"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch3' on Front plane"
+ },
+ {
+  "call": 54,
+  "tool": "add_rectangle",
+  "args": {
+   "x1": -10.16,
+   "y1": -1,
+   "x2": 10.16,
+   "y2": 29.21
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added rectangle from (-10.16, -1.0) to (10.16, 29.21)"
+ },
+ {
+  "call": 55,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 56,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch3",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude2"
+ },
+ {
+  "call": 57,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Right"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch4' on Right plane"
+ },
+ {
+  "call": 58,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 9.525,
+   "radius": 4.7625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 9.525) with radius 4.7625mm"
+ },
+ {
+  "call": 59,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 60,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch4",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude3"
+ },
+ {
+  "call": 61,
+  "tool": "create_axis",
+  "args": {
+   "reference": "y"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created y axis"
+ },
+ {
+  "call": 62,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Top Plane",
+   "offset": 9.525
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane1"
+ },
+ {
+  "call": 63,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Top Plane",
+   "offset": 47.625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane2"
+ },
+ {
+  "call": 64,
+  "tool": "list_features",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "None"
+ },
+ {
+  "call": 65,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane1",
+   "new_name": "PivotPlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane1 to PivotPlane"
+ },
+ {
+  "call": 66,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane2",
+   "new_name": "TopFacePlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane2 to TopFacePlane"
+ },
+ {
+  "call": 67,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Top"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch5' on Top plane"
+ },
+ {
+  "call": 68,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 4.7625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 4.7625mm"
+ },
+ {
+  "call": 69,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 70,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch5",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude4"
+ },
+ {
+  "call": 71,
+  "tool": "verify_model",
+  "args": {
+   "bounding_box_mm": [
+    38.1,
+    47.625,
+    38.1
+   ],
+   "volume_mm3": 27213.9,
+   "solid_body_count": 1,
+   "feature_count": 5,
+   "relative_tolerance": 0.002
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification failed: 3 of 4 checks passed (failed: feature_count)"
+ },
+ {
+  "call": 72,
+  "tool": "save_part",
+  "args": {
+   "file_path": "{out}/Yoke_female.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Part saved as: Yoke_female.SLDPRT"
+ },
+ {
+  "call": 73,
+  "tool": "delete_feature",
+  "args": {
+   "name": "Cut-Extrude4"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Deleted Cut-Extrude4"
+ },
+ {
+  "call": 74,
+  "tool": "delete_feature",
+  "args": {
+   "name": "Sketch5"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Deleted Sketch5"
+ },
+ {
+  "call": 75,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Front"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch6' on Front plane"
+ },
+ {
+  "call": 76,
+  "tool": "add_line",
+  "args": {
+   "x1": 0,
+   "y1": 47.625,
+   "x2": 6.35,
+   "y2": 47.625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (0.0, 47.625) to (6.35, 47.625)"
+ },
+ {
+  "call": 77,
+  "tool": "add_line",
+  "args": {
+   "x1": 6.35,
+   "y1": 47.625,
+   "x2": 6.35,
+   "y2": 64.4753
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (6.35, 47.625) to (6.35, 64.4753)"
+ },
+ {
+  "call": 78,
+  "tool": "add_line",
+  "args": {
+   "x1": 6.35,
+   "y1": 64.4753,
+   "x2": 5.08,
+   "y2": 66.675
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (6.35, 64.4753) to (5.08, 66.675)"
+ },
+ {
+  "call": 79,
+  "tool": "add_line",
+  "args": {
+   "x1": 5.08,
+   "y1": 66.675,
+   "x2": 0,
+   "y2": 66.675
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (5.08, 66.675) to (0.0, 66.675)"
+ },
+ {
+  "call": 80,
+  "tool": "add_line",
+  "args": {
+   "x1": 0,
+   "y1": 66.675,
+   "x2": 0,
+   "y2": 47.625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (0.0, 66.675) to (0.0, 47.625)"
+ },
+ {
+  "call": 81,
+  "tool": "add_centerline",
+  "args": {
+   "x1": 0,
+   "y1": 40,
+   "x2": 0,
+   "y2": 70
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added centerline from (0.0, 40.0) to (0.0, 70.0)"
+ },
+ {
+  "call": 82,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 83,
+  "tool": "create_revolve",
+  "args": {
+   "sketch_name": "stub",
+   "axis_entity": "centerline",
+   "angle": 360
+  },
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to create revolve: Error in create_revolve: Sketch 'stub' not found in the feature tree. Sketches available to revolve: Sketch1, Sketch2, Sketch3, Sketch4, Sketch6",
+  "error_type": "not_found"
+ },
+ {
+  "call": 84,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Front Plane",
+   "offset": 4.7625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane3"
+ },
+ {
+  "call": 85,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Plane1"
+  },
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to create sketch: Error in create_sketch: Failed to select plane: Plane1: not found in the document. Use Front, Top, Right, or a plane's name from list_features.",
+  "error_type": "not_found"
+ },
+ {
+  "call": 86,
+  "tool": "add_rectangle",
+  "args": {
+   "x1": -10,
+   "y1": 53.975,
+   "x2": 10,
+   "y2": 70
+  },
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to add rectangle: No active sketch",
+  "error_type": "no_active_sketch"
+ },
+ {
+  "call": 87,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to exit sketch: No active sketch to exit",
+  "error_type": "no_active_sketch"
+ },
+ {
+  "call": 88,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch7",
+   "depth": 10,
+   "end_condition": "ThroughAll"
+  },
+  "recorded_status": "error",
+  "replayed_status": "error",
+  "replayed_message": "Failed to create cut-extrude: Error in create_cut_extrude: Sketch 'Sketch7' not found in the feature tree. Sketches available to cut from: Sketch1, Sketch2, Sketch3, Sketch4, Sketch6",
+  "error_type": "not_found"
+ },
+ {
+  "call": 89,
+  "tool": "delete_feature",
+  "args": {
+   "name": "Sketch7"
+  },
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to delete feature: Error in delete_feature: Feature not found: Sketch7",
+  "error_type": "not_found"
+ },
+ {
+  "call": 90,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Plane3"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch7' on Plane3 plane"
+ },
+ {
+  "call": 91,
+  "tool": "add_rectangle",
+  "args": {
+   "x1": -10,
+   "y1": 53.975,
+   "x2": 10,
+   "y2": 70
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added rectangle from (-10.0, 53.975) to (10.0, 70.0)"
+ },
+ {
+  "call": 92,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 93,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch8",
+   "depth": 10,
+   "end_condition": "ThroughAll"
+  },
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to create cut-extrude: Error in create_cut_extrude: Sketch 'Sketch8' not found in the feature tree. Sketches available to cut from: Sketch1, Sketch2, Sketch3, Sketch4, Sketch6, Sketch7",
+  "error_type": "not_found"
+ },
+ {
+  "call": 94,
+  "tool": "delete_feature",
+  "args": {
+   "name": "Cut-Extrude9"
+  },
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to delete feature: Error in delete_feature: Feature not found: Cut-Extrude9",
+  "error_type": "not_found"
+ },
+ {
+  "call": 95,
+  "tool": "list_features",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "None"
+ },
+ {
+  "call": 96,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch8",
+   "depth": 10,
+   "end_condition": "ThroughAll",
+   "reverse_direction": true
+  },
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to create cut-extrude: Error in create_cut_extrude: Sketch 'Sketch8' not found in the feature tree. Sketches available to cut from: Sketch1, Sketch2, Sketch3, Sketch4, Sketch6, Sketch7",
+  "error_type": "not_found"
+ },
+ {
+  "call": 97,
+  "tool": "verify_model",
+  "args": {
+   "bounding_box_mm": [
+    38.1,
+    66.675,
+    38.1
+   ],
+   "volume_mm3": 30782,
+   "solid_body_count": 1,
+   "relative_tolerance": 0.002
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification failed: 1 of 3 checks passed (failed: volume_mm3, bounding_box_mm)"
+ },
+ {
+  "call": 98,
+  "tool": "save_part",
+  "args": {
+   "file_path": "{out}/Yoke_male.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Part saved as: Yoke_male.SLDPRT"
+ },
+ {
+  "call": 99,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 100,
+  "tool": "create_part",
+  "args": {
+   "name": "spider",
+   "units": "mm"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new part: Part233"
+ },
+ {
+  "call": 101,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Front"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch1' on Front plane"
+ },
+ {
+  "call": 102,
+  "tool": "add_rectangle",
+  "args": {
+   "x1": -9.525,
+   "y1": -9.525,
+   "x2": 9.525,
+   "y2": 9.525
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added rectangle from (-9.525, -9.525) to (9.525, 9.525)"
+ },
+ {
+  "call": 103,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 104,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch1",
+   "depth": 19.05,
+   "end_condition": "MidPlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude1"
+ },
+ {
+  "call": 105,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Front"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch2' on Front plane"
+ },
+ {
+  "call": 106,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 4.7625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 4.7625mm"
+ },
+ {
+  "call": 107,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 108,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch2",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude1"
+ },
+ {
+  "call": 109,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Right"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch3' on Right plane"
+ },
+ {
+  "call": 110,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 4.7625
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 4.7625mm"
+ },
+ {
+  "call": 111,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 112,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch3",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude2"
+ },
+ {
+  "call": 113,
+  "tool": "create_axis",
+  "args": {
+   "reference": "x"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created x axis"
+ },
+ {
+  "call": 114,
+  "tool": "create_axis",
+  "args": {
+   "reference": "z"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created z axis"
+ },
+ {
+  "call": 115,
+  "tool": "list_features",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "None"
+ },
+ {
+  "call": 116,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Axis1",
+   "new_name": "AxisX"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Axis1 to AxisX"
+ },
+ {
+  "call": 117,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Axis2",
+   "new_name": "AxisZ"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Axis2 to AxisZ"
+ },
+ {
+  "call": 118,
+  "tool": "verify_model",
+  "args": {
+   "bounding_box_mm": [
+    19.05,
+    19.05,
+    19.05
+   ],
+   "volume_mm3": 4774.56,
+   "solid_body_count": 1,
+   "relative_tolerance": 0.001
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification passed: 3 of 3 checks passed"
+ },
+ {
+  "call": 119,
+  "tool": "save_part",
+  "args": {
+   "file_path": "{out}/spider.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Part saved as: spider.SLDPRT"
+ },
+ {
+  "call": 120,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 121,
+  "tool": "create_part",
+  "args": {
+   "name": "pin",
+   "units": "mm"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new part: Part234"
+ },
+ {
+  "call": 122,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Right"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch1' on Right plane"
+ },
+ {
+  "call": 123,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 4.699
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 4.699mm"
+ },
+ {
+  "call": 124,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 125,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch1",
+   "depth": 38.1,
+   "end_condition": "MidPlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude1"
+ },
+ {
+  "call": 126,
+  "tool": "create_axis",
+  "args": {
+   "reference": "x"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created x axis"
+ },
+ {
+  "call": 127,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Axis1",
+   "new_name": "AxisX"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Axis1 to AxisX"
+ },
+ {
+  "call": 128,
+  "tool": "verify_model",
+  "args": {
+   "bounding_box_mm": [
+    38.1,
+    9.398,
+    9.398
+   ],
+   "volume_mm3": 2642.93,
+   "solid_body_count": 1,
+   "relative_tolerance": 0.001
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification passed: 3 of 3 checks passed"
+ },
+ {
+  "call": 129,
+  "tool": "save_part",
+  "args": {
+   "file_path": "{out}/pin.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Part saved as: pin.SLDPRT"
+ },
+ {
+  "call": 130,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 131,
+  "tool": "create_part",
+  "args": {
+   "name": "crank-shaft",
+   "units": "mm"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new part: Part235"
+ },
+ {
+  "call": 132,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Top"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch1' on Top plane"
+ },
+ {
+  "call": 133,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 9.4615
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 9.4615mm"
+ },
+ {
+  "call": 134,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 135,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch1",
+   "depth": 15.875
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude1"
+ },
+ {
+  "call": 136,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Top"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch2' on Top plane"
+ },
+ {
+  "call": 137,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 6.2865
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 6.2865mm"
+ },
+ {
+  "call": 138,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 139,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch2",
+   "depth": 40
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude2"
+ },
+ {
+  "call": 140,
+  "tool": "add_fillet",
+  "args": {
+   "radius": 4.763,
+   "edge_names": [
+    "0.0062865,0.015875,0"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created fillet: Fillet"
+ },
+ {
+  "call": 141,
+  "tool": "verify_model",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured the active part; no expectations were given"
+ },
+ {
+  "call": 142,
+  "tool": "add_fillet",
+  "args": {
+   "radius": 4.763,
+   "edge_names": [
+    "0.0094615,0.016148,0"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created fillet: Fillet"
+ },
+ {
+  "call": 143,
+  "tool": "verify_model",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured the active part; no expectations were given"
+ },
+ {
+  "call": 144,
+  "tool": "list_features",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "None"
+ },
+ {
+  "call": 145,
+  "tool": "export_image",
+  "args": {
+   "file_path": "{out}/shaft_fillets.png",
+   "view_orientation": "front",
+   "width": 800,
+   "height": 800
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exported image: shaft_fillets.png"
+ },
+ {
+  "call": 146,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Top"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch3' on Top plane"
+ },
+ {
+  "call": 147,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 6.477
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 6.477mm"
+ },
+ {
+  "call": 148,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 149,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch3",
+   "depth": 12.7
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude3 (the requested direction found no material, so it cut the other way)"
+ },
+ {
+  "call": 150,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Front Plane",
+   "offset": 4.889
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane1"
+ },
+ {
+  "call": 151,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Plane1"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch4' on Plane1 plane"
+ },
+ {
+  "call": 152,
+  "tool": "add_rectangle",
+  "args": {
+   "x1": -5,
+   "y1": 0,
+   "x2": 5,
+   "y2": 12.7
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added rectangle from (-5.0, 0.0) to (5.0, 12.7)"
+ },
+ {
+  "call": 153,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 154,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch4",
+   "depth": 2
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude3"
+ },
+ {
+  "call": 155,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Front"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch5' on Front plane"
+ },
+ {
+  "call": 156,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 6.35,
+   "radius": 1.1905
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 6.35) with radius 1.1905mm"
+ },
+ {
+  "call": 157,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 158,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch5",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude4"
+ },
+ {
+  "call": 159,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Plane1"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch6' on Plane1 plane"
+ },
+ {
+  "call": 160,
+  "tool": "add_rectangle",
+  "args": {
+   "x1": -10,
+   "y1": 33.65,
+   "x2": 10,
+   "y2": 45
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added rectangle from (-10.0, 33.65) to (10.0, 45.0)"
+ },
+ {
+  "call": 161,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 162,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch6",
+   "depth": 10,
+   "end_condition": "ThroughAll",
+   "reverse_direction": true
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude5"
+ },
+ {
+  "call": 163,
+  "tool": "select_face_edges",
+  "args": {
+   "side": "top",
+   "edge_type": "circular"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Selected 1 edge(s) (circular) on the face at [0.0, 40.0, -0.69875] mm"
+ },
+ {
+  "call": 164,
+  "tool": "add_chamfer",
+  "args": {
+   "distance": 0.794,
+   "edge_names": []
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created chamfer: Chamfer1"
+ },
+ {
+  "call": 165,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Top Plane",
+   "offset": 33.65
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane2"
+ },
+ {
+  "call": 166,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane2",
+   "new_name": "ShoulderPlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane2 to ShoulderPlane"
+ },
+ {
+  "call": 167,
+  "tool": "create_axis",
+  "args": {
+   "reference": "y"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created y axis"
+ },
+ {
+  "call": 168,
+  "tool": "verify_model",
+  "args": {
+   "bounding_box_mm": [
+    18.923,
+    40,
+    18.923
+   ],
+   "volume_mm3": 5933.2,
+   "solid_body_count": 1,
+   "relative_tolerance": 0.002
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification passed: 3 of 3 checks passed"
+ },
+ {
+  "call": 169,
+  "tool": "save_part",
+  "args": {
+   "file_path": "{out}/crank-shaft.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Part saved as: crank-shaft.SLDPRT"
+ },
+ {
+  "call": 170,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 171,
+  "tool": "create_part",
+  "args": {
+   "name": "crank-arm",
+   "units": "mm"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new part: Part236"
+ },
+ {
+  "call": 172,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Top"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch1' on Top plane"
+ },
+ {
+  "call": 173,
+  "tool": "add_rectangle",
+  "args": {
+   "x1": -9.525,
+   "y1": -9.525,
+   "x2": 9.525,
+   "y2": 65.475
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added rectangle from (-9.525, -9.525) to (9.525, 65.475)"
+ },
+ {
+  "call": 174,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 175,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch1",
+   "depth": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude1"
+ },
+ {
+  "call": 176,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Top"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch2' on Top plane"
+ },
+ {
+  "call": 177,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 0,
+   "radius": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 0.0) with radius 6.35mm"
+ },
+ {
+  "call": 178,
+  "tool": "add_circle",
+  "args": {
+   "center_x": 0,
+   "center_y": 55.95,
+   "radius": 2.3815
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added circle at (0.0, 55.95) with radius 2.3815mm"
+ },
+ {
+  "call": 179,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 180,
+  "tool": "create_cut_extrude",
+  "args": {
+   "sketch_name": "Sketch2",
+   "depth": 10,
+   "end_condition": "ThroughAllBoth"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created cut-extrude: Cut-Extrude1"
+ },
+ {
+  "call": 181,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Front Plane",
+   "offset": 4.889
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane1"
+ },
+ {
+  "call": 182,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Plane1"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch3' on Plane1 plane"
+ },
+ {
+  "call": 183,
+  "tool": "add_rectangle",
+  "args": {
+   "x1": -5,
+   "y1": 0,
+   "x2": 5,
+   "y2": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added rectangle from (-5.0, 0.0) to (5.0, 6.35)"
+ },
+ {
+  "call": 184,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 185,
+  "tool": "create_extrusion",
+  "args": {
+   "sketch_name": "Sketch3",
+   "depth": 2
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created extrusion: Boss-Extrude2"
+ },
+ {
+  "call": 186,
+  "tool": "select_face_edges",
+  "args": {
+   "side": "front"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Selected 4 edge(s) (linear) on the face at [0.0, 3.175, 9.525] mm"
+ },
+ {
+  "call": 187,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Front Plane",
+   "offset": 65.475,
+   "flip": true
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane2"
+ },
+ {
+  "call": 188,
+  "tool": "select_face_edges",
+  "args": {
+   "plane": "Plane2"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Selected 4 edge(s) (linear) on the face at [0.0, 3.175, -65.475] mm"
+ },
+ {
+  "call": 189,
+  "tool": "delete_feature",
+  "args": {
+   "name": "Plane2"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Deleted Plane2"
+ },
+ {
+  "call": 190,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Front Plane",
+   "offset": 55.95,
+   "flip": true
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane3"
+ },
+ {
+  "call": 191,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Top Plane",
+   "offset": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane4"
+ },
+ {
+  "call": 192,
+  "tool": "list_features",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "None"
+ },
+ {
+  "call": 193,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane3",
+   "new_name": "SmallHolePlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane3 to SmallHolePlane"
+ },
+ {
+  "call": 194,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane4",
+   "new_name": "TopFacePlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane4 to TopFacePlane"
+ },
+ {
+  "call": 195,
+  "tool": "select_face_edges",
+  "args": {
+   "plane": "TopFacePlane",
+   "edge_type": "circular"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Selected 2 edge(s) (circular) on the face at [0.0, 6.35, -27.975] mm"
+ },
+ {
+  "call": 196,
+  "tool": "verify_model",
+  "args": {
+   "bounding_box_mm": [
+    19.05,
+    6.35,
+    75
+   ],
+   "volume_mm3": 8206.43,
+   "solid_body_count": 1,
+   "relative_tolerance": 0.001
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification passed: 3 of 3 checks passed"
+ },
+ {
+  "call": 197,
+  "tool": "save_part",
+  "args": {
+   "file_path": "{out}/crank-arm.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Part saved as: crank-arm.SLDPRT"
+ },
+ {
+  "call": 198,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 199,
+  "tool": "create_part",
+  "args": {
+   "name": "crank-knob",
+   "units": "mm"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new part: Part237"
+ },
+ {
+  "call": 200,
+  "tool": "create_sketch",
+  "args": {
+   "plane": "Front"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created sketch 'Sketch1' on Front plane"
+ },
+ {
+  "call": 201,
+  "tool": "add_line",
+  "args": {
+   "x1": 0,
+   "y1": 0,
+   "x2": 2.286,
+   "y2": 0
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (0.0, 0.0) to (2.286, 0.0)"
+ },
+ {
+  "call": 202,
+  "tool": "add_line",
+  "args": {
+   "x1": 2.286,
+   "y1": 0,
+   "x2": 2.286,
+   "y2": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (2.286, 0.0) to (2.286, 6.35)"
+ },
+ {
+  "call": 203,
+  "tool": "add_line",
+  "args": {
+   "x1": 2.286,
+   "y1": 6.35,
+   "x2": 4.7625,
+   "y2": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (2.286, 6.35) to (4.7625, 6.35)"
+ },
+ {
+  "call": 204,
+  "tool": "add_arc",
+  "args": {
+   "center_x": 11.1125,
+   "center_y": 6.35,
+   "start_x": 11.1125,
+   "start_y": 12.7,
+   "end_x": 4.7625,
+   "end_y": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added a center arc from (11.1125, 12.7) to (4.7625, 6.35)"
+ },
+ {
+  "call": 205,
+  "tool": "add_arc",
+  "args": {
+   "center_x": 11.1125,
+   "center_y": 17.4625,
+   "start_x": 11.1125,
+   "start_y": 12.7,
+   "end_x": 11.1125,
+   "end_y": 22.225
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added a center arc from (11.1125, 12.7) to (11.1125, 22.225)"
+ },
+ {
+  "call": 206,
+  "tool": "add_line",
+  "args": {
+   "x1": 11.1125,
+   "y1": 22.225,
+   "x2": 0,
+   "y2": 22.225
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (11.1125, 22.225) to (0.0, 22.225)"
+ },
+ {
+  "call": 207,
+  "tool": "add_line",
+  "args": {
+   "x1": 0,
+   "y1": 22.225,
+   "x2": 0,
+   "y2": 0
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added line from (0.0, 22.225) to (0.0, 0.0)"
+ },
+ {
+  "call": 208,
+  "tool": "add_centerline",
+  "args": {
+   "x1": 0,
+   "y1": -5,
+   "x2": 0,
+   "y2": 30
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added centerline from (0.0, -5.0) to (0.0, 30.0)"
+ },
+ {
+  "call": 209,
+  "tool": "exit_sketch",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exited sketch editing mode"
+ },
+ {
+  "call": 210,
+  "tool": "create_revolve",
+  "args": {
+   "sketch_name": "Sketch1",
+   "axis_entity": "centerline",
+   "angle": 360
+  },
+  "recorded_status": "success",
+  "replayed_status": "error",
+  "replayed_message": "Failed to create revolve: Error in create_revolve: Axis 'centerline' is neither a sketch line's id (from add_centerline or add_line) nor a reference axis in the model. Give the id add_centerline returned, create an axis with create_axis, or leave axis_entity out to use the sketch's centreline.",
+  "error_type": "operation_failed"
+ },
+ {
+  "call": 211,
+  "tool": "create_axis",
+  "args": {
+   "reference": "y"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created y axis"
+ },
+ {
+  "call": 212,
+  "tool": "create_reference_plane",
+  "args": {
+   "reference": "Top Plane",
+   "offset": 6.35
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created reference plane: Plane1"
+ },
+ {
+  "call": 213,
+  "tool": "rename_feature",
+  "args": {
+   "old_name": "Plane1",
+   "new_name": "StepPlane"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Renamed Plane1 to StepPlane"
+ },
+ {
+  "call": 214,
+  "tool": "verify_model",
+  "args": {
+   "bounding_box_mm": [
+    31.75,
+    22.225,
+    31.75
+   ],
+   "volume_mm3": 7528.07,
+   "solid_body_count": 1,
+   "relative_tolerance": 0.001
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification failed: 0 of 3 checks passed (failed: volume_mm3, bounding_box_mm, solid_body_count)"
+ },
+ {
+  "call": 215,
+  "tool": "save_part",
+  "args": {
+   "file_path": "{out}/crank-knob.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Part saved as: crank-knob.SLDPRT"
+ },
+ {
+  "call": 216,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 217,
+  "tool": "create_assembly",
+  "args": {
+   "name": "crank sub"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new assembly: Assem26"
+ },
+ {
+  "call": 218,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/crank-shaft.SLDPRT"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted crank-shaft-1"
+ },
+ {
+  "call": 219,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/crank-arm.SLDPRT",
+   "x": 0,
+   "y": 33.65,
+   "z": 0
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted crank-arm-1"
+ },
+ {
+  "call": 220,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/crank-knob.SLDPRT",
+   "x": 0,
+   "y": 33.65,
+   "z": -55.95
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted crank-knob-1"
+ },
+ {
+  "call": 221,
+  "tool": "list_components",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "3 component(s) in the assembly"
+ },
+ {
+  "call": 222,
+  "tool": "list_features",
+  "args": {
+   "max_assembly_depth": 1
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "None"
+ },
+ {
+  "call": 223,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-arm-1",
+   "entity_a": "Top Plane",
+   "component_b": "crank-shaft-1",
+   "entity_b": "ShoulderPlane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-arm-1 and crank-shaft-1"
+ },
+ {
+  "call": 224,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-arm-1",
+   "entity_a": "Right Plane",
+   "component_b": "crank-shaft-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-arm-1 and crank-shaft-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 225,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-arm-1",
+   "entity_a": "Front Plane",
+   "component_b": "crank-shaft-1",
+   "entity_b": "Front Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-arm-1 and crank-shaft-1"
+ },
+ {
+  "call": 226,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-knob-1",
+   "entity_a": "Axis1",
+   "component_b": "crank-arm-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-knob-1 and crank-arm-1"
+ },
+ {
+  "call": 227,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-knob-1",
+   "entity_a": "Axis1",
+   "component_b": "crank-arm-1",
+   "entity_b": "SmallHolePlane",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-knob-1 and crank-arm-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 228,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-knob-1",
+   "entity_a": "StepPlane",
+   "component_b": "crank-arm-1",
+   "entity_b": "TopFacePlane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-knob-1 and crank-arm-1"
+ },
+ {
+  "call": 229,
+  "tool": "verify_model",
+  "args": {
+   "component_count": 3,
+   "mate_count": 6,
+   "no_interference": true,
+   "bounding_box_mm": [
+    31.75,
+    55.875,
+    81.35
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification failed: 3 of 4 checks passed (failed: bounding_box_mm)"
+ },
+ {
+  "call": 230,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 231,
+  "tool": "create_assembly",
+  "args": {
+   "name": "crank sub"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new assembly: Assem27"
+ },
+ {
+  "call": 232,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/crank-shaft.SLDPRT",
+   "x": 0,
+   "y": 20,
+   "z": 0
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted crank-shaft-1"
+ },
+ {
+  "call": 233,
+  "tool": "verify_model",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured the active assembly; no expectations were given"
+ },
+ {
+  "call": 234,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/crank-arm.SLDPRT",
+   "x": 0,
+   "y": 36.825,
+   "z": -27.975
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted crank-arm-1"
+ },
+ {
+  "call": 235,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/crank-knob.SLDPRT",
+   "x": 0,
+   "y": 44.76,
+   "z": -55.95
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted crank-knob-1"
+ },
+ {
+  "call": 236,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-arm-1",
+   "entity_a": "Top Plane",
+   "component_b": "crank-shaft-1",
+   "entity_b": "ShoulderPlane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-arm-1 and crank-shaft-1"
+ },
+ {
+  "call": 237,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-arm-1",
+   "entity_a": "Right Plane",
+   "component_b": "crank-shaft-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-arm-1 and crank-shaft-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 238,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-arm-1",
+   "entity_a": "Front Plane",
+   "component_b": "crank-shaft-1",
+   "entity_b": "Front Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-arm-1 and crank-shaft-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 239,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-knob-1",
+   "entity_a": "Axis1",
+   "component_b": "crank-arm-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-knob-1 and crank-arm-1"
+ },
+ {
+  "call": 240,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-knob-1",
+   "entity_a": "Axis1",
+   "component_b": "crank-arm-1",
+   "entity_b": "SmallHolePlane",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-knob-1 and crank-arm-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 241,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank-knob-1",
+   "entity_a": "StepPlane",
+   "component_b": "crank-arm-1",
+   "entity_b": "TopFacePlane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank-knob-1 and crank-arm-1"
+ },
+ {
+  "call": 242,
+  "tool": "verify_model",
+  "args": {
+   "component_count": 3,
+   "mate_count": 6,
+   "no_interference": true,
+   "bounding_box_mm": [
+    31.75,
+    55.875,
+    81.35
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification failed: 3 of 4 checks passed (failed: bounding_box_mm)"
+ },
+ {
+  "call": 243,
+  "tool": "save_assembly",
+  "args": {
+   "file_path": "{out}/crank sub.SLDASM"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Assembly saved as: crank sub.SLDASM"
+ },
+ {
+  "call": 244,
+  "tool": "close_model",
+  "args": {
+   "save": false
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Model closed successfully"
+ },
+ {
+  "call": 245,
+  "tool": "create_assembly",
+  "args": {
+   "name": "UJoint"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Created new assembly: Assem28"
+ },
+ {
+  "call": 246,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/bracket.SLDPRT",
+   "x": 0,
+   "y": 41.275,
+   "z": 37.4727
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted bracket-1"
+ },
+ {
+  "call": 247,
+  "tool": "verify_model",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured the active assembly; no expectations were given"
+ },
+ {
+  "call": 248,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/Yoke_male.SLDPRT",
+   "x": 0,
+   "y": 68.2625,
+   "z": 38.1
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted Yoke_male-1"
+ },
+ {
+  "call": 249,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/spider.SLDPRT",
+   "x": 0,
+   "y": 44.45,
+   "z": 38.1
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted spider-1"
+ },
+ {
+  "call": 250,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/pin.SLDPRT",
+   "x": 0,
+   "y": 44.45,
+   "z": 38.1
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted pin-1"
+ },
+ {
+  "call": 251,
+  "tool": "list_components",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "4 component(s) in the assembly"
+ },
+ {
+  "call": 252,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "Yoke_male-1",
+   "entity_a": "Axis1",
+   "component_b": "bracket-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between Yoke_male-1 and bracket-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 253,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "Yoke_male-1",
+   "entity_a": "Axis1",
+   "component_b": "bracket-1",
+   "entity_b": "HoleAxisPlane",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between Yoke_male-1 and bracket-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 254,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "Yoke_male-1",
+   "entity_a": "TopFacePlane",
+   "component_b": "bracket-1",
+   "entity_b": "ArmUnderside",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between Yoke_male-1 and bracket-1"
+ },
+ {
+  "call": 255,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "pin-1",
+   "entity_a": "Right Plane",
+   "component_b": "Yoke_male-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between pin-1 and Yoke_male-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 256,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "pin-1",
+   "entity_a": "Front Plane",
+   "component_b": "Yoke_male-1",
+   "entity_b": "Front Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between pin-1 and Yoke_male-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 257,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "pin-1",
+   "entity_a": "Top Plane",
+   "component_b": "Yoke_male-1",
+   "entity_b": "PivotPlane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between pin-1 and Yoke_male-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 258,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "spider-1",
+   "entity_a": "AxisX",
+   "component_b": "pin-1",
+   "entity_b": "AxisX",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between spider-1 and pin-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 259,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "spider-1",
+   "entity_a": "Right Plane",
+   "component_b": "pin-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between spider-1 and pin-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 260,
+  "tool": "verify_model",
+  "args": {
+   "component_count": 4,
+   "mate_count": 8,
+   "no_interference": true
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification passed: 3 of 3 checks passed"
+ },
+ {
+  "call": 261,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/Yoke_female.SLDPRT",
+   "x": 0,
+   "y": 20,
+   "z": 55
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted Yoke_female-1"
+ },
+ {
+  "call": 262,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/pin.SLDPRT",
+   "x": 0,
+   "y": 44.45,
+   "z": 38.1
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted pin-2"
+ },
+ {
+  "call": 263,
+  "tool": "list_components",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "6 component(s) in the assembly"
+ },
+ {
+  "call": 264,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "pin-2",
+   "entity_a": "Right Plane",
+   "component_b": "Yoke_female-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between pin-2 and Yoke_female-1 (no component moved - the constraint wasalready satisfied)"
+ },
+ {
+  "call": 265,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "pin-2",
+   "entity_a": "Front Plane",
+   "component_b": "Yoke_female-1",
+   "entity_b": "Front Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between pin-2 and Yoke_female-1"
+ },
+ {
+  "call": 266,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "pin-2",
+   "entity_a": "Top Plane",
+   "component_b": "Yoke_female-1",
+   "entity_b": "PivotPlane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between pin-2 and Yoke_female-1"
+ },
+ {
+  "call": 267,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "pin-2",
+   "entity_a": "AxisX",
+   "component_b": "spider-1",
+   "entity_b": "AxisZ",
+   "mate_type": "coincident"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between pin-2 and spider-1"
+ },
+ {
+  "call": 268,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "pin-2",
+   "entity_a": "Right Plane",
+   "component_b": "spider-1",
+   "entity_b": "Front Plane",
+   "mate_type": "coincident",
+   "alignment": "closest"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between pin-2 and spider-1"
+ },
+ {
+  "call": 269,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "Yoke_female-1",
+   "entity_a": "Axis1",
+   "component_b": "bracket-1",
+   "entity_b": "Right Plane",
+   "mate_type": "parallel"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added parallel mate between Yoke_female-1 and bracket-1 (no component moved - the constraint was already satisfied)"
+ },
+ {
+  "call": 270,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "Yoke_female-1",
+   "entity_a": "TopFacePlane",
+   "component_b": "bracket-1",
+   "entity_b": "Top Plane",
+   "mate_type": "angle",
+   "angle": 40,
+   "alignment": "anti_aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added angle mate between Yoke_female-1 and bracket-1"
+ },
+ {
+  "call": 271,
+  "tool": "check_interference",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Interference check completed"
+ },
+ {
+  "call": 272,
+  "tool": "measure_entities",
+  "args": {
+   "entities": [
+    "face:0,0.0152636,0.0625905"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured face:0,0.0152636,0.0625905"
+ },
+ {
+  "call": 273,
+  "tool": "measure_entities",
+  "args": {
+   "entities": [
+    "face:0.01905,0.029129,0.050956"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured face:0.01905,0.029129,0.050956"
+ },
+ {
+  "call": 274,
+  "tool": "measure_entities",
+  "args": {
+   "entities": [
+    "face:0.010,0.0152636,0.0625905",
+    "face:-0.015,0.013746,0.060831"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured face:0.010,0.0152636,0.0625905, face:-0.015,0.013746,0.060831"
+ },
+ {
+  "call": 275,
+  "tool": "measure_entities",
+  "args": {
+   "entities": [
+    "face:0.01905,0.029129,0.050956",
+    "face:-0.015,0.013746,0.060831"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured face:0.01905,0.029129,0.050956, face:-0.015,0.013746,0.060831"
+ },
+ {
+  "call": 276,
+  "tool": "export_image",
+  "args": {
+   "file_path": "{out}/uj_right.png",
+   "view_orientation": "right",
+   "width": 900,
+   "height": 900
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exported image: uj_right.png"
+ },
+ {
+  "call": 277,
+  "tool": "delete_feature",
+  "args": {
+   "name": "Angle1"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Deleted Angle1"
+ },
+ {
+  "call": 278,
+  "tool": "verify_model",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Measured the active assembly; no expectations were given"
+ },
+ {
+  "call": 279,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "Yoke_female-1",
+   "entity_a": "TopFacePlane",
+   "component_b": "bracket-1",
+   "entity_b": "Front Plane",
+   "mate_type": "angle",
+   "angle": 50,
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added angle mate between Yoke_female-1 and bracket-1"
+ },
+ {
+  "call": 280,
+  "tool": "export_image",
+  "args": {
+   "file_path": "{out}/uj_right2.png",
+   "view_orientation": "right",
+   "width": 900,
+   "height": 900
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exported image: uj_right2.png"
+ },
+ {
+  "call": 281,
+  "tool": "check_interference",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Interference check completed"
+ },
+ {
+  "call": 282,
+  "tool": "check_interference",
+  "args": {
+   "components": [
+    "pin-1",
+    "pin-2"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Interference check completed"
+ },
+ {
+  "call": 283,
+  "tool": "check_interference",
+  "args": {
+   "components": [
+    "bracket-1",
+    "Yoke_female-1"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Interference check completed"
+ },
+ {
+  "call": 284,
+  "tool": "check_interference",
+  "args": {
+   "components": [
+    "bracket-1",
+    "Yoke_female-1",
+    "Yoke_male-1",
+    "spider-1",
+    "pin-1",
+    "pin-2"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Interference check completed"
+ },
+ {
+  "call": 285,
+  "tool": "insert_component",
+  "args": {
+   "file_path": "{out}/crank sub.SLDASM",
+   "x": 0,
+   "y": 117.8375,
+   "z": 6.95
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Inserted crank sub-1"
+ },
+ {
+  "call": 286,
+  "tool": "list_components",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "7 component(s) in the assembly"
+ },
+ {
+  "call": 287,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank sub-1",
+   "entity_a": "Right Plane",
+   "component_b": "Yoke_male-1",
+   "entity_b": "Right Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank sub-1 and Yoke_male-1"
+ },
+ {
+  "call": 288,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank sub-1",
+   "entity_a": "Front Plane",
+   "component_b": "Yoke_male-1",
+   "entity_b": "Front Plane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank sub-1 and Yoke_male-1"
+ },
+ {
+  "call": 289,
+  "tool": "add_mate",
+  "args": {
+   "component_a": "crank sub-1",
+   "entity_a": "Top Plane",
+   "component_b": "bracket-1",
+   "entity_b": "CrankBottomPlane",
+   "mate_type": "coincident",
+   "alignment": "aligned"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Added coincident mate between crank sub-1 and bracket-1"
+ },
+ {
+  "call": 290,
+  "tool": "check_interference",
+  "args": {
+   "components": [
+    "crank sub-1",
+    "Yoke_male-1",
+    "bracket-1",
+    "Yoke_female-1",
+    "spider-1",
+    "pin-1",
+    "pin-2"
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Interference check completed"
+ },
+ {
+  "call": 291,
+  "tool": "verify_model",
+  "args": {
+   "component_count": 7,
+   "mate_count": 18,
+   "bounding_box_mm": [
+    38.1,
+    152.125,
+    113.2704
+   ]
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Verification failed: 2 of 3 checks passed (failed: bounding_box_mm)"
+ },
+ {
+  "call": 292,
+  "tool": "rebuild_model",
+  "args": {},
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Rebuilt cleanly; no rebuild errors."
+ },
+ {
+  "call": 293,
+  "tool": "save_assembly",
+  "args": {
+   "file_path": "{out}/UJoint.SLDASM"
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Assembly saved as: UJoint.SLDASM"
+ },
+ {
+  "call": 294,
+  "tool": "export_image",
+  "args": {
+   "file_path": "{out}/uj_iso.png",
+   "view_orientation": "isometric",
+   "width": 900,
+   "height": 900
+  },
+  "recorded_status": "success",
+  "replayed_status": "success",
+  "replayed_message": "Exported image: uj_iso.png"
+ }
+]

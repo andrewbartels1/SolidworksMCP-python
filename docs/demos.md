@@ -130,13 +130,13 @@ what it built. The full comparison is on the
 and [#207](https://github.com/andrewbartels1/SolidworksMCP-python/issues/207)
 tracks writing skills that improve results.
 
-**Source:** [`tests/live/test_live_sw_ujoint_demo.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_ujoint_demo.py),
+**Source:** [`tests/live/demo_ujoint_replay.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/demo_ujoint_replay.py),
 replaying [`with_skill_calls.json`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/data/ujoint/with_skill_calls.json).
 Record it with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tests\scripts\live_demo.ps1 `
-    -Test tests/live/test_live_sw_ujoint_demo.py `
+    -Test tests/live/demo_ujoint_replay.py `
     -CaptureDir docs/assets/demos/ujoint -Record -PromptSeconds 12
 ```
 
