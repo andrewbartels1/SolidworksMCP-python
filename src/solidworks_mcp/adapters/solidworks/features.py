@@ -734,7 +734,7 @@ def _select_revolve_inputs(adapter: Any, params: RevolveParameters) -> str | Non
         return None
     sketch = _resolve_profile_sketch(adapter, sketch_name, purpose="revolve")
     if axis:
-        selected = adapter._attempt(
+        selected = _select_sketch_axis(adapter, axis, sketch) or adapter._attempt(
             lambda: adapter.currentModel.Extension.SelectByID2(
                 axis, "AXIS", 0.0, 0.0, 0.0, True, 4, _null_callout(), 0
             ),
@@ -742,11 +742,64 @@ def _select_revolve_inputs(adapter: Any, params: RevolveParameters) -> str | Non
         )
         if not selected:
             raise Exception(
-                f"Axis '{axis}' is not a reference axis in the model. Create one "
-                "with create_axis, or draw the axis in the sketch with "
-                "add_centerline and leave axis_entity out."
+                f"Axis '{axis}' is neither a sketch line's id (from "
+                "add_centerline or add_line) nor a reference axis in the model. "
+                "Give the id add_centerline returned, create an axis with "
+                "create_axis, or leave axis_entity out to use the sketch's "
+                "centreline."
             )
     return sketch
+
+
+def _select_sketch_axis(adapter: Any, axis: str, sketch: str) -> bool:
+    """Append the sketch line ``axis`` (an id ``add_centerline`` returned)
+    to the selection with mark 4, the mark ``FeatureRevolve2`` reads its axis
+    from, as the reference axis is.
+
+    The sketch is closed by now: ``exit_sketch`` kept its ids in
+    ``_closed_sketch``, and they only count when the revolved sketch is that
+    one (every sketch numbers its ids from 1). The line is selected by its
+    name in the closed sketch: ``"Line1@Sketch1"`` as ``EXTSKETCHSEGMENT``
+    (``SKETCHSEGMENT`` returns ``False`` once the sketch is closed; both seen
+    live on 2026).
+
+    Args:
+        adapter: A connected adapter; its ``_closed_sketch`` is the closed
+            sketch's name and its ids' ``ISketchSegment`` handles.
+        axis: The name the caller gave.
+        sketch: The revolved sketch's tree name.
+
+    Returns:
+        bool: ``True`` when ``axis`` is a tracked line and was selected;
+        ``False`` when it isn't tracked (it may be a reference axis).
+    """
+    closed_name, closed = cast(
+        "tuple[str | None, dict[str, Any]]",
+        getattr(adapter, "_closed_sketch", (None, {})),
+    )
+    segment = closed.get(axis) if closed_name == sketch else None
+    if segment is None or isinstance(segment, (list, tuple)):
+        return False
+    line = sw_type_info.flagged(segment, "ISketchSegment")
+    name = adapter._attempt(lambda: line.GetName(), default=None)
+    if not name:
+        return False
+    return bool(
+        adapter._attempt(
+            lambda: adapter.currentModel.Extension.SelectByID2(
+                f"{name}@{sketch}",
+                "EXTSKETCHSEGMENT",
+                0.0,
+                0.0,
+                0.0,
+                True,
+                4,
+                _null_callout(),
+                0,
+            ),
+            default=False,
+        )
+    )
 
 
 def _create_revolve_impl(

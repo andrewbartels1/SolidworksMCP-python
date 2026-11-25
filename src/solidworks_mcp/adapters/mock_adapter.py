@@ -1438,11 +1438,14 @@ class MockSolidWorksAdapter(
         if isinstance(sketch, AdapterResult):
             return sketch
         axis = getattr(params, "axis_entity", None)
-        if axis and axis not in self._axes:
+        if axis and axis not in self._axes and axis not in self._sketch_entity_ids:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=f"Axis '{axis}' is not a reference axis in the "
-                "model. Create one with create_axis.",
+                error=f"Axis '{axis}' is neither a sketch line's id (from "
+                "add_centerline or add_line) nor a reference axis in the model. "
+                "Give the id add_centerline returned, create an axis with "
+                "create_axis, or leave axis_entity out to use the sketch's "
+                "centreline.",
             )
 
         await asyncio.sleep(self._delays["feature_operation"])

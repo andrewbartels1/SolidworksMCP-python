@@ -248,8 +248,9 @@ class RevolveParameters(BaseModel):
         thin_thickness (float | None): The thin thickness value.
         sketch_name (str | None): The sketch to revolve, by its tree name;
             ``None`` for the sketch closed last.
-        axis_entity (str | None): A reference axis to revolve about, by its
-            tree name; ``None`` for the sketch's own centreline.
+        axis_entity (str | None): The axis to revolve about: a sketch line's
+            id (``add_centerline``) or a reference axis by its tree name;
+            ``None`` for the sketch's own centreline.
     """
 
     angle: float

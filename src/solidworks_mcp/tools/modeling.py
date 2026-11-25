@@ -269,7 +269,8 @@ class CreateRevolveInput(CompatInput):
 
     Attributes:
         angle (float): The angle value.
-        axis_entity (str | None): A reference axis to revolve about.
+        axis_entity (str | None): A sketch line's id or a reference axis to
+            revolve about.
         both_directions (bool): The both directions value.
         merge_result (bool): The merge result value.
         reverse_direction (bool): The reverse direction value.
@@ -287,9 +288,10 @@ class CreateRevolveInput(CompatInput):
     axis_entity: str | None = Field(
         default=None,
         description=(
-            "A reference axis to revolve about, by its name in the feature tree "
-            '(e.g. "Axis1" from `create_axis`); omit to use the centreline '
-            "drawn in the sketch"
+            "The axis to revolve about: the id `add_centerline` (or "
+            '`add_line`) returned, e.g. "Centerline_1", or a reference axis by '
+            'its name in the feature tree, e.g. "Axis1" from `create_axis`; '
+            "omit to use the centreline drawn in the sketch"
         ),
     )
     angle: float = Field(description="Revolve angle in degrees")
@@ -1831,9 +1833,9 @@ async def register_modeling_tools(
         """Revolve a closed sketch around an axis, adding a solid to the active part.
 
         Use it for turned shapes (shafts, knobs). It revolves the sketch `sketch_name`
-        names, or the one `exit_sketch` closed last, about the reference axis
-        `axis_entity` names (from `create_axis`), or about the centreline drawn in the
-        sketch with `add_centerline`. A sketch or axis that isn't in the model fails
+        names, or the one `exit_sketch` closed last, about `axis_entity`: the id
+        `add_centerline` returned or a reference axis from `create_axis`. Left out,
+        the centreline drawn in the sketch is the axis. A sketch or axis that isn't in the model fails
         before anything is built. Needs: an open part and a closed profile with a
         centreline or a reference axis. Changes: adds a Revolve feature. Returns:
         `revolve` (`name`, `sketch` and `axis_entity` when named, `angle`) and

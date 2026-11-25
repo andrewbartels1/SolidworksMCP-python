@@ -41,6 +41,7 @@ from .solidworks import (
     bitmap,
     default_entities,
 )
+from .solidworks.com_utils import SAVE_AS_COPY, SAVE_AS_CURRENT_VERSION
 from .solidworks.dialog_watch import DialogWatch, waited_message
 from .solidworks.feature_walk import walk_feature_tree
 from .solidworks.features import _null_callout, _select_feature_by_name
@@ -1800,6 +1801,9 @@ class PyWin32Adapter(
         self._last_sketch_name: str | None = None
         self._sketch_count: int = 0  # incremented each time a sketch is created
         self._sketch_entities: dict[str, Any] = {}
+        # The sketch exit_sketch closed last: its tree name and its entity
+        # ids, for a feature made from it next (create_revolve's axis).
+        self._closed_sketch: tuple[str | None, dict[str, Any]] = (None, {})
         # Cached (center_x_mm, center_y_mm) for entities whose center can't be
         # recovered via ``GetCenterPoint`` — currently polygons, which register
         # as a SAFEARRAY of segment handles (no single dispatch to read from).
@@ -2296,9 +2300,8 @@ class PyWin32Adapter(
             RuntimeError: If SaveAs3 fails or file is not created.
         """
         try:
-            target_doc.SaveAs3(
-                resolved_path, 0, 2
-            )  # swSaveAsCurrentVersion=0, Silent=2
+            # A copy: the open document keeps its own path.
+            target_doc.SaveAs3(resolved_path, SAVE_AS_CURRENT_VERSION, SAVE_AS_COPY)
             if os.path.exists(resolved_path):
                 return
         except Exception as exc:
@@ -2498,8 +2501,17 @@ class PyWin32Adapter(
         errors = _byref_long(0)
         warnings = _byref_long(0)
         try:
-            # swSaveAsCurrentVersion = 0, swSaveAsOptions_Silent = 2
-            ext.SaveAs2(resolved_path, 0, 2, export_data, "", False, errors, warnings)
+            # A copy: the open document keeps its own path.
+            ext.SaveAs2(
+                resolved_path,
+                SAVE_AS_CURRENT_VERSION,
+                SAVE_AS_COPY,
+                export_data,
+                "",
+                False,
+                errors,
+                warnings,
+            )
         except Exception as exc:
             logger.warning(
                 "[pywin32.export_file] Extension.SaveAs2 failed: {}", str(exc)
@@ -2524,8 +2536,8 @@ class PyWin32Adapter(
         try:
             target_doc.SaveAs3(
                 resolved_path,
-                0,  # swSaveAsCurrentVersion
-                2,  # swSaveAsOptions_Silent
+                SAVE_AS_CURRENT_VERSION,
+                SAVE_AS_COPY,  # the open document keeps its own path
             )
         except Exception as exc:
             logger.warning(
@@ -2628,13 +2640,15 @@ class PyWin32Adapter(
             # ----------------------------------------------------------------
             _ = format_map[format_lower]  # validate format is known; value unused
             logger.debug(
-                "[pywin32.export_file] SaveAs3 {} (version=0, options=Silent)",
+                "[pywin32.export_file] SaveAs3 {} (current version, as a copy)",
                 resolved_path,
             )
+            # An export writes a copy (swSaveAsOptions_Copy): the open document
+            # keeps its own path; the format comes from the file's extension.
             success = target_doc.SaveAs3(  # type: ignore[union-attr]
                 resolved_path,
-                0,  # swSaveAsCurrentVersion — format inferred from file extension
-                2,  # swSaveAsOptions_Silent
+                SAVE_AS_CURRENT_VERSION,
+                SAVE_AS_COPY,
             )
 
             if not success and not os.path.exists(resolved_path):

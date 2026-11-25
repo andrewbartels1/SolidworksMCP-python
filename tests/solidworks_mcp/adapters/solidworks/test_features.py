@@ -3794,8 +3794,71 @@ def test_select_revolve_inputs_names_an_axis_that_is_not_there(monkeypatch) -> N
     )
     params = SimpleNamespace(sketch_name=None, axis_entity="Line1")
 
-    with pytest.raises(Exception, match="Axis 'Line1' is not a reference axis"):
+    with pytest.raises(Exception, match="Axis 'Line1' is neither a sketch line's id"):
         features._select_revolve_inputs(adapter, params)
+
+
+class _NamedLine:
+    """An ``ISketchSegment`` with a name in its sketch."""
+
+    def __init__(self, name: str | None = "Line1") -> None:
+        self.name = name
+
+    def GetName(self) -> str | None:
+        return self.name
+
+
+def _with_lines(
+    adapter: _FakeFeatureAdapter, monkeypatch: pytest.MonkeyPatch, **lines: Any
+) -> None:
+    monkeypatch.setattr(features.sw_type_info, "flagged", lambda obj, *_: obj)
+    monkeypatch.setattr(
+        features, "_resolve_profile_sketch", lambda _a, name, purpose: "Sketch1"
+    )
+    adapter._closed_sketch = ("Sketch1", dict(lines))  # type: ignore[attr-defined]
+
+
+def test_a_centreline_id_is_the_revolve_axis(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The id add_centerline returned is selected by its name in the closed
+    sketch, appended with mark 4 (the mark FeatureRevolve2 reads its axis
+    from); no reference axis is looked up."""
+    adapter = _revolve_adapter(axis_selects=False)
+    _with_lines(adapter, monkeypatch, Centerline_1=_NamedLine("Line1"))
+    params = SimpleNamespace(sketch_name=None, axis_entity="Centerline_1")
+
+    assert features._select_revolve_inputs(adapter, params) == "Sketch1"
+    assert adapter.picks == [("Line1@Sketch1", "EXTSKETCHSEGMENT", True, 4)]
+
+
+def test_a_centreline_id_from_another_sketch_is_not_used(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ids repeat in every sketch: Centerline_1 of Sketch2 isn't Sketch1's."""
+    adapter = _revolve_adapter(axis_selects=False)
+    _with_lines(adapter, monkeypatch, Centerline_1=_NamedLine("Line1"))
+    adapter._closed_sketch = ("Sketch2", adapter._closed_sketch[1])  # type: ignore[attr-defined]
+    params = SimpleNamespace(sketch_name=None, axis_entity="Centerline_1")
+
+    with pytest.raises(Exception, match="neither a sketch line's id"):
+        features._select_revolve_inputs(adapter, params)
+    assert adapter.picks == [("Centerline_1", "AXIS", True, 4)]
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [{"Polygon_1": (object(), object())}, {"Centerline_1": _NamedLine(None)}],
+)
+def test_a_polygon_or_unnamed_line_falls_back_to_a_reference_axis(
+    monkeypatch: pytest.MonkeyPatch, lines: dict[str, Any]
+) -> None:
+    adapter = _revolve_adapter(axis_selects=True)
+    _with_lines(adapter, monkeypatch, **lines)
+    name = next(iter(lines))
+    params = SimpleNamespace(sketch_name=None, axis_entity=name)
+
+    features._select_revolve_inputs(adapter, params)
+
+    assert adapter.picks == [(name, "AXIS", True, 4)]
 
 
 class TestScopedSuppression:

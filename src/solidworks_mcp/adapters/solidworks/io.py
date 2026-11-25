@@ -14,7 +14,7 @@ from ...utils.sw_dependencies import dependency_paths
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
 from . import default_entities
-from .com_utils import string_array
+from .com_utils import SAVE_AS_COPY, SAVE_AS_CURRENT_VERSION, string_array
 from .configurations import (
     SPECIFY_CONFIGURATION,
     THIS_CONFIGURATION,
@@ -89,8 +89,6 @@ _NAMED_VIEWS: dict[str, str] = {
 #: Points to millimetres. Note schemas express text height in points.
 _POINTS_TO_MM = 25.4 / 72.0
 
-#: ``swSaveAsOptions_e.swSaveAsOptions_Copy``: save a copy, keep the original.
-_SAVE_AS_COPY = 2
 
 #: How far (mm) a note's top-left may sit from where it was asked for.
 _NOTE_TOLERANCE_MM = 0.5
@@ -2155,7 +2153,11 @@ class SolidWorksIOMixin:
 
                 # Deliberately no os.remove here: SaveAs3 overwrites, and
                 # deleting first meant a failed save destroyed the old file too.
-                save_as3_result = adapter.currentModel.SaveAs3(resolved_path, 0, 0)
+                # No option flags: File > Save As, the open document becomes
+                # the new file (save_copy is the copy).
+                save_as3_result = adapter.currentModel.SaveAs3(
+                    resolved_path, SAVE_AS_CURRENT_VERSION, 0
+                )
                 if not self._is_success(save_as3_result):
                     save_as = getattr(adapter.currentModel, "SaveAs", None)
                     if callable(save_as):
@@ -2239,7 +2241,9 @@ class SolidWorksIOMixin:
                     "save_file, or give the copy another path."
                 )
             os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
-            returned = adapter.currentModel.SaveAs3(resolved, 0, _SAVE_AS_COPY)
+            returned = adapter.currentModel.SaveAs3(
+                resolved, SAVE_AS_CURRENT_VERSION, SAVE_AS_COPY
+            )
             if not os.path.exists(resolved):
                 raise Exception(
                     f"No copy was written at {resolved} (SaveAs3 returned {returned})."

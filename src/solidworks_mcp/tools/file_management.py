@@ -713,8 +713,8 @@ async def register_file_management_tools(
         For a SolidWorks format (solidworks, sldprt, sldasm, slddrw) it is File >
         Save As: the open document becomes the new file, and open assemblies that use
         it follow it to the new name. With `as_copy` it writes a copy instead and the
-        original stays the open, referenced document. Any other `format_type` is
-        passed to the exporter. For one known format with its options, prefer
+        original stays the open, referenced document. Any other `format_type` is an
+        export: it writes a copy, and the open document keeps its own file. For one known format with its options, prefer
         `export_step`, `export_stl` and the other `export_*` tools. Needs: an open,
         active document. Changes: writes the file. A file already at `file_path` is
         kept and the call refused, unless `overwrite` is on. Returns: `file_path` and

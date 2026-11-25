@@ -490,7 +490,7 @@
     "family": "export",
     "level": "stable",
     "reason": "",
-    "summary": "Export the active document to DWG, like File > Save As with the DWG type."
+    "summary": "Write a DWG copy of the active document; it stays open on its own file."
    },
    {
     "name": "export_flat_pattern",
@@ -504,7 +504,7 @@
     "family": "export",
     "level": "stable",
     "reason": "",
-    "summary": "Export the active document to IGES, like File > Save As with the IGES type."
+    "summary": "Write a IGES copy of the active document; it stays open on its own file."
    },
    {
     "name": "export_image",
@@ -518,21 +518,21 @@
     "family": "export",
     "level": "stable",
     "reason": "",
-    "summary": "Export the active document to PDF, like File > Save As with the PDF type."
+    "summary": "Write a PDF copy of the active document; it stays open on its own file."
    },
    {
     "name": "export_step",
     "family": "export",
     "level": "stable",
     "reason": "",
-    "summary": "Export the active document to STEP, like File > Save As with the STEP type."
+    "summary": "Write a STEP copy of the active document; it stays open on its own file."
    },
    {
     "name": "export_stl",
     "family": "export",
     "level": "stable",
     "reason": "",
-    "summary": "Export the active document to STL, like File > Save As with the STL type."
+    "summary": "Write a STL copy of the active document; it stays open on its own file."
    },
    {
     "name": "find_related_api_members",

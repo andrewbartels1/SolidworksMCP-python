@@ -2713,6 +2713,12 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
         sketch_manager.InsertSketch(True)
         adapter.currentSketch = None
         adapter.currentSketchManager = None
+        # The closed sketch's ids stay readable for a feature made from it
+        # next (create_revolve's axis_entity); a new sketch reuses the ids.
+        adapter._closed_sketch = (
+            getattr(adapter, "_last_sketch_name", None),
+            dict(adapter._sketch_entities),
+        )
         adapter._reset_sketch_entity_registry()
         return "exited"
 
