@@ -13,7 +13,7 @@
 
 An MCP server that lets AI agents drive SolidWorks: describe a part, and the agent builds it with the server's 123 tools and checks what SolidWorks reports back.
 
-🚀 **157 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
+🚀 **159 Tools** | 🤖 **Agent-Ready Workflows** | ⚡ **Automatic COM/VBA Routing** | 🧪 **Schema-Validated Prompt Runs**
 
 ## Overview
 
@@ -43,7 +43,7 @@ The project emphasizes an inspect -> classify -> delegate loop instead of blind 
 
 ### 2) Broad Tool Surface with Practical Coverage
 
-- 157 tools across modeling, assemblies, sketching, drawing, engineering data, analysis, export, automation, templates, macros, and docs discovery
+- 159 tools across modeling, assemblies, sketching, drawing, engineering data, analysis, export, automation, templates, macros, and docs discovery
 - one server API surface for both simple operations and advanced workflows
 
 ### 3) Reliable Execution Path for Complex Operations

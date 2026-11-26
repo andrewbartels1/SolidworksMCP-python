@@ -287,6 +287,13 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_reference_point": _STABLE,
     "create_revolve": _STABLE,
     "create_sweep": _STABLE,
+    # Beta until queue item 34's live demo (task 6.3).
+    "create_cut_sweep": Support(
+        SupportLevel.BETA, "not yet checked on SolidWorks by a live demo."
+    ),
+    "create_helix": Support(
+        SupportLevel.BETA, "not yet checked on SolidWorks by a live demo."
+    ),
     "delete_feature": _STABLE,
     "get_dimension": _STABLE,
     "insert_component": _STABLE,

@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 157,
+  "total": 159,
   "by_level": {
    "stable": 149,
-   "beta": 0,
+   "beta": 2,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -318,6 +318,13 @@
     "summary": "Cut material from the active part with a closed sketch profile: holes, slots, windows."
    },
    {
+    "name": "create_cut_sweep",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks by a live demo.",
+    "summary": "Sweep a closed profile along a path to remove material (Insert > Cut > Sweep)."
+   },
+   {
     "name": "create_detail_view",
     "family": "drawing",
     "level": "stable",
@@ -351,6 +358,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Extrude the sketch you just closed into a solid boss, added to the active part."
+   },
+   {
+    "name": "create_helix",
+    "family": "modeling",
+    "level": "beta",
+    "reason": "not yet checked on SolidWorks by a live demo.",
+    "summary": "Make a helix or a flat spiral from a sketch holding one circle (Insert > Curve > Helix/Spiral)."
    },
    {
     "name": "create_hole",
@@ -434,7 +448,7 @@
     "family": "modeling",
     "level": "stable",
     "reason": "",
-    "summary": "Sweep a closed profile sketch along a path sketch to make a solid (Insert > Boss/Base > Sweep)."
+    "summary": "Sweep a closed profile along a path to add material (Insert > Boss/Base > Sweep)."
    },
    {
     "name": "create_technical_drawing",
@@ -1113,11 +1127,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 284,
+   "covered": 286,
    "total": 2838
   },
   "api": {
-   "covered": 324,
+   "covered": 329,
    "total": 5985
   },
   "interfaces": [
@@ -1209,6 +1223,7 @@
      "InsertDatumTag2",
      "InsertFeatureShell",
      "InsertGtol",
+     "InsertHelix",
      "InsertNote",
      "InsertProtrusionBlend2",
      "InsertProtrusionSwept4",
@@ -1357,6 +1372,7 @@
      "GetFlatPatternFolder",
      "HoleWizard5",
      "InsertCosmeticThread3",
+     "InsertCutSwept5",
      "InsertFeatureChamfer",
      "InsertMirrorFeature",
      "InsertMultiFaceDraft",

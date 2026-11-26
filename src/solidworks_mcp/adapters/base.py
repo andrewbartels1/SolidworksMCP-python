@@ -264,19 +264,62 @@ class RevolveParameters(BaseModel):
 
 
 class SweepParameters(BaseModel):
-    """Parameters for sweep operations.
+    """Parameters for a sweep that adds material, or (``create_cut_sweep``) removes it.
+
+    The profile is, in order of preference: a circle of
+    ``circular_profile_diameter``, the sketch named ``profile``, or the
+    sketch closed last that isn't the path.
 
     Attributes:
-        merge_result (bool): The merge result value.
-        path (str): The path value.
-        twist_along_path (bool): The twist along path value.
-        twist_angle (float): The twist angle value.
+        path (str): The path: a sketch, or a curve such as a helix.
+        profile (str | None): The profile sketch's name.
+        circular_profile_diameter (float | None): Sweep a circle this wide,
+            mm, with no profile sketch.
+        twist_along_path (bool): Twist the profile at a constant rate.
+        twist_angle (float): The twist, degrees.
+        merge_result (bool): Merge with the existing bodies (not used by a
+            cut).
     """
 
     path: str
+    profile: str | None = None
+    circular_profile_diameter: float | None = None
     twist_along_path: bool = False
     twist_angle: float = 0.0
     merge_result: bool = True
+
+
+class HelixParameters(BaseModel):
+    """Parameters for a helix, or a flat spiral, on a sketch holding one circle.
+
+    Two of ``height``, ``pitch`` and ``revolutions`` define it, as
+    ``defined_by`` names (``spiral`` takes pitch and revolutions). Lengths
+    are mm and angles degrees.
+
+    Attributes:
+        sketch (str): The base sketch: exactly one circle.
+        defined_by (str): ``height_and_pitch``, ``height_and_revolutions``,
+            ``pitch_and_revolutions`` or ``spiral``.
+        height (float | None): The height, mm.
+        pitch (float | None): The distance between turns, mm.
+        revolutions (float | None): The number of turns.
+        clockwise (bool): Wind clockwise.
+        reverse (bool): Grow from the other side of the sketch.
+        start_angle (float): Where on the circle it starts, degrees.
+        taper_angle (float | None): A taper, degrees; none for straight.
+        taper_outward (bool): The taper widens rather than narrows.
+    """
+
+    sketch: str
+    defined_by: str = "height_and_pitch"
+    height: float | None = None
+    pitch: float | None = None
+    revolutions: float | None = None
+    clockwise: bool = False
+    reverse: bool = False
+    start_angle: float = 0.0
+    taper_angle: float | None = None
+    taper_outward: bool = False
 
 
 class LoftParameters(BaseModel):
@@ -684,6 +727,38 @@ class SolidWorksAdapter(ABC):
             AdapterResult[SolidWorksFeature]: The result produced by the operation.
         """
         pass
+
+    async def create_cut_sweep(
+        self, params: SweepParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        """Sweep a closed profile along a path and remove material.
+
+        Args:
+            params: The path and profile, as for :meth:`create_sweep`.
+
+        Returns:
+            AdapterResult[SolidWorksFeature]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_cut_sweep is not implemented by this adapter",
+        )
+
+    async def create_helix(
+        self, params: HelixParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A helix or a flat spiral on a sketch holding one circle.
+
+        Args:
+            params: The base sketch and the values that define the helix.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_helix is not implemented by this adapter",
+        )
 
     @abstractmethod
     async def create_loft(

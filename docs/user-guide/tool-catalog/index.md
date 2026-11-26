@@ -1,6 +1,6 @@
-# Tool Catalog — All 157 Tools
+# Tool Catalog — All 159 Tools
 
-This reference documents all **157 MCP tools** registered by the SolidWorks MCP server.
+This reference documents all **159 MCP tools** registered by the SolidWorks MCP server.
 Each section covers one functional category with parameter tables and copy-paste sample calls.
 
 ![Tool categories overview — 109 tools across 12 functional areas](../../assets/images/tool-categories-overview.svg)
@@ -9,7 +9,7 @@ Each section covers one functional category with parameter tables and copy-paste
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| [Modeling Tools](modeling.md) | 42 | Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, Hole Wizard holes, cosmetic threads, shells, drafts, ribs, sheet metal (flanges, bends, the flat pattern), fillets, chamfers, patterns, reference geometry, mates, dimensions, feature renaming and the document unit system. |
+| [Modeling Tools](modeling.md) | 44 | Parts, assemblies and drawings: extrusions, revolves, helices, sweeps and swept cuts, lofts, cuts, Hole Wizard holes, cosmetic threads, shells, drafts, ribs, sheet metal (flanges, bends, the flat pattern), fillets, chamfers, patterns, reference geometry, mates, dimensions, feature renaming and the document unit system. |
 | [Equation Tools](equations.md) | 3 | Equations and global variables: one value driving several dimensions, in all configurations or chosen ones. |
 | [Assembly Tools](assembly.md) | 5 | Exploded views, component patterns and mirrors, and replacing a component with another file. |
 | [Sketching Tools](sketching.md) | 27 | Sketches on a plane or a flat face: lines, circles, arcs, slots, splines, polygons, text, fillets, chamfers, trim and extend, construction geometry, relations, dimensions, offsets, mirrors and patterns. |

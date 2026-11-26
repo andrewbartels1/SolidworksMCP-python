@@ -8,11 +8,12 @@ import re
 from typing import Any, Literal, cast
 
 from fastmcp import FastMCP
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from ..adapters.base import (
     AdapterResult,
     ExtrusionParameters,
+    HelixParameters,
     LoftParameters,
     RevolveParameters,
     SolidWorksAdapter,
@@ -324,19 +325,143 @@ class CreateRevolveInput(CompatInput):
 
 
 class CreateSweepInput(BaseModel):
-    """Input schema for creating a sweep feature.
+    """Input schema for a sweep that adds material.
 
     Attributes:
-        merge_result (bool): The merge result value.
-        path (str): The path value.
-        twist_along_path (bool): The twist along path value.
-        twist_angle (float): The twist angle value.
+        path (str): The path: a sketch, or a curve such as a helix.
+        profile (str | None): The profile sketch's name.
+        circular_profile_diameter (float | None): Sweep a circle this wide, mm.
+        twist_along_path (bool): Twist the profile at a constant rate.
+        twist_angle (float): The twist, degrees.
+        merge_result (bool): Merge with the existing bodies.
     """
 
-    path: str = Field(description="Name or ID of the sweep path")
+    path: str = Field(
+        description="The path: a sketch's name, or a curve's such as "
+        "'Helix/Spiral1' from create_helix"
+    )
+    profile: str | None = Field(
+        default=None,
+        description="The closed profile sketch's name; when omitted, the sketch "
+        "closed last that isn't the path",
+    )
+    circular_profile_diameter: float | None = Field(
+        default=None,
+        gt=0,
+        description="Sweep a circle this wide, mm, with no profile sketch "
+        "(a spring's wire); overrides profile",
+    )
     twist_along_path: bool = Field(default=False, description="Twist along path")
     twist_angle: float = Field(default=0.0, description="Twist angle in degrees")
     merge_result: bool = Field(default=True, description="Merge with existing geometry")
+
+
+class CreateCutSweepInput(BaseModel):
+    """Input schema for a sweep that removes material.
+
+    Attributes:
+        path (str): The path: a sketch, or a curve such as a helix.
+        profile (str | None): The profile sketch's name.
+        circular_profile_diameter (float | None): Sweep a circle this wide, mm.
+        twist_along_path (bool): Twist the profile at a constant rate.
+        twist_angle (float): The twist, degrees.
+    """
+
+    path: str = Field(
+        description="The path: a sketch's name, or a curve's such as "
+        "'Helix/Spiral1' from create_helix"
+    )
+    profile: str | None = Field(
+        default=None,
+        description="The closed profile sketch's name; when omitted, the sketch "
+        "closed last that isn't the path",
+    )
+    circular_profile_diameter: float | None = Field(
+        default=None,
+        gt=0,
+        description="Cut a round groove this wide, mm, with no profile sketch; "
+        "overrides profile",
+    )
+    twist_along_path: bool = Field(default=False, description="Twist along path")
+    twist_angle: float = Field(default=0.0, description="Twist angle in degrees")
+
+
+#: The values each helix ``defined_by`` needs.
+_HELIX_NEEDS: dict[str, tuple[str, str]] = {
+    "height_and_pitch": ("height", "pitch"),
+    "height_and_revolutions": ("height", "revolutions"),
+    "pitch_and_revolutions": ("pitch", "revolutions"),
+    "spiral": ("pitch", "revolutions"),
+}
+
+
+class CreateHelixInput(CompatInput):
+    """Input schema for a helix or a flat spiral.
+
+    Attributes:
+        sketch (str): The base sketch, holding exactly one circle.
+        defined_by (str): Which two values define it.
+        height (float | None): The height, mm.
+        pitch (float | None): The distance between turns, mm.
+        revolutions (float | None): The number of turns.
+        clockwise (bool): Wind clockwise.
+        reverse (bool): Grow from the other side of the sketch.
+        start_angle (float): Where on the circle it starts, degrees.
+        taper_angle (float | None): A taper, degrees.
+        taper_outward (bool): The taper widens rather than narrows.
+    """
+
+    sketch: str = Field(
+        description="The base sketch's name: one circle, whose diameter and "
+        "centre are the helix's; the helix's axis is normal to that sketch"
+    )
+    defined_by: Literal[
+        "height_and_pitch", "height_and_revolutions", "pitch_and_revolutions", "spiral"
+    ] = Field(
+        default="height_and_pitch",
+        description="Which two values define it; 'spiral' is flat, in the "
+        "sketch's plane, and takes pitch and revolutions",
+    )
+    height: float | None = Field(default=None, gt=0, description="Height, mm")
+    pitch: float | None = Field(
+        default=None, gt=0, description="Distance between turns, mm"
+    )
+    revolutions: float | None = Field(
+        default=None, gt=0, description="Number of turns, e.g. 8 or 2.5"
+    )
+    clockwise: bool = Field(default=False, description="Wind clockwise")
+    reverse: bool = Field(
+        default=False, description="Grow from the other side of the sketch"
+    )
+    start_angle: float = Field(
+        default=0.0,
+        description="Where on the circle it starts, degrees; the reply gives "
+        "the start point",
+    )
+    taper_angle: float | None = Field(
+        default=None, gt=0, lt=90, description="A taper, degrees (a cone spring)"
+    )
+    taper_outward: bool = Field(
+        default=False, description="The taper widens rather than narrows"
+    )
+
+    @model_validator(mode="after")
+    def _two_values(self) -> "CreateHelixInput":
+        """The two values ``defined_by`` names are given.
+
+        Raises:
+            ValueError: One of them is missing.
+        """
+        missing = [
+            name
+            for name in _HELIX_NEEDS[self.defined_by]
+            if getattr(self, name) is None
+        ]
+        if missing:
+            raise ValueError(
+                f"defined_by '{self.defined_by}' needs {' and '.join(missing)}"
+            )
+        return self
 
 
 class CreateLoftInput(BaseModel):
@@ -2141,42 +2266,141 @@ async def register_modeling_tools(
             "execution_time": result.execution_time,
         }
 
-    @mcp.tool()
-    async def create_sweep(input_data: CreateSweepInput) -> dict[str, Any]:
-        """Sweep a closed profile sketch along a path sketch to make a solid (Insert > Boss/Base > Sweep).
-
-        Draw the closed profile and the open path as two sketches first. The profile is
-        the sketch you closed last that isn't the path. Needs: an open part with both
-        sketches. Changes: adds a Sweep feature. Returns: `sweep` with `name`, `path`,
-        `twist_along_path` and `twist_angle`.
+    def _sweep_reply(
+        verb: str, key: str, input_data: Any, result: AdapterResult[Any]
+    ) -> dict[str, Any]:
+        """A sweep tool's reply: the feature's name, choices and volumes.
 
         Args:
-            input_data: The sweep. `path` (the path sketch's name) is required;
-                `twist_along_path`, `twist_angle` (degrees) and `merge_result` have
-                defaults.
+            verb: ``"Swept"`` or ``"Cut"``, for the message.
+            key: The reply's key, ``sweep`` or ``cut_sweep``.
+            input_data: The validated input.
+            result: The adapter's successful result.
+
+        Returns:
+            dict[str, Any]: The tool reply.
+        """
+        feature = result.data
+        name = _result_value(feature, "feature_name", "name", default="Sweep")
+        parameters = dict(_result_value(feature, "parameters", default={}) or {})
+        diameter = parameters.get("circular_profile_diameter_mm")
+        shape = (
+            f"a {diameter:g} mm circle"
+            if diameter
+            else str(parameters.get("profile") or "the profile")
+        )
+        return {
+            "status": "success",
+            "message": f"{verb} {shape} along {parameters.get('path', input_data.path)}: {name}",
+            key: {
+                "name": name,
+                "path": input_data.path,
+                "twist_along_path": input_data.twist_along_path,
+                "twist_angle": input_data.twist_angle,
+                **parameters,
+            },
+            "execution_time": result.execution_time,
+        }
+
+    def _sweep_parameters(input_data: Any, merge: bool = True) -> SweepParameters:
+        """The adapter's sweep parameters from either sweep tool's input."""
+        return SweepParameters(
+            path=input_data.path,
+            profile=input_data.profile,
+            circular_profile_diameter=input_data.circular_profile_diameter,
+            twist_along_path=input_data.twist_along_path,
+            twist_angle=input_data.twist_angle,
+            merge_result=merge,
+        )
+
+    @mcp.tool()
+    async def create_sweep(input_data: CreateSweepInput) -> dict[str, Any]:
+        """Sweep a closed profile along a path to add material (Insert > Boss/Base > Sweep).
+
+        The path is a sketch or a curve such as a helix from `create_helix`. The
+        profile is a circle of `circular_profile_diameter` mm (a spring's wire, no
+        sketch needed), the sketch named `profile`, or else the sketch you closed last
+        that isn't the path; draw a profile sketch where the path starts. The volume
+        must grow, or the sweep is removed and the call fails. Needs: an open part with
+        the path (and the profile sketch). Changes: adds a Sweep feature. Returns:
+        `sweep` with `name`, `profile`, `path` and `volume_before`, `volume_after`,
+        `volume_change` (mm³).
+
+        Args:
+            input_data: The sweep. `path` is required; `profile`,
+                `circular_profile_diameter`, `twist_along_path`, `twist_angle`
+                (degrees) and `merge_result` have defaults.
 
         Returns:
             dict[str, Any]: The created sweep.
         """
         input_data = normalize_input(input_data, CreateSweepInput)
-        params = SweepParameters(
-            path=input_data.path,
-            twist_along_path=input_data.twist_along_path,
-            twist_angle=input_data.twist_angle,
-            merge_result=input_data.merge_result,
+        result = await adapter.create_sweep(
+            _sweep_parameters(input_data, input_data.merge_result)
         )
-        result = await adapter.create_sweep(params)
         require_success(result, context="Failed to create sweep")
-        feature = result.data
+        return _sweep_reply("Swept", "sweep", input_data, result)
+
+    @mcp.tool()
+    async def create_cut_sweep(input_data: CreateCutSweepInput) -> dict[str, Any]:
+        """Sweep a closed profile along a path to remove material (Insert > Cut > Sweep).
+
+        Use it for a modelled thread, a helical groove or a channel along a curve: as
+        `create_cut_extrude` is to `create_extrusion`. The path and profile are chosen
+        as for `create_sweep` (a helix from `create_helix` and a profile sketch at its
+        start point, or `circular_profile_diameter`). The volume must go down, or the
+        cut is removed and the call fails. Needs: an open part with a solid the profile
+        overlaps. Changes: adds a Cut-Sweep feature. Returns: `cut_sweep` with `name`,
+        `profile`, `path` and `volume_before`, `volume_after`, `volume_change` (mm³,
+        negative).
+
+        Args:
+            input_data: The cut. `path` is required; `profile`,
+                `circular_profile_diameter`, `twist_along_path` and `twist_angle`
+                (degrees) have defaults.
+
+        Returns:
+            dict[str, Any]: The created cut sweep.
+        """
+        input_data = normalize_input(input_data, CreateCutSweepInput)
+        result = await adapter.create_cut_sweep(_sweep_parameters(input_data))
+        require_success(result, context="Failed to create the cut sweep")
+        return _sweep_reply("Cut", "cut_sweep", input_data, result)
+
+    @mcp.tool()
+    async def create_helix(input_data: CreateHelixInput) -> dict[str, Any]:
+        """Make a helix or a flat spiral from a sketch holding one circle (Insert > Curve > Helix/Spiral).
+
+        The path for a spring, a modelled thread or a coil: sketch one circle (its
+        diameter and centre are the helix's; the axis is normal to the sketch), close
+        the sketch, then give two of `height`, `pitch` and `revolutions` as
+        `defined_by` names. The reply gives all three, the length and `start_point_mm`,
+        where to draw a sweep profile (on a Top-plane circle, `start_angle` 90 puts the
+        start on the Front plane). Then `create_sweep` or `create_cut_sweep` with the
+        helix's name as `path`. Needs: an open part with the circle sketch closed.
+        Changes: adds a Helix/Spiral curve (no solid). Returns: `helix` with `name`,
+        `height_mm`, `pitch_mm`, `revolutions`, `diameter_mm`, `length_mm` and
+        `start_point_mm`.
+
+        Args:
+            input_data: The helix. `sketch` is required, with the two values
+                `defined_by` (default `height_and_pitch`) names; `clockwise`,
+                `reverse`, `start_angle`, `taper_angle` and `taper_outward` have
+                defaults.
+
+        Returns:
+            dict[str, Any]: The helix.
+        """
+        input_data = normalize_input(input_data, CreateHelixInput)
+        result = await adapter.create_helix(HelixParameters(**input_data.model_dump()))
+        require_success(result, context="Failed to create the helix")
+        data = result.data if isinstance(result.data, dict) else {}
         return {
             "status": "success",
-            "message": f"Created sweep: {_result_value(feature, 'feature_name', 'name', default='Sweep')}",
-            "sweep": {
-                "name": _result_value(feature, "feature_name", "name", default="Sweep"),
-                "path": input_data.path,
-                "twist_along_path": input_data.twist_along_path,
-                "twist_angle": input_data.twist_angle,
-            },
+            "message": f"Made {data.get('name', 'a helix')}: "
+            f"{data.get('revolutions', 0):g} turns at {data.get('pitch_mm', 0):g} mm "
+            f"pitch, {data.get('length_mm', 0):g} mm long",
+            "helix": data,
             "execution_time": result.execution_time,
         }
 

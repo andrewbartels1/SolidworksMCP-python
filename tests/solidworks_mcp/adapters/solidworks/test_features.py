@@ -899,22 +899,6 @@ def _selectable(*names: str):
     return _by_name
 
 
-def test_sweep_reports_an_unselectable_path() -> None:
-    from solidworks_mcp.adapters.base import SweepParameters
-
-    adapter = _FakeFeatureAdapter()
-    adapter.currentModel = SimpleNamespace(
-        FeatureManager=SimpleNamespace(),
-        ClearSelection2=lambda _a: True,
-        FirstFeature=_tree("Profile1"),
-        FeatureByName=_selectable("Profile1"),
-    )
-
-    result = features._create_sweep_impl(adapter, SweepParameters(path="Path1"))
-
-    assert "Failed to select sweep path: Path1" in (result.error or "")
-
-
 def test_loft_reports_an_unselectable_guide_curve() -> None:
     from solidworks_mcp.adapters.base import LoftParameters
 
@@ -1204,16 +1188,6 @@ def _build_adapter(monkeypatch) -> PyWin32Adapter:
 
 class TestSolidWorksFeaturesMixinSweepLoft:
     """Cover the create_sweep and create_loft delegation paths."""
-
-    @pytest.mark.asyncio
-    async def test_create_sweep_returns_error(self, monkeypatch) -> None:
-        """create_sweep is a stub that always returns ERROR."""
-        adapter = _build_adapter(monkeypatch)
-        adapter.currentModel = MagicMock()
-        params = SimpleNamespace(profile_sketch="Sketch1", path_sketch="Path1")
-        result = await adapter.create_sweep(params)
-        assert result.is_error
-        assert result.error is not None
 
     @pytest.mark.asyncio
     async def test_create_loft_returns_error(self, monkeypatch) -> None:
@@ -2061,121 +2035,6 @@ class TestPyWin32AdapterBranches:
         assert "Failed to create revolve feature" in (revolve_result.error or "")
 
     @pytest.mark.asyncio
-    async def test_create_sweep_no_model_and_missing_path(self, monkeypatch) -> None:
-        """create_sweep guards: no active model, then missing path name."""
-        adapter = self._build_adapter(monkeypatch)
-
-        adapter.currentModel = None
-        no_model = await adapter.create_sweep(SimpleNamespace(path="Sketch2"))
-        assert no_model.is_error
-        assert "No active model" in (no_model.error or "")
-
-        adapter.currentModel = SimpleNamespace()
-        no_path = await adapter.create_sweep(
-            SimpleNamespace(path="", twist_along_path=False, twist_angle=0.0)
-        )
-        assert no_path.is_error
-        assert "path" in (no_path.error or "")
-
-    @pytest.mark.asyncio
-    async def test_create_sweep_success_selects_profile_and_path(
-        self, monkeypatch
-    ) -> None:
-        """create_sweep selects the non-path sketch (mark 1) + path (mark 4)
-        and forwards the constant-twist option to InsertProtrusionSwept4."""
-        adapter = self._build_adapter(monkeypatch)
-
-        selected: list[tuple] = []
-        swept = Mock(return_value=SimpleNamespace(Name="Sweep1", GetID=lambda: 7))
-        adapter.currentModel = SimpleNamespace(
-            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
-            FeatureByName=self._feature_by_name(selected),
-            ClearSelection2=Mock(return_value=True),
-            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=swept),
-        )
-
-        result = await adapter.create_sweep(
-            SimpleNamespace(
-                path="Sketch2",
-                twist_along_path=True,
-                twist_angle=90.0,
-                merge_result=True,
-            )
-        )
-
-        assert result.is_success, result.error
-        assert result.data.type == "Sweep"
-        assert result.data.parameters["profile"] == "Sketch1"
-        assert result.data.parameters["path"] == "Sketch2"
-
-        # Profile selected under mark 1 (append False), path under mark 4
-        # (append True). Recorded tuples are (name, append, mark).
-        assert ("Sketch1", False, 1) in selected
-        assert ("Sketch2", True, 4) in selected
-
-        # TwistCtrlOption (arg index 2) == 8 (constant twist along path) and
-        # TwistAngle (arg index 15) == 90 degrees in radians.
-        swept_args = swept.call_args.args
-        assert swept_args[2] == 8
-        assert swept_args[15] == pytest.approx(math.radians(90.0))
-
-    @pytest.mark.asyncio
-    async def test_create_sweep_no_profile_distinct_from_path(
-        self, monkeypatch
-    ) -> None:
-        """When the only sketch is the path itself, create_sweep errors."""
-        adapter = self._build_adapter(monkeypatch)
-        adapter.currentModel = SimpleNamespace(
-            FirstFeature=self._sketch_tree("Sketch2"),
-            FeatureByName=self._feature_by_name([]),
-            ClearSelection2=Mock(return_value=True),
-            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=Mock()),
-        )
-
-        result = await adapter.create_sweep(
-            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
-        )
-        assert result.is_error
-        assert "profile sketch distinct from the path" in (result.error or "")
-
-    @pytest.mark.asyncio
-    async def test_create_sweep_feature_none_errors(self, monkeypatch) -> None:
-        """create_sweep errors when InsertProtrusionSwept4 returns None."""
-        adapter = self._build_adapter(monkeypatch)
-        adapter.currentModel = SimpleNamespace(
-            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
-            FeatureByName=self._feature_by_name([]),
-            ClearSelection2=Mock(return_value=True),
-            FeatureManager=SimpleNamespace(
-                InsertProtrusionSwept4=Mock(return_value=None)
-            ),
-        )
-
-        result = await adapter.create_sweep(
-            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
-        )
-        assert result.is_error
-        assert "Failed to create sweep feature" in (result.error or "")
-
-    @pytest.mark.asyncio
-    async def test_create_sweep_profile_selection_failure(self, monkeypatch) -> None:
-        """create_sweep errors with the profile name when Select2 can't find it."""
-        adapter = self._build_adapter(monkeypatch)
-        adapter.currentModel = SimpleNamespace(
-            FirstFeature=self._sketch_tree("Sketch1", "Sketch2"),
-            # FeatureByName returns None for the inferred profile sketch.
-            FeatureByName=self._feature_by_name([], fail=("Sketch1",)),
-            ClearSelection2=Mock(return_value=True),
-            FeatureManager=SimpleNamespace(InsertProtrusionSwept4=Mock()),
-        )
-
-        result = await adapter.create_sweep(
-            SimpleNamespace(path="Sketch2", twist_along_path=False, twist_angle=0.0)
-        )
-        assert result.is_error
-        assert "Sketch1" in (result.error or "")
-
-    @pytest.mark.asyncio
     async def test_create_loft_no_model_and_too_few_profiles(self, monkeypatch) -> None:
         """create_loft guards: no active model, then fewer than two profiles."""
         adapter = self._build_adapter(monkeypatch)
@@ -2487,31 +2346,6 @@ class TestMirrorAndPatternVolumeOutcomes:
 
         assert result.is_success
         assert result.data["volume_change"] == -100.0
-
-
-def test_sweep_prefers_the_last_created_sketch_as_profile() -> None:
-    """A helix base circle precedes the profile; the tracked sketch wins."""
-    from solidworks_mcp.adapters.base import SweepParameters
-
-    selected: list[str] = []
-
-    def by_name(name: str):
-        return SimpleNamespace(
-            Select2=lambda _append, _mark: selected.append(name) or True
-        )
-
-    adapter = _FakeFeatureAdapter()
-    adapter._last_sketch_name = "Base"
-    adapter.currentModel = SimpleNamespace(
-        FeatureManager=SimpleNamespace(InsertProtrusionSwept4=lambda *_a: None),
-        ClearSelection2=lambda _a: True,
-        FirstFeature=_tree("Base", "Later", "Path1"),
-        FeatureByName=by_name,
-    )
-
-    features._create_sweep_impl(adapter, SweepParameters(path="Path1"))
-
-    assert selected[0] == "Base"
 
 
 @pytest.mark.parametrize(

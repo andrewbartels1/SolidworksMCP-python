@@ -76,7 +76,7 @@ Four details were unknown until SolidWorks ran them. A probe on
    worked out: `IFeature.GetSpecificFeature2` (flagged `IFeature` first) is
    an `IReferenceCurve`; its `GetFirstSegment` edge gives the vertices and,
    through `GetCurveParams3` and `ICurve.GetLength3`, the length (504.924
-   mm for 8 turns of a 20 mm helix at pitch 6, as the formula gives). On a
+   mm for 8 turns of a 20 mm helix at pitch 6; the formula gives 504.941, 0.003% more). On a
    Top-plane circle, `start_angle` 0 starts at +z and 90 at +x, so 90 puts
    the start on the Front plane. The worked-out length in section 1 becomes
    the fallback only.

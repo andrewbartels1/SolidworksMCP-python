@@ -190,6 +190,17 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         patterns=(r"built no feature",),
     ),
     ErrorRule(
+        error_type="feature_not_built",
+        hint=(
+            "The sweep built nothing, or moved the volume the wrong way. The "
+            "profile must be closed and lie where the path starts (draw it at "
+            "create_helix's start_point_mm, on a plane through the path); a "
+            "cut's profile must overlap the solid. Fix the profile or path "
+            "rather than retrying as is."
+        ),
+        patterns=(r"swept nothing", r"should (add|remove) material but"),
+    ),
+    ErrorRule(
         error_type=INVALID_INPUT,
         hint=(
             "face_point must lie on a flat face of the active part's body, in "

@@ -37,6 +37,7 @@ from .solidworks import (
     SolidWorksSelectionMixin,
     SolidWorksSheetMetalMixin,
     SolidWorksSketchMixin,
+    SolidWorksSweptMixin,
     SolidWorksTemplatesMixin,
     bitmap,
     default_entities,
@@ -1724,6 +1725,7 @@ class _FeatureSelectionService:
 class PyWin32Adapter(
     SolidWorksAssemblyMixin,
     SolidWorksSheetMetalMixin,
+    SolidWorksSweptMixin,
     SolidWorksTemplatesMixin,
     SolidWorksDrawingPackMixin,
     SolidWorksDrawingStandardMixin,

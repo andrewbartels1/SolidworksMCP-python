@@ -28,11 +28,11 @@ from .base import (
     SolidWorksAdapter,
     SolidWorksFeature,
     SolidWorksModel,
-    SweepParameters,
 )
 from .mock_drawing_pack import MockDrawingPackMixin
 from .mock_equations import MockEquationsMixin
 from .mock_sheet_metal import MockSheetMetalMixin
+from .mock_swept import MockSweptMixin
 from .mock_templates import MockTemplatesMixin
 from .solidworks.documentation import MATERIAL_PROPERTIES
 from .solidworks.drawing_standard import gtol_problem
@@ -145,6 +145,7 @@ class _BoolCallable:
 
 class MockSolidWorksAdapter(
     MockSheetMetalMixin,
+    MockSweptMixin,
     MockTemplatesMixin,
     MockDrawingPackMixin,
     MockEquationsMixin,
@@ -1538,47 +1539,6 @@ class MockSolidWorksAdapter(
             f"available to {purpose}: {available}",
         )
 
-    async def create_sweep(
-        self, params: SweepParameters
-    ) -> AdapterResult[SolidWorksFeature]:
-        """Mock creating a sweep feature.
-
-        Args:
-            params (SweepParameters): The params value.
-
-        Returns:
-            AdapterResult[SolidWorksFeature]: The result produced by the operation.
-        """
-        if not self._current_model:
-            return AdapterResult(
-                status=AdapterResultStatus.ERROR, error="No active model"
-            )
-
-        await asyncio.sleep(self._delays["feature_operation"])
-        self._operation_count += 1
-
-        feature_id = f"Boss-Sweep{len(self._features) + 1}"
-        feature = SolidWorksFeature(
-            name=feature_id,
-            type="Sweep",
-            id=str(uuid.uuid4()),
-            parameters={
-                "path": params.path,
-                "twist_along_path": params.twist_along_path,
-                "twist_angle": params.twist_angle,
-            },
-            properties={"created": datetime.now().isoformat(), "mock": True},
-        )
-
-        feature_key = feature.id or feature.name
-        self._features[feature_key] = feature
-
-        return AdapterResult(
-            status=AdapterResultStatus.SUCCESS,
-            data=feature,
-            execution_time=self._delays["feature_operation"],
-        )
-
     async def create_loft(
         self, params: LoftParameters
     ) -> AdapterResult[SolidWorksFeature]:
@@ -1891,6 +1851,8 @@ class MockSolidWorksAdapter(
 
         circle_id = f"Circle{random.randint(1000, 9999)}"
         self._sketch_entity_ids.add(circle_id)
+        # create_helix checks its base sketch holds one circle.
+        self._circles().setdefault(self._current_sketch, []).append(float(radius))
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,

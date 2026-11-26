@@ -446,6 +446,7 @@ class SolidWorksPartFeaturesMixin:
         *,
         must_change: bool = True,
         first_feature: bool = False,
+        direction: int = 0,
     ) -> AdapterResult[dict[str, Any]]:
         """Run ``build`` on the COM thread and judge it by the volume.
 
@@ -456,6 +457,8 @@ class SolidWorksPartFeaturesMixin:
                 thread, which must leave the volume alone.
             first_feature: The part may have no body yet (a base flange), so
                 an unreadable volume before counts as zero.
+            direction: 1 when the feature must add material (a boss sweep),
+                -1 when it must remove it (a cut sweep), 0 for either.
 
         Returns:
             The feature's data plus the volume before, after and change; an
@@ -501,6 +504,23 @@ class SolidWorksPartFeaturesMixin:
                     f"{before:.1f} mm³ before and after); SolidWorks built "
                     f"nothing, so the feature{f' {name}' if name else ''} was "
                     "removed again. Check the picked faces, edges or sketch."
+                ),
+            )
+        if must_change and direction and (after - before) * direction < 0:
+            # A cut that added material, or a boss that removed it: the
+            # profile or path is not what the agent meant (spec
+            # tools/swept-features).
+            name = (result.data or {}).get("name")
+            if name:
+                await adapter.delete_feature(name)
+            wanted, got = ("add", "removed") if direction > 0 else ("remove", "added")
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR,
+                error=(
+                    f"{operation} should {wanted} material but {got} "
+                    f"{abs(after - before):.1f} mm³ ({before:.1f} -> {after:.1f} "
+                    f"mm³), so the feature{f' {name}' if name else ''} was "
+                    "removed again."
                 ),
             )
         if not must_change and not unchanged:

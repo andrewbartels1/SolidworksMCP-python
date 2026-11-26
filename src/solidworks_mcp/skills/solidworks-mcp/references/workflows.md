@@ -109,6 +109,21 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
 5. `set_flat_pattern` with `flat: true` gives the blank's size; check it,
    `export_flat_pattern` for the DXF, then `flat: false` to fold it back.
 
+## A spring or a modelled thread (a helix and a sweep)
+
+1. `create_part`, `create_sketch` on "Top", one `add_circle` (the helix's
+   diameter; its centre is on the axis), `exit_sketch`.
+2. `create_helix` with that sketch and two of `height`, `pitch` and
+   `revolutions`. The reply's `start_point_mm` is where the helix starts
+   (`start_angle` 90 puts it on the Front plane).
+3. A spring: `create_sweep` with the helix's `name` as `path` and
+   `circular_profile_diameter` (the wire). No profile sketch is needed.
+4. A thread on a rod: extrude the rod first, make the helix on it, then
+   sketch a closed profile (a triangle) on the Front plane at the start
+   point and `create_cut_sweep` with `path` (the helix) and `profile`.
+5. Both sweeps report `volume_change`; a cut that removes nothing fails
+   and is removed. Check with `verify_model`.
+
 ## Changing an existing model
 
 1. `open_model`, then `list_features` and `list_model_dimensions`.

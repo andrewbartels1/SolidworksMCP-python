@@ -18,6 +18,7 @@ from .base import (
     AdapterResult,
     AdapterResultStatus,
     ExtrusionParameters,
+    HelixParameters,
     LoftParameters,
     MassProperties,
     RevolveParameters,
@@ -1268,6 +1269,26 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         return await self._execute_with_circuit_breaker(
             "create_sweep",
             lambda: self.adapter.create_sweep(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def create_cut_sweep(
+        self, params: SweepParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        """A sweep that removes material. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_cut_sweep",
+            lambda: self.adapter.create_cut_sweep(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def create_helix(
+        self, params: HelixParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A helix or a flat spiral. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_helix",
+            lambda: self.adapter.create_helix(params),
             input_dict=_to_input_dict(params),
         )
 
