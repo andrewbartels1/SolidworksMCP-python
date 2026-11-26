@@ -6,7 +6,7 @@ reviewed, then implemented, signed off live where it touches SolidWorks,
 and archived after its PR merges. Update this file when an item is done
 or the order changes.
 
-Last updated 2026-11-19.
+Last updated 2026-11-25.
 
 | # | Item | Issue | OpenSpec change | State |
 | --- | --- | --- | --- | --- |
@@ -50,7 +50,9 @@ Last updated 2026-11-19.
 | 37 | Drawing sheets and callouts: new and active sheet, auxiliary, break and broken-out views, hole callouts, ordinate dimensions, surface finish, revision table | #158 (part) | not yet written | Planned |
 | 38 | Weldments: structural members, trim/extend, end caps, gussets, cut list | none | not yet written | Planned (needs live probes: the profile library location varies) |
 | 39 | Reference and analysis extras: coordinate system, bounding box, centre-of-mass point, section properties; wrap (text on a curved face) | none | not yet written | Planned |
-| 40 | Structure review (the user's request 2026-11-19), not a rewrite: the adapter wrappers (`base`, `circuit_breaker`, `connection_pool`, each about 2,500 lines of near-identical per-tool methods) repeat every adapter method, and the largest modules (`mock_adapter` 4,900, `io` 4,000, `features` 3,800, `modeling` 3,200, `sketch` 2,900 lines) should split by topic, as `adapters/solidworks/` already does. Measure the repetition, propose a SOLID structure (one generic forwarding path; one module per topic), and move to it in steps that keep every test passing | none | not yet written | Planned (last) |
+| 40 | Structure review (the user's request 2026-11-19), not a rewrite: the adapter wrappers (`base`, `circuit_breaker`, `connection_pool`, each about 2,500 lines of near-identical per-tool methods) repeat every adapter method, and the largest modules (`mock_adapter` 4,900, `io` 4,000, `features` 3,800, `modeling` 3,200, `sketch` 2,900 lines) should split by topic, as `adapters/solidworks/` already does. Measure the repetition, propose a SOLID structure (one generic forwarding path; one module per topic), and move to it in steps that keep every test passing. Widened 2026-11-25 (the user's request): also audit every function for full type hints, Google-style docstrings with every section (Args, Returns, Raises, and an Example where the use isn't obvious), and inline comments that explain the logic, so each function's job is obvious; and the code sprawl: files and helpers that have grown in miscellaneous places, and a layout that scales to more tools and features (where a new tool's adapter method, wrapper, mock, schema and tests go). Its own PR, separate from feature work | none | not yet written | Planned (last) |
+| 41 | Test in other SolidWorks languages: find how to switch SolidWorks' language on this machine (System Options > General > "Use English language", language packs from the Installation Manager, the registry), what that changes (UI, default template names, feature and sketch point names such as `Point1`, standard view names, `GetModelViewNames` order) and run the default-entity and selftest live tests in German and French. Prompted by #262: 2.2.0's language handling was only tested on English SolidWorks with renamed planes | #262 (follow-up) | not yet written | Planned |
+| 42 | U-joint replay differences: decide, call by call, whether each of the nine calls that end differently on today's server is variance in a long agent run or something to fix on our end (a clearer error, a better description, or accepting `axis_entity: "centerline"` when the sketch has one centreline); rerun the prompt on today's server and compare | #278 | not yet written | Planned |
 ## Removed tools (item 10, release 2.1.0)
 
 33 tools were registered but never implemented: every call returned

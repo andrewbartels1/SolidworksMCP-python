@@ -15,6 +15,7 @@ from typing import Any, cast
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
 from .com_utils import as_list, dispatch_array, long_array
+from .default_entities import entity_name
 from .features import _null_callout
 from .io import (
     _box_from_metres,
@@ -96,9 +97,13 @@ def _select_components(adapter: Any, components: list[Any], mark: int) -> None:
 def _select_named(adapter: Any, name: str, kind: str, mark: int) -> None:
     """Select a plane or axis by its name, appending, under ``mark``.
 
+    A default plane (``Top Plane``, ``Right``...) is found by its place in
+    the assembly's tree, in any language (#262, fixed in 2.2.0).
+
     Raises:
         Exception: ``<Kind> '<name>' not found``, when nothing was selected.
     """
+    name = entity_name(adapter, name)
     picked = adapter.currentModel.Extension.SelectByID2(
         name, kind, 0, 0, 0, True, mark, _null_callout(), 0
     )

@@ -13,7 +13,14 @@ from typing import Any, cast
 from ...utils.sw_dependencies import dependency_paths
 from .. import sw_type_info as _sw_type_info
 from ..base import AdapterResult, AdapterResultStatus, MassProperties, SolidWorksModel
-from .configurations import THIS_CONFIGURATION, configuration_scope
+from . import default_entities
+from .com_utils import SAVE_AS_COPY, SAVE_AS_CURRENT_VERSION, string_array
+from .configurations import (
+    SPECIFY_CONFIGURATION,
+    THIS_CONFIGURATION,
+    configuration_scope,
+)
+from .configurations import _names as _configuration_names
 from .face_selection import mate_entity_label
 
 try:
@@ -42,6 +49,20 @@ _MATE_ALIGNMENTS: dict[str, int] = {
     "closest": 2,
 }
 
+#: What each ``swAddMateError_e`` refusal means, and what to try.
+#: Added in 2.2.0 (#264): why SolidWorks refused a mate, by swAddMateError_e.
+_MATE_ERRORS: dict[int, str] = {
+    2: "The two entities can't take this mate type.",
+    3: "The alignment doesn't fit these entities; try alignment 'closest'.",
+    4: "The selection is wrong for this mate: check both entities.",
+    5: (
+        "The mate conflicts with the mates already there (over-defined). A "
+        "concentric mate's 'aligned' compares the cylinders' axis "
+        "directions, which depend on how each feature was built and can flip "
+        "the part against an earlier mate; try alignment 'closest'."
+    ),
+}
+
 
 #: ``swDwgTemplates_e`` / ``swDwgPaperSizes_e`` values (read from swconst.tlb).
 _SW_DWG_TEMPLATE_NONE = 13
@@ -68,6 +89,52 @@ _NAMED_VIEWS: dict[str, str] = {
 
 #: Points to millimetres. Note schemas express text height in points.
 _POINTS_TO_MM = 25.4 / 72.0
+
+
+#: How far (mm) a note's top-left may sit from where it was asked for.
+_NOTE_TOLERANCE_MM = 0.5
+
+
+def _note_extent_mm(adapter: Any, note: Any) -> list[float] | None:
+    """A note's ``[left, bottom, right, top]`` on the sheet, mm, or None."""
+    flagged = _sw_type_info.flagged(note, "INote")
+    raw = adapter._attempt(lambda: list(flagged.GetExtent()), default=None)
+    if not raw or len(raw) < 5:
+        return None
+    return [round(float(v) * 1000.0, 2) for v in (raw[0], raw[1], raw[3], raw[4])]
+
+
+# Added in 2.2.0 (#275).
+def _note_top_left(
+    adapter: Any, note: Any, annotation: Any, x: float, y: float
+) -> list[float] | None:
+    """Put a note's top-left corner at (x, y) mm, wherever it is anchored.
+
+    ``IAnnotation.SetPosition`` puts the top-left there on SW 2026; on SW
+    2024 the note was centred on the point instead and ran off the sheet
+    (#275, fixed in 2.2.0). The note's extent is read back and the note moved by the
+    difference, so it lands the same on both.
+
+    Returns:
+        list[float] | None: The note's extent after the move, mm; ``None``
+        when it can't be read.
+    """
+    extent = _note_extent_mm(adapter, note)
+    if extent is None:
+        return None
+    dx, dy = x - extent[0], y - extent[3]
+    if abs(dx) <= _NOTE_TOLERANCE_MM and abs(dy) <= _NOTE_TOLERANCE_MM:
+        return extent
+    pos = adapter._attempt(lambda: list(annotation.GetPosition()), default=None)
+    if not pos or len(pos) < 2:
+        return extent
+    adapter._attempt(
+        lambda: annotation.SetPosition(
+            float(pos[0]) + dx / 1000.0, float(pos[1]) + dy / 1000.0, 0.0
+        ),
+        default=None,
+    )
+    return _note_extent_mm(adapter, note)
 
 
 def _payload(data: Any) -> dict[str, Any]:
@@ -1934,8 +2001,20 @@ class SolidWorksIOMixin:
             dimension = adapter.currentModel.Parameter(name)
             if not dimension:
                 raise Exception(f"Dimension '{name}' not found")
+            old_m = adapter._attempt(lambda: dimension.SystemValue, default=None)
 
             value_m = value / 1000.0
+            if (
+                option == THIS_CONFIGURATION
+                and names
+                and len(_configuration_names(adapter)) > 1
+            ):
+                # A dimension never yet set per configuration takes a
+                # SystemValue write in every configuration (#266, fixed in 2.2.0; seen on SW
+                # 2024 and 2026), so with several configurations "this" names
+                # the active one, as an explicit list does.
+                # Fixed in 2.2.0 (#266).
+                option, array = SPECIFY_CONFIGURATION, string_array(names)
             if option == THIS_CONFIGURATION:
                 # SetValue3 has gen_py parameter mapping issues on SW 2025.
                 # SystemValue (in meters) is reliable.
@@ -1961,7 +2040,15 @@ class SolidWorksIOMixin:
                 )
             if rebuilt is None:
                 raise Exception("Failed to set dimension")
-            return {"configurations": names}
+            return {
+                "configurations": names,
+                "old_value": (
+                    round(float(old_m) * 1000.0, 6)
+                    if isinstance(old_m, (int, float))
+                    else None
+                ),
+                "new_value": value,
+            }
 
         return cast(
             AdapterResult[dict[str, Any]],
@@ -2069,7 +2156,11 @@ class SolidWorksIOMixin:
 
                 # Deliberately no os.remove here: SaveAs3 overwrites, and
                 # deleting first meant a failed save destroyed the old file too.
-                save_as3_result = adapter.currentModel.SaveAs3(resolved_path, 0, 0)
+                # No option flags: File > Save As, the open document becomes
+                # the new file (save_copy is the copy).
+                save_as3_result = adapter.currentModel.SaveAs3(
+                    resolved_path, SAVE_AS_CURRENT_VERSION, 0
+                )
                 if not self._is_success(save_as3_result):
                     save_as = getattr(adapter.currentModel, "SaveAs", None)
                     if callable(save_as):
@@ -2105,6 +2196,72 @@ class SolidWorksIOMixin:
         return cast(
             AdapterResult[None],
             adapter._handle_com_operation("save_file", _save),
+        )
+
+    # Added in 2.2.0 (#276).
+    async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Write a copy of the active document and keep working on the original.
+
+        ``IModelDoc2.SaveAs3(path, 0, swSaveAsOptions_Copy)``: File > Save As
+        with "Save as copy and continue" (#276, fixed in 2.2.0). The open document keeps its
+        own path, so an assembly using it still uses it.
+
+        Args:
+            file_path: Where to write the copy; not the document's own path.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: ``file_path``, ``current_path``
+            (the path the open document has afterwards) and
+            ``kept_original`` (whether that is still its own path).
+        """
+        adapter = self._adapter(self)
+        if not adapter.currentModel:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        resolved = os.path.abspath(file_path)
+
+        def _path() -> str:
+            return str(
+                adapter._attempt(
+                    lambda: adapter._get_attr_or_call(
+                        adapter.currentModel, "GetPathName"
+                    ),
+                    default="",
+                )
+                or ""
+            )
+
+        def _same(a: str, b: str) -> bool:
+            return os.path.normcase(os.path.abspath(a)) == os.path.normcase(
+                os.path.abspath(b)
+            )
+
+        def _copy() -> dict[str, Any]:
+            before = _path()
+            if before and _same(before, resolved):
+                raise ValueError(
+                    f"{resolved} is the open document's own path; save it with "
+                    "save_file, or give the copy another path."
+                )
+            os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
+            returned = adapter.currentModel.SaveAs3(
+                resolved, SAVE_AS_CURRENT_VERSION, SAVE_AS_COPY
+            )
+            if not os.path.exists(resolved):
+                raise Exception(
+                    f"No copy was written at {resolved} (SaveAs3 returned {returned})."
+                )
+            after = _path()
+            return {
+                "file_path": resolved,
+                "current_path": after or None,
+                "kept_original": _same(after, before) if before and after else None,
+            }
+
+        return cast(
+            AdapterResult[dict[str, Any]],
+            adapter._handle_com_operation("save_copy", _copy),
         )
 
     async def rebuild_model(
@@ -2966,8 +3123,13 @@ class SolidWorksIOMixin:
                         adapter, model, wrapped, component_name, point, index > 0
                     )
                     continue
+                # A default plane is found in the component's own tree, in
+                # any language (#262, fixed in 2.2.0).
+                local_name = default_entities.entity_name(
+                    adapter, entity_name, owner=wrapped
+                )
                 feature = adapter._attempt(
-                    lambda w=wrapped, e=entity_name: w.FeatureByName(e), default=None
+                    lambda w=wrapped, e=local_name: w.FeatureByName(e), default=None
                 )
                 if feature is None:
                     raise Exception(
@@ -3019,10 +3181,14 @@ class SolidWorksIOMixin:
             # swAddMateError_e reports 1 for success on this build (measured:
             # a mate that demonstrably moved a component returned 1).
             if mate is None or (error_status not in (None, 1)):
+                reason = (
+                    _MATE_ERRORS.get(error_status)
+                    if isinstance(error_status, int)
+                    else None
+                ) or "Check the two entities can actually satisfy this mate type."
                 raise Exception(
                     f"SolidWorks rejected the {mate_key} mate "
-                    f"(error status {error_status!r}). Check the two entities "
-                    "can actually satisfy this mate type."
+                    f"(error status {error_status!r}). {reason}"
                 )
 
             transforms_after = _component_transforms(adapter, assembly)
@@ -3250,17 +3416,15 @@ class SolidWorksIOMixin:
             y = float(_first(data, "position_y", "y", default=150.0))
 
         # With no orientation, a view_type that names a view ("top",
-        # "isometric") is the orientation; any other ("orthographic") is front
-        # (#256: view_type alone used to leave every view a front view).
-        view_type = str(_first(data, "view_type", default="")).strip().lower()
+        # "isometric", or a model view's own "*Name") is the orientation; any
+        # other ("orthographic") is front (#256: view_type alone used to leave
+        # every view a front view; #262, fixed in 2.2.0: "*Isometrisch" fell back to front).
+        view_type = str(_first(data, "view_type", default="")).strip()
+        names_a_view = view_type.lower() in _NAMED_VIEWS or view_type.startswith("*")
         requested = str(
-            _first(
-                data,
-                "orientation",
-                default=view_type if view_type in _NAMED_VIEWS else "front",
-            )
-        )
-        view_name = _NAMED_VIEWS.get(requested.strip().lower())
+            _first(data, "orientation", default=view_type if names_a_view else "front")
+        ).strip()
+        view_name = _NAMED_VIEWS.get(requested.lower())
         if view_name is None and requested.startswith("*"):
             view_name = requested
         if view_name is None:
@@ -3314,9 +3478,12 @@ class SolidWorksIOMixin:
                     default=None,
                 )
 
+            # A standard view goes by the model's own name for it, read from
+            # its view list by position, so it is right in any language (#262, fixed in 2.2.0).
+            local_view = default_entities.standard_view_name(adapter, opened, view_name)
             view = adapter._attempt(
                 lambda: drawing.CreateDrawViewFromModelView3(
-                    path, view_name, x / 1000.0, y / 1000.0, 0.0
+                    path, local_view, x / 1000.0, y / 1000.0, 0.0
                 ),
                 default=None,
             )
@@ -3326,7 +3493,7 @@ class SolidWorksIOMixin:
                 raise Exception(
                     f"View was not created - the sheet still has {len(after)} "
                     f"view(s). Check that '{model_path}' opens on its own and "
-                    f"that '{view_name}' is a valid named view for it."
+                    f"that '{local_view}' is a valid named view for it."
                 )
 
             added = [n for n in after if n not in before]
@@ -3553,21 +3720,7 @@ class SolidWorksIOMixin:
                     "InsertNote returned nothing - the note was not created."
                 )
 
-            positioned = False
-            annotation = adapter._attempt(
-                lambda: _sw_type_info.flagged(note, "INote").GetAnnotation(),
-                default=None,
-            )
-            if annotation is not None:
-                positioned = bool(
-                    adapter._attempt(
-                        lambda: _sw_type_info.flagged(
-                            annotation, "IAnnotation"
-                        ).SetPosition(x / 1000.0, y / 1000.0, 0.0),
-                        default=False,
-                    )
-                )
-
+            # The size first: it changes the note's extent.
             if font_mm:
                 adapter._attempt(
                     lambda: _sw_type_info.flagged(note, "INote").SetTextFormat(
@@ -3576,11 +3729,29 @@ class SolidWorksIOMixin:
                     default=None,
                 )
 
+            positioned = False
+            annotation = adapter._attempt(
+                lambda: _sw_type_info.flagged(note, "INote").GetAnnotation(),
+                default=None,
+            )
+            if annotation is not None:
+                annotation = _sw_type_info.flagged(annotation, "IAnnotation")
+                positioned = bool(
+                    adapter._attempt(
+                        lambda: annotation.SetPosition(x / 1000.0, y / 1000.0, 0.0),
+                        default=False,
+                    )
+                )
+            extent = (
+                _note_top_left(adapter, note, annotation, x, y) if positioned else None
+            )
+
             adapter._attempt(lambda: model.EditRebuild3(), default=None)
             return {
                 "text": text,
                 "position": {"x": x, "y": y},
                 "positioned": positioned,
+                "extent_mm": extent,
                 "font_size_points": font_points or None,
             }
 

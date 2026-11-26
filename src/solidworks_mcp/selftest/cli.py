@@ -15,6 +15,7 @@ from typing import Any, cast
 
 import typer
 
+from ..adapters.solidworks import compat
 from ..config import SolidWorksMCPConfig, load_config
 from ..setup.solidworks import installed_versions
 from .areas import AREAS, Context
@@ -130,6 +131,10 @@ async def run_selftest(
             guard = DocumentGuard(call)
             async with guard:
                 results = await run_areas(AREAS, Context(call, guard.folder))
+            # Members this release answers only as the other dispatch kind:
+            # the report names them, since they are what differs here.
+            # Since 2.2.0 (#265): the members a release answered another way.
+            environment["com_fallbacks"] = sorted(compat.fallbacks)
     finally:
         await server.adapter.disconnect()
     typer.echo(render(environment, results, guard.problems))

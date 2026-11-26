@@ -2455,6 +2455,24 @@ async def test_revolve_about_a_named_axis(mcp_server, mock_adapter) -> None:
     assert "create_axis" in missing["message"]
 
 
+@pytest.mark.asyncio
+async def test_revolve_about_a_centreline_id(mcp_server, mock_adapter) -> None:
+    await mock_adapter.create_part()
+    await mock_adapter.create_sketch("Front")
+    line = (await mock_adapter.add_centerline(0, -5, 0, 45)).data
+    await mock_adapter.add_rectangle(0, 0, 10, 40)
+    await mock_adapter.exit_sketch()
+    await register_modeling_tools(mcp_server, mock_adapter, {})
+    tool = next(
+        t.fn for t in await mcp_server.list_tools() if t.name == "create_revolve"
+    )
+
+    used = await tool({"sketch_name": "Sketch1", "axis_entity": line, "angle": 360})
+
+    assert used["status"] == "success", used
+    assert used["revolve"]["axis_entity"] == line
+
+
 @pytest.mark.parametrize("configurations", [[], [" "]])
 def test_configurations_must_name_one(configurations: list[str]) -> None:
     from solidworks_mcp.tools.modeling import SetDimensionInput, SuppressFeatureInput

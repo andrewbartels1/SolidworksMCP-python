@@ -123,6 +123,14 @@ def summary_markdown(environment: dict[str, Any], results: list[AreaResult]) -> 
         f"pywin32 {_value(environment.get('pywin32'))} |",
         f"| solidworks-mcp-python | {_value(environment.get('solidworks_mcp'))} |",
     ]
+    # Since 2.2.0 (#265): name what this release answers another way.
+    fallbacks = environment.get("com_fallbacks") or []
+    if fallbacks:
+        lines.append(
+            "| COM calls this release answers another way | "
+            + ", ".join(f"`{name}`" for name in fallbacks)
+            + " |"
+        )
     for result in results:
         lines += ["", f"#### {result.name}: {result.outcome.value}"]
         if result.note:

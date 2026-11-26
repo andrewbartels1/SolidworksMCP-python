@@ -1,5 +1,8 @@
 """Equations and global variables: list, add or change, and delete them.
 
+Since 2.2.0 every IEquationMgr call goes through ``compat`` (#265: they
+failed with "Member not found" on SolidWorks 2024).
+
 One value (``"Width" = 60mm``) can drive several dimensions
 (``"D1@Sketch1" = "Width" / 2``), which is how a SolidWorks part becomes
 parametric.
@@ -39,6 +42,7 @@ from typing import Any, cast
 
 from .. import sw_type_info
 from ..base import AdapterResult, AdapterResultStatus
+from . import compat
 from .configurations import (
     ALL_CONFIGURATIONS,
     THIS_CONFIGURATION,
@@ -75,7 +79,7 @@ def _same(a: str, b: str) -> bool:
 
 def _failed(manager: Any) -> bool:
     """Whether the last operation failed: ``Status`` is negative then."""
-    status = manager.Status
+    status = compat.read(manager, "Status", interface="IEquationMgr")
     return isinstance(status, int) and status < 0
 
 
@@ -85,9 +89,11 @@ def _add(manager: Any, index: int, text: str) -> int:
     An equation ``Add2`` accepts but can't solve leaves ``Status`` negative;
     it is deleted again so nothing half-made stays in the model.
     """
-    added = int(manager.Add2(index, text, True))
+    added = int(
+        compat.invoke(manager, "Add2", index, text, True, interface="IEquationMgr")
+    )
     if added >= 0 and _failed(manager):
-        manager.Delete(added)
+        compat.invoke(manager, "Delete", added, interface="IEquationMgr")
         return -1
     return added
 
@@ -103,7 +109,9 @@ def _took(manager: Any, index: int, text: str) -> bool:
     ``Status`` isn't negative and the stored text reads back the same
     (SolidWorks may respace it).
     """
-    return not _failed(manager) and _same(str(manager.Equation(index)), text)
+    return not _failed(manager) and _same(
+        str(compat.invoke(manager, "Equation", index, interface="IEquationMgr")), text
+    )
 
 
 def _put_everywhere(manager: Any, index: int, text: str) -> bool:
@@ -120,8 +128,14 @@ def _put_everywhere(manager: Any, index: int, text: str) -> bool:
 
 def _set_here(manager: Any, index: int, text: str) -> bool:
     """Set equation ``index`` to ``text`` in the active configuration only."""
-    returned = manager.SetEquationAndConfigurationOption(
-        index, text, THIS_CONFIGURATION, None
+    returned = compat.invoke(
+        manager,
+        "SetEquationAndConfigurationOption",
+        index,
+        text,
+        THIS_CONFIGURATION,
+        None,
+        interface="IEquationMgr",
     )
     return returned == 0 and _took(manager, index, text)
 
@@ -140,20 +154,37 @@ class SolidWorksEquationsMixin:
         """The active model's equation manager, its methods flagged."""
         adapter: Any = self
         return sw_type_info.flagged(
-            adapter.currentModel.GetEquationMgr(), "IEquationMgr"
+            compat.invoke(
+                adapter.currentModel, "GetEquationMgr", interface="IModelDoc2"
+            ),
+            "IEquationMgr",
         )
 
     def _equations(self, manager: Any) -> list[dict[str, Any]]:
         """Every equation, in order, with its solved value."""
         adapter: Any = self
         rows = []
-        for index in range(int(manager.GetCount() or 0)):
-            text = str(manager.Equation(index))
+        for index in range(
+            int(compat.invoke(manager, "GetCount", interface="IEquationMgr") or 0)
+        ):
+            text = str(
+                compat.invoke(manager, "Equation", index, interface="IEquationMgr")
+            )
             name, expression = split_equation(text)
             is_global = bool(
-                adapter._attempt(lambda i=index: manager.GlobalVariable(i), False)
+                adapter._attempt(
+                    lambda i=index: compat.invoke(
+                        manager, "GlobalVariable", i, interface="IEquationMgr"
+                    ),
+                    False,
+                )
             )
-            value = adapter._attempt(lambda i=index: manager.Value(i), None)
+            value = adapter._attempt(
+                lambda i=index: compat.invoke(
+                    manager, "Value", i, interface="IEquationMgr"
+                ),
+                None,
+            )
             rows.append(
                 {
                     "index": index,
@@ -206,7 +237,12 @@ class SolidWorksEquationsMixin:
                 took = _set_here(manager, index, text) and took
                 if values is not None:
                     self._solve(manager)
-                    value = adapter._attempt(lambda m=manager: m.Value(index), None)
+                    value = adapter._attempt(
+                        lambda m=manager: compat.invoke(
+                            m, "Value", index, interface="IEquationMgr"
+                        ),
+                        None,
+                    )
                     values[name] = float(value) if value is not None else None
         finally:
             if previous:
@@ -216,7 +252,10 @@ class SolidWorksEquationsMixin:
     def _solve(self, manager: Any) -> None:
         """Solve every equation, then rebuild."""
         adapter: Any = self
-        adapter._attempt(lambda: manager.EvaluateAll(), None)
+        adapter._attempt(
+            lambda: compat.invoke(manager, "EvaluateAll", interface="IEquationMgr"),
+            None,
+        )
         adapter._attempt(lambda: adapter.currentModel.ForceRebuild3(False), None)
 
     def _on_model(self, operation: str, build: Any) -> AdapterResult[Any]:
@@ -289,7 +328,12 @@ class SolidWorksEquationsMixin:
                 if option != ALL_CONFIGURATIONS and not self._set(
                     index, text, option, names, values
                 ):
-                    self._equation_manager().Delete(index)
+                    compat.invoke(
+                        self._equation_manager(),
+                        "Delete",
+                        index,
+                        interface="IEquationMgr",
+                    )
                     raise ValueError(
                         f"SolidWorks refused the equation {text} in "
                         f"{', '.join(names)}; nothing was added."
@@ -297,7 +341,9 @@ class SolidWorksEquationsMixin:
                 action = "added"
             else:
                 index = existing["index"]
-                previous = str(manager.Equation(index))
+                previous = str(
+                    compat.invoke(manager, "Equation", index, interface="IEquationMgr")
+                )
                 if not self._set(index, text, option, names, values):
                     self._set(index, previous, option, names)
                     raise ValueError(
@@ -339,7 +385,7 @@ class SolidWorksEquationsMixin:
             if match is None:
                 known = ", ".join(r["name"] for r in rows) or "none"
                 raise LookupError(f"No equation named '{name}'; the model has {known}.")
-            manager.Delete(match["index"])
+            compat.invoke(manager, "Delete", match["index"], interface="IEquationMgr")
             self._solve(manager)
             return {
                 "deleted": match["name"],

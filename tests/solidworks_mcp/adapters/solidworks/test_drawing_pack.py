@@ -203,11 +203,92 @@ async def test_a_section_view_is_cut_along_the_line(adapter: FakeAdapter) -> Non
     assert result.data == {
         "label": "A",
         "parent": "Front",
+        "at_position": True,
         "name": "Section View A-A",
         "outline_mm": (200.0, 150.0, 300.0, 230.0),
         "views_before": 1,
         "views_after": 2,
     }
+
+
+class _AlignedSection:
+    """A section view 100 x 80 mm, kept on its parent's x until freed (#273).
+
+    ``offset`` is how far its position point sits from its outline's centre.
+    """
+
+    def __init__(self, x: float, y: float, offset: float = 0.0, moves: bool = True):
+        self.centre = (x, y)
+        self.offset = offset
+        self.moves = moves
+        self.aligned = True
+
+    def GetName2(self) -> str:  # noqa: N802
+        return "Section View A-A"
+
+    def GetOutline(self) -> tuple[float, ...]:  # noqa: N802
+        x, y = self.centre
+        return (x - 0.05, y - 0.04, x + 0.05, y + 0.04)
+
+    def RemoveAlignment(self) -> bool:  # noqa: N802
+        self.aligned = False
+        return True
+
+    @property
+    def Position(self) -> tuple[float, float]:  # noqa: N802
+        return (self.centre[0] + self.offset, self.centre[1])
+
+    @Position.setter
+    def Position(self, raw: Any) -> None:  # noqa: N802
+        x, y = tuple(getattr(raw, "value", raw))[:2]  # a VARIANT on Windows
+        if self.moves and not self.aligned:
+            self.centre = (x - self.offset, y)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("offset", [0.0, 0.006])
+async def test_a_section_view_is_freed_from_its_parent_and_moved(
+    adapter: FakeAdapter, offset: float
+) -> None:
+    section = _AlignedSection(0.07, 0.19, offset)  # on the parent's x
+    adapter.currentModel.CreateSectionViewAt5.return_value = section
+
+    result = await adapter.create_section_view(
+        "Front", [10, 190], [130, 190], [250, 190]
+    )
+
+    assert section.aligned is False
+    assert result.data["at_position"] is True
+    assert result.data["outline_mm"] == pytest.approx((200.0, 150.0, 300.0, 230.0))
+
+
+@pytest.mark.asyncio
+async def test_a_section_view_that_wont_move_says_so(adapter: FakeAdapter) -> None:
+    adapter.currentModel.CreateSectionViewAt5.return_value = _AlignedSection(
+        0.07, 0.19, moves=False
+    )
+
+    result = await adapter.create_section_view(
+        "Front", [10, 190], [130, 190], [250, 190]
+    )
+
+    assert result.data["at_position"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_section_view_whose_outline_is_lost_after_moving(
+    adapter: FakeAdapter,
+) -> None:
+    section = _AlignedSection(0.07, 0.19)
+    outlines = iter([section.GetOutline()])
+    section.GetOutline = lambda: next(outlines, None)  # type: ignore[method-assign]
+    adapter.currentModel.CreateSectionViewAt5.return_value = section
+
+    result = await adapter.create_section_view(
+        "Front", [10, 190], [130, 190], [250, 190]
+    )
+
+    assert result.data["at_position"] is False
 
 
 @pytest.mark.asyncio

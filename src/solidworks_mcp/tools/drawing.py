@@ -117,8 +117,13 @@ class AddNoteInput(BaseModel):
     """
 
     text: str = Field(description="Note text content")
-    position_x: float = Field(description="X position for note")
-    position_y: float = Field(description="Y position for note")
+    # The position is the top-left corner on every release since 2.2.0 (#275).
+    position_x: float = Field(
+        description="X of the note's top-left corner, mm from the sheet's left edge"
+    )
+    position_y: float = Field(
+        description="Y of the note's top-left corner, mm from the sheet's bottom edge"
+    )
     font_size: float = Field(default=12.0, description="Font size in points")
     leader_attachment: str | None = Field(
         default=None, description="Entity to attach leader line to"
@@ -519,12 +524,13 @@ async def register_drawing_tools(
         Use it for general notes such as material or finish. For a title block, use
         `generate_drawing_package`, which fills one. Needs: an open, active drawing.
         Changes: adds a note to the sheet. Returns: `data` with `text`, `position`,
-        `positioned` (whether the position was applied) and `font_size_points`.
+        `positioned` (whether the position was applied), `extent_mm` (the note's
+        [left, bottom, right, top] on the sheet, read back) and `font_size_points`.
 
         Args:
-            input_data: The note. `text`, `position_x` and `position_y` (mm from
-                the sheet's lower-left corner) are required; `font_size` (points)
-                has a default.
+            input_data: The note. `text`, `position_x` and `position_y` (the
+                note's top-left corner, mm from the sheet's lower-left corner)
+                are required; `font_size` (points) has a default.
 
         Returns:
             dict[str, Any]: The note placed.

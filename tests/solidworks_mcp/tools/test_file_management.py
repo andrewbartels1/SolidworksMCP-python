@@ -422,6 +422,29 @@ class TestFileManagementTools:
         assert "save blocked" in error_result["message"]
 
     @pytest.mark.asyncio
+    async def test_save_as_a_copy_keeps_the_original_open(
+        self, mcp_server, mock_adapter, mock_config
+    ):
+        """#276: as_copy writes a copy; the original stays the open document."""
+        await register_file_management_tools(mcp_server, mock_adapter, mock_config)
+        await mock_adapter.create_part("Original", "mm")
+        save_as_tool = next(
+            t.fn for t in await mcp_server.list_tools() if t.name == "save_as"
+        )
+        mock_adapter.save_file = AsyncMock()
+
+        result = await save_as_tool(
+            input_data=SaveAsInput(
+                file_path="C:/tmp/variant.sldprt", as_copy=True, overwrite=True
+            )
+        )
+
+        assert result["status"] == "success"
+        assert result["message"] == "Copy saved as: C:/tmp/variant.sldprt"
+        assert result["kept_original"] is True
+        mock_adapter.save_file.assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_save_as_export_error_and_fallback_without_methods(
         self, mcp_server, mock_adapter, mock_config
     ):

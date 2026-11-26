@@ -1202,6 +1202,38 @@ class TestAddMateErrorBranches:
         assert "Expected 2 selected entities" in (result.error or "")
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("status", "says"),
+        [
+            (2, "can't take this mate type"),
+            (3, "try alignment 'closest'"),
+            (4, "selection is wrong"),
+            (5, "over-defined"),
+            (0, "Check the two entities"),
+        ],
+    )
+    async def test_a_refusal_says_why(self, monkeypatch, status, says) -> None:
+        """#264: status 5 on SolidWorks 2024 is an over-defined assembly."""
+        adapter = self._assembly_adapter(monkeypatch)
+        self._identity_dynamic(monkeypatch)
+        feature = SimpleNamespace(Select2=lambda append, mark: True)
+        adapter.currentModel.GetComponents.return_value = [
+            SimpleNamespace(Name2="part-1", FeatureByName=lambda e: feature),
+            SimpleNamespace(Name2="part-2", FeatureByName=lambda e: feature),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 2
+        adapter.currentModel.AddMate5.return_value = SimpleNamespace()
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._byref_int",
+            lambda: SimpleNamespace(value=status),
+        )
+
+        result = await adapter.add_mate("part-1", "part-2")
+
+        assert f"(error status {status})" in (result.error or "")
+        assert says in (result.error or "")
+
+    @pytest.mark.asyncio
     async def test_errors_when_solidworks_rejects_the_mate(self, monkeypatch) -> None:
         """error_status=2 mirrors the documented real measurement: this build
         reports 1 for success, so anything else (including a successful-looking
@@ -1251,6 +1283,84 @@ class TestSaveFileLegacyFallback:
         assert result.is_error
         assert "File not written after save" in (result.error or "")
         model.Save.assert_called_once()
+
+
+class TestSaveCopy:
+    """#276: a copy is written; the open document keeps its own path."""
+
+    @staticmethod
+    def _model(own: str, writes: bool = True, follows: bool = False) -> Any:
+        state = {"path": own}
+
+        def save_as3(path: str, version: int, options: int) -> bool:
+            state["options"] = options
+            if writes:
+                Path(path).write_text("copy")
+            if follows:
+                state["path"] = path
+            return writes
+
+        return SimpleNamespace(
+            GetPathName=lambda: state["path"], SaveAs3=save_as3, state=state
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_copy_is_written_and_the_original_kept(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        own = str(tmp_path / "part.sldprt")
+        adapter.currentModel = self._model(own)
+        copy = tmp_path / "out" / "variant.sldprt"
+
+        result = await adapter.save_copy(str(copy))
+
+        assert result.data == {
+            "file_path": str(copy),
+            "current_path": own,
+            "kept_original": True,
+        }
+        assert adapter.currentModel.state["options"] == 2  # swSaveAsOptions_Copy
+
+    @pytest.mark.asyncio
+    async def test_a_document_that_follows_the_copy_says_so(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = self._model(str(tmp_path / "a.sldprt"), follows=True)
+
+        result = await adapter.save_copy(str(tmp_path / "b.sldprt"))
+
+        assert result.data["kept_original"] is False
+
+    @pytest.mark.asyncio
+    async def test_a_never_saved_document_has_no_original_to_keep(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        adapter.currentModel = self._model("")
+
+        result = await adapter.save_copy(str(tmp_path / "b.sldprt"))
+
+        assert result.data["kept_original"] is None
+        assert result.data["current_path"] is None
+
+    @pytest.mark.asyncio
+    async def test_its_own_path_and_an_unwritten_copy_are_errors(
+        self, monkeypatch, tmp_path
+    ) -> None:
+        adapter = _build_adapter(monkeypatch)
+        own = str(tmp_path / "part.sldprt")
+        adapter.currentModel = self._model(own)
+        same = await adapter.save_copy(own)
+        adapter.currentModel = self._model(own, writes=False)
+        unwritten = await adapter.save_copy(str(tmp_path / "x.sldprt"))
+        adapter.currentModel = None
+        nothing = await adapter.save_copy(str(tmp_path / "y.sldprt"))
+
+        assert "the open document's own path" in (same.error or "")
+        assert "No copy was written" in (unwritten.error or "")
+        assert nothing.error == "No active model"
 
 
 class TestViewNamesHelper:
@@ -3920,6 +4030,56 @@ class TestAssemblyAndDrawingSuccessPaths:
         assert result.data["moved_components"] == ["part-2"]
         assert result.data["geometry_moved"] is True
 
+    @pytest.mark.asyncio
+    async def test_a_mate_finds_each_components_own_default_plane(
+        self, monkeypatch
+    ) -> None:
+        # #262: a French component's Front plane is "Plan de face".
+        adapter = self._document(monkeypatch, 2)
+        monkeypatch.setattr(
+            _io_module, "_dynamic", SimpleNamespace(Dispatch=lambda obj: obj)
+        )
+        looked_up: list[str] = []
+
+        def _component(name: str, planes: tuple[str, ...]) -> SimpleNamespace:
+            first: Any = SimpleNamespace(
+                GetTypeName2=lambda: "OriginProfileFeature",
+                Name="Origine",
+                GetNextFeature=lambda: None,
+            )
+            for plane in reversed(planes):
+                first = SimpleNamespace(
+                    GetTypeName2=lambda: "RefPlane",
+                    Name=plane,
+                    GetNextFeature=lambda n=first: n,
+                )
+            tree = first
+
+            def _by_name(entity: str) -> Any:
+                looked_up.append(entity)
+                return SimpleNamespace(Select2=lambda append, mark: True)
+
+            return SimpleNamespace(
+                Name2=name, FirstFeature=lambda: tree, FeatureByName=_by_name
+            )
+
+        french = ("Plan de face", "Plan de dessus", "Plan de droite")
+        adapter.currentModel.GetComponents.return_value = [
+            _component("part-1", french),
+            _component("part-2", ("Front", "Top", "Right")),
+        ]
+        adapter.currentModel.SelectionManager.GetSelectedObjectCount2.return_value = 2
+        adapter.currentModel.AddMate5.return_value = SimpleNamespace()
+        monkeypatch.setattr(_io_module, "_byref_int", lambda: SimpleNamespace(value=1))
+        monkeypatch.setattr(_io_module, "_component_transforms", lambda _a, _asm: {})
+
+        result = await adapter.add_mate(
+            "part-1", "part-2", entity_a="Front Plane", entity_b="Top Plane"
+        )
+
+        assert result.is_success, result.error
+        assert looked_up == ["Plan de face", "Top"]
+
     @staticmethod
     def _face_mate(monkeypatch, handle: Any, found: bool = True) -> PyWin32Adapter:
         """A two-component assembly whose 'pin-1' has one face, at ``handle``."""
@@ -4152,10 +4312,69 @@ class TestAssemblyAndDrawingSuccessPaths:
             "text": "MATERIAL: AISI 1018",
             "position": {"x": 120.0, "y": 40.0},
             "positioned": True,
+            "extent_mm": None,  # a MagicMock has no extent
             "font_size_points": 12.0,
         }
         annotation.SetPosition.assert_called_once_with(0.12, 0.04, 0.0)
         note.SetTextFormat.assert_called_once()
+
+    @staticmethod
+    def _note(extents: list, position: Any = (0.03, 0.04, 0.0)) -> Any:
+        """A note whose extent reads ``extents`` in turn (metres)."""
+        moves: list[tuple] = []
+        annotation = SimpleNamespace(
+            SetPosition=lambda *a: moves.append(a) or True,
+            GetPosition=lambda: position,
+        )
+        reads = iter(extents)
+        return SimpleNamespace(
+            GetAnnotation=lambda: annotation,
+            GetExtent=lambda: next(reads),
+            SetTextFormat=lambda *_a: True,
+            moves=moves,
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_note_already_at_its_top_left_is_left(self, monkeypatch) -> None:
+        # Live on SW 2026: SetPosition puts the top-left at the point.
+        adapter = self._document(monkeypatch, 3)
+        note = self._note([(0.0299, 0.0356, 0.0, 0.0964, 0.0402, 0.0)])
+        adapter.currentModel.InsertNote.return_value = note
+
+        result = await adapter.add_note({"text": "X", "position": [30.0, 40.0]})
+
+        assert result.data["extent_mm"] == [29.9, 35.6, 96.4, 40.2]
+        assert note.moves == [(0.03, 0.04, 0.0)]
+
+    @pytest.mark.asyncio
+    async def test_a_centred_note_is_moved_to_its_top_left(self, monkeypatch) -> None:
+        # #275 on SW 2024: the note was centred on the point.
+        adapter = self._document(monkeypatch, 3)
+        note = self._note(
+            [
+                (-0.0033, 0.0378, 0.0, 0.0633, 0.0422, 0.0),
+                (0.03, 0.0356, 0.0, 0.0966, 0.04, 0.0),
+            ]
+        )
+        adapter.currentModel.InsertNote.return_value = note
+
+        result = await adapter.add_note({"text": "X", "position": [30.0, 40.0]})
+
+        assert note.moves[1] == pytest.approx((0.0633, 0.0378, 0.0))
+        assert result.data["extent_mm"] == [30.0, 35.6, 96.6, 40.0]
+
+    @pytest.mark.asyncio
+    async def test_a_note_whose_position_cant_be_read_is_left(
+        self, monkeypatch
+    ) -> None:
+        adapter = self._document(monkeypatch, 3)
+        note = self._note([(-0.0033, 0.0378, 0.0, 0.0633, 0.0422, 0.0)], position=None)
+        adapter.currentModel.InsertNote.return_value = note
+
+        result = await adapter.add_note({"text": "X", "position": [30.0, 40.0]})
+
+        assert len(note.moves) == 1
+        assert result.data["extent_mm"] == [-3.3, 37.8, 63.3, 42.2]
 
     @pytest.mark.asyncio
     async def test_list_drawing_views_returns_the_view_names(self, monkeypatch) -> None:
@@ -4476,11 +4695,36 @@ async def test_set_dimension_in_named_configurations(monkeypatch) -> None:
     unknown = await adapter.set_dimension("D1@Boss-Extrude1", 80.0, ["Short"])
 
     dimension.SetSystemValue3.assert_any_call(0.08, 3, ("ARRAY", "Long"))
-    assert done.data == {"configurations": ["Long"]}
+    assert done.data == {
+        "configurations": ["Long"],
+        "old_value": None,
+        "new_value": 80.0,
+    }
     assert "SetSystemValue3 refused D1@Boss-Extrude1 in Default, Long" in (
         refused.error or ""
     )
     assert "No configuration named 'Short'" in (unknown.error or "")
+
+
+@pytest.mark.asyncio
+async def test_this_configuration_names_the_active_one_when_there_are_several(
+    monkeypatch,
+) -> None:
+    """#266: a SystemValue write went to every configuration."""
+    adapter = _build_adapter(monkeypatch)
+    monkeypatch.setattr(_io_module, "string_array", lambda names: ("ARRAY", *names))
+    dimension = SimpleNamespace(SetSystemValue3=Mock(return_value=0), SystemValue=0.01)
+    adapter.currentModel = _ConfiguredModel(Parameter=Mock(return_value=dimension))
+
+    done = await adapter.set_dimension("D1@Boss-Extrude1", 25.0)
+
+    dimension.SetSystemValue3.assert_called_once_with(0.025, 3, ("ARRAY", "Default"))
+    assert dimension.SystemValue == 0.01  # not written directly
+    assert done.data == {
+        "configurations": ["Default"],
+        "old_value": 10.0,
+        "new_value": 25.0,
+    }
 
 
 class TestExplodedDrawingView:
@@ -4612,3 +4856,51 @@ class TestViewScaleAndViewType:
 
         assert result.data["orientation"] == orientation
         assert result.data["scale_read"] is None
+
+
+#: A German model's view list: the ten standard views first, then its own.
+_GERMAN_VIEWS = (
+    "*Normal auf",
+    "*Vorne",
+    "*Hinten",
+    "*Links",
+    "*Rechts",
+    "*Oben",
+    "*Unten",
+    "*Isometrisch",
+    "*Trimetrisch",
+    "*Dimetrisch",
+    "*Meine Ansicht",
+)
+
+
+class TestViewsInAnyLanguage:
+    """#262: on a German install every English view name failed."""
+
+    @pytest.mark.asyncio
+    async def test_a_standard_view_takes_the_models_own_name(self, monkeypatch) -> None:
+        adapter = _view_adapter(monkeypatch, SimpleNamespace())
+        adapter.swApp.OpenDoc6.return_value = SimpleNamespace(
+            GetModelViewNames=lambda: _GERMAN_VIEWS
+        )
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, "orientation": "isometric"}
+        )
+
+        assert result.is_success
+        placed = adapter.currentModel.CreateDrawViewFromModelView3.call_args.args
+        assert placed[1] == "*Isometrisch"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("field", ["view_type", "orientation"])
+    async def test_a_starred_name_is_used_as_given(self, monkeypatch, field) -> None:
+        adapter = _view_adapter(monkeypatch, SimpleNamespace())
+
+        result = await adapter.create_drawing_view(
+            {"model_path": __file__, field: "*Meine Ansicht"}
+        )
+
+        assert result.data["orientation"] == "*Meine Ansicht"
+        placed = adapter.currentModel.CreateDrawViewFromModelView3.call_args.args
+        assert placed[1] == "*Meine Ansicht"

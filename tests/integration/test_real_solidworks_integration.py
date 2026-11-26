@@ -151,12 +151,9 @@ async def test_real_registered_tool_catalog_snapshot(
         "get_mass_properties",
         "check_interference",
         "export_step",
-        # Automation / templates / macros / drawing analysis
-        "batch_process_files",
+        # Macros (batch_process_files, extract_template, start_macro_recording
+        # and analyze_drawing_comprehensive were removed in the tool cleanup)
         "generate_vba_extrusion",
-        "extract_template",
-        "start_macro_recording",
-        "analyze_drawing_comprehensive",
     }
 
     missing = sorted(expected_core_tools.difference(unique_tool_names))

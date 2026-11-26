@@ -77,6 +77,16 @@ def test_the_link_fills_the_form_until_it_is_too_long() -> None:
     assert report.issue_link("x" * report.MAX_LINK_LENGTH) is None
 
 
+def test_the_com_calls_that_differ_are_named_only_when_some_did() -> None:
+    differ = {**_ENV, "com_fallbacks": ["IEquationMgr.GetCount", "Status"]}
+
+    assert (
+        "| COM calls this release answers another way | "
+        "`IEquationMgr.GetCount`, `Status` |"
+    ) in report.summary_markdown(differ, [_PART])
+    assert "answers another way" not in report.summary_markdown(_ENV, [_PART])
+
+
 def test_render_prints_lines_problems_summary_and_link() -> None:
     text = report.render(_ENV, [_PART], ["could not close Part2: busy"])
 

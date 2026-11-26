@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-24
+
 ### Added
 
 - **Assembly depth** (queue item 33): an assembly to the drawing a shop
@@ -25,8 +27,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `exploded`. Tool names may now start with `replace_`. Stable, checked
   live on SolidWorks 2026. Demo: a pinned base, patterned, mirrored,
   swapped, exploded and ballooned, on the demos page.
+- **A compatibility layer for COM calls that differ between SolidWorks
+  releases** (`adapters/solidworks/compat.py`). Each call is made exactly as
+  before, so SolidWorks 2026 is unchanged; only when SolidWorks answers
+  "Member not found" is it retried as the other dispatch kind (a method on
+  one release can be a property on another). The equation tools go through
+  it (#265: all three failed with "Member not found" on SolidWorks 2024).
+  The selftest summary names every member that needed the retry, so a
+  report from a release we don't have says what differs there.
+- **Relations to the sketch origin and to end points** (#269):
+  `add_sketch_constraint` takes `origin` and `<id>.start` / `<id>.end` (a
+  line's or arc's end point), so a corner can be tied to the origin and a
+  sketch fully defined without Fix. The origin is found by identity, so any
+  language works.
+- **`save_as` with `as_copy`** (#276): writes a copy and keeps the original
+  open, as Save As's "Save as copy and continue" does, so assemblies keep
+  using the original. The reply has `current_path` and `kept_original`.
+- **`create_revolve` revolves about a sketch line by its id**: `axis_entity`
+  takes the id `add_centerline` (or `add_line`) returned, such as
+  `Centerline_1`, as well as a reference axis from `create_axis`. The line is
+  selected by its name in the closed sketch (`Line1@Sketch1`, as
+  `EXTSKETCHSEGMENT`) with mark 4, the mark `FeatureRevolve2` reads its axis
+  from. An id counts only for the sketch `exit_sketch` closed last, since every
+  sketch numbers its ids from 1.
 
 ### Fixed
+
+- **`create_hole` puts the hole exactly at `face_point`.** SolidWorks puts a
+  Hole Wizard hole where the face was picked, and the pick landed about
+  0.04 mm off: a Ø6 hole asked for at (-20, 20, -12) mm had its axis at
+  (-20.043, -12.039) on SolidWorks 2026. The hole's position sketch point is
+  now moved onto the exact point (`ISketchPoint.SetCoords`) and read back; a
+  hole that can't be moved is removed and the call fails.
+- **`arrange_dimensions` no longer fails on a dimension that has to cross its
+  view.** SolidWorks can attach a section's auto-dimension to one point in
+  the top half of the view and one in the bottom half; then it crosses the
+  view on either side. The check called that an overlap no pass could clear
+  (about 1 run in 3 of the drawing-pack live test). It is now reported only
+  when another side would have avoided it, and such a dimension goes where
+  its lines cross the least. A failed arrange also reports
+  `conflict_geometry`: each conflicting dimension's lines, text box,
+  extension-line starts and view outline, in mm.
+- **Save As and Save a Copy are kept apart in the code and the tool
+  descriptions.** The exports passed `SaveAs3` option 2 with a comment calling
+  it Silent; 2 is `swSaveAsOptions_Copy` (Silent is 1). Copy is what an export
+  should do, so the value is unchanged; the options are now named once
+  (`com_utils.SAVE_AS_COPY`, `SAVE_AS_SILENT`), and the `export_*`
+  descriptions say they write a copy and leave the open document on its own
+  file, where they said "like File > Save As".
 
 - **`create_axis` in an assembly names the new axis.** It read the last
   item in the tree, which in an assembly is the Mates folder, so the axis
@@ -35,6 +83,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`insert_component` says where it puts a part**: `x`, `y` and `z` are
   the component's centre (the middle of its bounding box), not its origin,
   as SolidWorks places it. Only the descriptions changed.
+- **Default planes, the origin and standard views work in any language**
+  (#262, German SolidWorks 2025; #261, French). `Front`, `Top`, `Right`,
+  `XY`, `XZ`, `YZ`, `Front Plane`... and `Origin` are found by their place in
+  the document's own tree (the first three reference planes before the
+  origin), in sketches, reference planes, axes, mirrors, patterns, mates,
+  explode steps and `select_feature`; a renamed default plane is found too.
+  Drawing views take the model's own name for a standard view
+  (`*Isometrisch`), in `create_drawing_view` and `generate_drawing_package`.
+  This replaces #261's process-wide hook on pywin32 and its French table, and
+  the hard-coded Spanish, Chinese and Japanese plane names. A document
+  without its default planes fails as `not_found`, naming its planes and the
+  install's language.
+- **`create_sketch` no longer sketches on the wrong plane.** A plane that
+  wasn't found fell through to Top, Front or Right; it is now an error. Its
+  last-resort `SelectByID2` passed a bare `None` callout, a type mismatch
+  (`Typenkonflikt` on German, #262).
+- **`create_sketch` with `XY`, `XZ` or `YZ` opens on the right plane**: in
+  SolidWorks' default orientation `XY` is the Front plane and `XZ` the Top
+  plane, as `select_face_edges` already had it. `XY` used to open on Top and
+  `XZ` on Front. **If you passed `XY` or `XZ`, your sketch moves plane.**
+- **`create_drawing_view` uses a `view_type` that starts with `*` as given**
+  (#262): `view_type: "*Isometrisch"` used to fall back to the front view.
+- **`insert_bom_table` without a position keeps the table inside the drawing
+  border** (#262): a table on the sheet format's anchor can't be moved
+  (`SetPosition` returns `False`, the anchor can't be cleared; seen live on
+  SolidWorks 2026), so the old slide onto the sheet never moved it, and
+  `moved_onto_sheet` said it had. A table that lands across the border is now
+  inserted again, unanchored, 10 mm in from the sheet's edge (ISO 5457's
+  frame), or just on the sheet when it is larger.
+- **The SolidWorks 2024 reports #266-#275**, each reproduced live on
+  SolidWorks 2026 first, so they were ours:
+  - `pack_and_go_assembly` failed with `AttributeError` before reaching
+    SolidWorks: the circuit breaker and connection pool didn't forward it
+    (#267). A test now checks both forward every adapter method.
+  - `set_dimension`'s first change with `configurations: "this"` reached
+    every configuration (#266); with several configurations it now names the
+    active one. `old_value` is reported.
+  - `check_sketch_fully_defined` always said `unknown` (#268); it reads
+    `ISketch.GetConstrainedStatus` (`under_defined`, `fully_defined`,
+    `over_defined`...).
+  - `create_extrusion` without `sketch_name` failed after `create_sketch`
+    named the sketch (#270): the rename cleared the selection.
+  - `add_mate` couldn't find a Hole Wizard hole's wall (#271): a point within
+    0.1 mm of a face is now on it (was 0.01 mm).
+  - `sketch_linear_pattern` failed for a negative direction (#272).
+  - `create_section_view` left the view on its parent (#273); it is freed from
+    the parent's alignment and moved, and `at_position` says if it got there.
+  - `add_cosmetic_thread` with `M8x1.25` stored `M8x1.0` (#274): the ISO and
+    DIN tables name a coarse thread without its pitch (`M8`), so that is sent;
+    the stored size and callout are read back.
+  - `add_note`'s position is the note's top-left corner (#275); its extent is
+    read back and the note moved there, as SolidWorks 2026 already places it
+    and 2024 didn't.
+  - `save_as` no longer says it saves a copy (#276).
+- **The selftest's assembly area seats the pin on SolidWorks 2024** (#264):
+  its concentric mate now takes alignment `closest`. With `aligned`, which
+  compares the hole's and the pin's axis directions (set by how each feature
+  was built, not by the geometry), SolidWorks 2024 flipped the pin, and the
+  flush-bottoms coincident mate was then over-defined (error status 5).
+- **The U-joint replay is no longer a live test**: it is
+  `tests/live/demo_ujoint_replay.py`, run only by name to record the demo.
+  How each of its 294 calls ends on today's server is in
+  `tests/live/data/ujoint/replay_2026-11-25.json`, and the nine that end
+  differently from the recorded session are explained in
+  `tests/live/data/ujoint/differences.md`: all nine come from names the agent
+  made up, which the old server accepted silently.
+- **`add_mate` says why SolidWorks refused a mate**: each `swAddMateError_e`
+  status is named (over-defined, wrong alignment, wrong selection, wrong mate
+  type), and an over-defined concentric mate suggests `closest`. The
+  `alignment` description says the same.
 
 ## [2.1.0] - 2026-11-21
 

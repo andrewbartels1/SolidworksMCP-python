@@ -43,8 +43,10 @@ from datetime import date as _date
 from typing import TYPE_CHECKING, Any, cast
 
 from ..base import AdapterResult, AdapterResultStatus
+from . import default_entities as _default_entities
 from . import dimension_layout as _layout
 from .com_utils import double_array as _double_array
+from .feature_walk import walk_feature_tree
 from .features import _null_callout
 from .io import _as_com, _resolve_drawing_view, _sw_type_info, _view_names
 
@@ -152,9 +154,54 @@ def gtol_problem(
     return None
 
 
+#: How far inside the sheet edge the drawing border runs: ISO 5457's frame
+#: is at least 10 mm in. A table placed by the sheet format's anchor is kept
+#: inside it (#262, fixed in 2.2.0: on a German SW 2025 template the BOM sat in the top-left
+#: corner across the border).
+BORDER_INSET = 0.010
+
+
 def _grow(box: tuple[float, ...], by: float) -> Box:
     """``box`` grown by ``by`` on every side."""
     return (box[0] - by, box[1] - by, box[2] + by, box[3] + by)
+
+
+def shift_into(box: Box, area: Box) -> Box | None:
+    """``box`` moved by the least distance that puts it inside ``area``.
+
+    Returns:
+        Box | None: The moved box, ``None`` when it is larger than ``area``.
+    """
+    if box[2] - box[0] > area[2] - area[0] + 1e-9:
+        return None
+    if box[3] - box[1] > area[3] - area[1] + 1e-9:
+        return None
+    dx = max(area[0] - box[0], 0.0) + min(area[2] - box[2], 0.0)
+    dy = max(area[1] - box[1], 0.0) + min(area[3] - box[3], 0.0)
+    return (box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy)
+
+
+# Added in 2.2.0 (#262).
+def bom_target(box: Box | None, sheet: Box | None) -> Box | None:
+    """Where a BOM the format's anchor placed should go instead, if anywhere.
+
+    Inside the border (``BORDER_INSET`` in from the sheet's edge) when it
+    fits there; else, if it runs off the sheet, just onto the sheet.
+
+    Returns:
+        Box | None: The box to place it at; ``None`` when it is already
+        inside the border, is on the sheet and too large for the border, or
+        can't be measured.
+    """
+    if not box or not sheet:
+        return None
+    framed = _grow(sheet, -BORDER_INSET)
+    if _layout.inside(box, _grow(framed, 1e-6)):
+        return None
+    target = shift_into(box, framed)
+    if target is None and not _layout.inside(box, _grow(sheet, 1e-6)):
+        target = shift_into(box, sheet)
+    return target
 
 
 def scale_label(scale: tuple[float, float]) -> str:
@@ -387,26 +434,35 @@ def note_lines(material: str | None, extra: list[str] | None) -> list[str]:
 
 
 def view_roles(
-    views: dict[str, Any], outlines: dict[str, Box | None], orientations: dict[str, str]
+    views: dict[str, Any],
+    outlines: dict[str, Box | None],
+    orientations: dict[str, str],
+    front_name: str = "*Front",
 ) -> dict[str, str]:
     """Name each orthographic view's role: ``front``, ``plan`` or ``side``.
 
-    The front is the view whose orientation says "front" (else the first);
-    a view centred above the front is the plan, any other is the side.
+    The front is the view whose orientation is the model's front view
+    (``front_name``) or says "front" (else the first); a view centred above
+    the front is the plan, any other is the side.
 
     Args:
         views: View name -> ``IView``, in creation order.
         outlines: View name -> outline, ``None`` when unreadable.
         orientations: View name -> orientation name, e.g. ``*Front``.
+        front_name: The model's own name for its front view (``*Vorne`` on
+            German), from its view list.
 
     Returns:
         dict[str, str]: View name -> role; a view whose outline is unknown
         gets no role.
     """
     names = list(views)
-    front = next(
-        (n for n in names if "front" in orientations.get(n, "").lower()), names[0]
-    )
+
+    def _is_front(name: str) -> bool:
+        orientation = orientations.get(name, "")
+        return orientation == front_name or "front" in orientation.lower()
+
+    front = next((n for n in names if _is_front(n)), names[0])
     role = {front: "front"}
     fo = outlines.get(front)
     for name in names:
@@ -629,39 +685,22 @@ class SolidWorksDrawingStandardMixin:
         bottom = y - height if top_anchored else y
         return (left, bottom, left + width, bottom + height)
 
-    def _slide_onto_sheet(self, table: Any, box: Box, sheet: Box) -> bool:
-        """Move a table by the least distance that puts its box on the sheet.
+    def _bom_features(self, model: Any) -> list[Any]:
+        """The drawing's BOM features (``BomFeat``), in tree order."""
+        return [
+            t.feature
+            for t in walk_feature_tree(self, model)
+            if t.type_name == "BomFeat"
+        ]
 
-        The ISO A3 format's BOM anchor is at the top of the sheet, and a table
-        grown up from it there runs off the top (measured live on SW 2026).
-
-        Args:
-            table: The ``ITableAnnotation``.
-            box: Its box on the sheet, in metres.
-            sheet: The sheet's box, in metres.
-
-        Returns:
-            bool: Whether the table was moved. ``False`` when it is larger
-            than the sheet or its position cannot be read.
-        """
-        if (
-            box[2] - box[0] > sheet[2] - sheet[0]
-            or box[3] - box[1] > sheet[3] - sheet[1]
-        ):
+    def _delete_feature(self, model: Any, feature: Any) -> bool:
+        """Select ``feature`` and delete it; whether SolidWorks did."""
+        self._attempt(lambda: model.ClearSelection2(True), default=None)
+        if not self._attempt(lambda: feature.Select2(False, 0), default=False):
             return False
-        dx = max(sheet[0] - box[0], 0.0) + min(sheet[2] - box[2], 0.0)
-        dy = max(sheet[1] - box[1], 0.0) + min(sheet[3] - box[3], 0.0)
-        t = _sw_type_info.flagged(table, "ITableAnnotation")
-        an = self._attempt(
-            lambda: _sw_type_info.flagged(t.GetAnnotation(), "IAnnotation"),
-            default=None,
+        return bool(
+            self._attempt(lambda: model.Extension.DeleteSelection2(0), default=False)
         )
-        pos = self._attempt(lambda: an.GetPosition(), default=None)
-        if not isinstance(pos, (list, tuple)) or len(pos) < 2:
-            return False
-        x, y = float(pos[0]) + dx, float(pos[1]) + dy
-        self._attempt(lambda: an.SetPosition(x, y, 0.0), default=None)
-        return True
 
     async def insert_bom_table(
         self,
@@ -680,7 +719,8 @@ class SolidWorksDrawingStandardMixin:
         it hung below the sheet (measured live on SW 2026). The table's box is
         read back and must lie on the sheet. An anchor near the top of the
         sheet (the ISO A3 format's) makes it grow off the top, so a table
-        placed by the anchor is slid back onto the sheet; one placed at a
+        placed by the anchor is slid inside the border (``BORDER_INSET`` in
+        from the edge), or just onto the sheet when it is larger; one placed at a
         given ``x_mm``/``y_mm`` is never moved. With no template the library
         default ``bom-standard.sldbomtbt`` from the BOM templates folder is
         used.
@@ -758,18 +798,26 @@ class SolidWorksDrawingStandardMixin:
             self._attempt(lambda: view.ReferencedConfiguration, default="") or ""
         )
         numbering = 1 if bom_type == "indented" else _SW_NUMBERING_NONE
-        table = view.InsertBomTable4(
-            use_anchor,
-            (x_mm or 0.0) / 1000.0,
-            (y_mm or 0.0) / 1000.0,
-            _SW_BOM_ANCHOR_BOTTOM_LEFT,
-            _SW_BOM_TYPES[bom_type],
-            config,
-            template,
-            False,
-            numbering,
-            False,
+
+        def _insert(anchored: bool, x: float, y: float) -> Any:
+            return view.InsertBomTable4(
+                anchored,
+                x,
+                y,
+                _SW_BOM_ANCHOR_BOTTOM_LEFT,
+                _SW_BOM_TYPES[bom_type],
+                config,
+                template,
+                False,
+                numbering,
+                False,
+            )
+
+        model = _sw_type_info.flagged(self.currentModel, "IModelDoc2")
+        boms_before = (
+            {str(f.Name) for f in self._bom_features(model)} if use_anchor else set()
         )
+        table = _insert(use_anchor, (x_mm or 0.0) / 1000.0, (y_mm or 0.0) / 1000.0)
         if table is None:
             raise Exception(
                 f"InsertBomTable4 returned nothing for view {view_name!r}. "
@@ -785,15 +833,23 @@ class SolidWorksDrawingStandardMixin:
         sheet = self._sheet_bounds(drawing)
         on_sheet = _grow(sheet, 1e-6) if sheet else None
         moved = False
-        if (
-            use_anchor
-            and box
-            and on_sheet
-            and not _layout.inside(box, on_sheet)
-            and self._slide_onto_sheet(table, box, sheet)
-        ):
-            moved = True
-            box = self._table_box(table)
+        target = bom_target(box, sheet) if use_anchor else None
+        if target is not None:
+            # A table on the format's anchor can't be moved (SetPosition
+            # returns False, Anchored can't be cleared; measured live on SW
+            # 2026), so it is put back unanchored where it fits (#262, fixed in 2.2.0).
+            new = [
+                f for f in self._bom_features(model) if str(f.Name) not in boms_before
+            ][-1:]
+            if new and self._delete_feature(model, new[0]):
+                table = _insert(False, target[0], target[1])
+                if table is None:
+                    raise RuntimeError(
+                        "The BOM table ran across the border and could not be "
+                        "inserted again inside it. Give x_mm and y_mm."
+                    )
+                moved = True
+                box = self._table_box(table)
         box_mm = [round(c * 1000, 1) for c in box] if box else None
         if box and on_sheet and not _layout.inside(box, on_sheet):
             raise RuntimeError(
@@ -1375,7 +1431,14 @@ class SolidWorksDrawingStandardMixin:
             n: str(self._attempt(lambda v=v: v.GetOrientationName(), default="") or "")
             for n, v in s.views.items()
         }
-        s.role = view_roles(s.views, outlines, orientations)
+        # The model's own names for its standard views, so the front and the
+        # isometric are found in any language (#262, fixed in 2.2.0).
+        model = self._attempt(
+            lambda: self.swApp.GetOpenDocumentByName(s.path), default=None
+        )
+        local_front = _default_entities.standard_view_name(self, model, "*Front")
+        local_iso = _default_entities.standard_view_name(self, model, "*Isometric")
+        s.role = view_roles(s.views, outlines, orientations, local_front)
         # Orthographic views show hidden edges dashed (a through hole in the
         # front and side views); the isometric stays as it is.
         hidden = {n: self._show_hidden_lines(v) for n, v in s.views.items()}
@@ -1383,7 +1446,7 @@ class SolidWorksDrawingStandardMixin:
             before_iso = set(_view_names(self, drawing))
             self._attempt(
                 lambda: drawing.CreateDrawViewFromModelView3(
-                    s.path, "*Isometric", *_ISO_DROP_POINT, 0.0
+                    s.path, local_iso, *_ISO_DROP_POINT, 0.0
                 ),
                 default=None,
             )

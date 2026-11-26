@@ -556,3 +556,123 @@ class TestTextBox:
         # The live top view's "30.00": corner on the dimension line at x 22.9 mm.
         box = lay.text_box(0.0229, 0.1656, 0.0142, 0.0035, math.pi / 2)
         assert box == pytest.approx((0.0194, 0.1656, 0.0229, 0.1798))
+
+
+class TestDescribeConflicts:
+    """A failed arrange reports the geometry behind each conflict, in mm."""
+
+    def test_a_dimension_in_conflict_is_described(self) -> None:
+        dim = _hdim("V#0", "V", 0.010, 0.030, 0.050, 0.040)
+        outlines = {"V": (0.0, 0.0, 0.040, 0.040)}
+        overlaps = [
+            {
+                "dimension": "V#0",
+                "conflicts_with": "V",
+                "kind": "line_through_own_view",
+            },
+            {
+                "dimension": "V#0",
+                "conflicts_with": "frame",
+                "kind": "outside_working_area",
+            },
+        ]
+
+        (described,) = lay.describe_conflicts([dim], outlines, overlaps)
+
+        assert described["key"] == "V#0"
+        assert described["orientation"] == "h"
+        assert described["text_box_mm"] == [15.0, 48.4, 25.0, 51.6]
+        assert described["lines_mm"][0] == [10.0, 40.0, 10.0, 50.0]
+        assert described["extension_origins_mm"] == [40.0, 40.0]
+        assert described["view_outline_mm"] == [0.0, 0.0, 40.0, 40.0]
+
+    def test_what_is_not_a_dimension_is_skipped(self) -> None:
+        dim = _hdim("V#0", "W", 0.010, 0.030, 0.050, 0.040)
+        overlaps = [
+            {"dimension": "Note1", "conflicts_with": "V", "kind": "on_view_geometry"},
+            {"dimension": "V#0", "conflicts_with": "V", "kind": "on_view_geometry"},
+        ]
+
+        described = lay.describe_conflicts([dim], {}, overlaps)
+
+        assert [d["key"] for d in described] == ["V#0"]
+        assert described[0]["view_outline_mm"] is None
+
+
+class TestExtensionLinesOnBothHalves:
+    """Seen live on SW 2026 (2.2.0): a section's auto-dimension started one
+    extension line at y = 356 mm and the other at y = 336 mm, in a view from
+    326.6 to 363.4 mm. Every side crosses the view, so it isn't an overlap."""
+
+    SECTION = (0.2316, 0.3266, 0.3684, 0.3634)
+
+    def _live(self) -> lay.DimensionGeometry:
+        return lay.DimensionGeometry(
+            key="Section View A-A#0",
+            view="Section View A-A",
+            text_box=(0.296121, 0.36965, 0.303879, 0.37315),
+            position=(0.3, 0.3714),
+            lines=[
+                (0.240, 0.356, 0.240, 0.37065),
+                (0.360, 0.336, 0.360, 0.37065),
+                (0.240, 0.36965, 0.360, 0.36965),
+            ],
+        )
+
+    def test_the_live_dimension_is_not_an_overlap(self) -> None:
+        dim = self._live()
+
+        assert not lay.crosses_own_view(dim, self.SECTION)
+        assert lay.find_overlaps([dim], {"Section View A-A": self.SECTION}) == []
+
+    def test_the_side_that_crosses_less_is_tried_first(self) -> None:
+        # Above: (363.4 - 356) + (363.4 - 336) = 34.8 mm; below: 38.8 mm.
+        assert lay._side_order([0.356, 0.336], 0.3266, 0.3634, "above", "below") == [
+            "above",
+            "below",
+        ]
+        # Lower origins: below crosses less, so it comes first.
+        assert lay._side_order([0.350, 0.330], 0.3266, 0.3634, "above", "below") == [
+            "below",
+            "above",
+        ]
+        assert lay._side_order([0.360, 0.358], 0.3266, 0.3634, "above", "below") == [
+            "above"
+        ]
+
+    def test_the_planner_puts_it_where_it_crosses_least(self) -> None:
+        dim = self._live()
+        outlines = {"Section View A-A": self.SECTION}
+
+        moves, unplaced = lay.plan_layout([dim], outlines)
+
+        assert not unplaced
+        (moved,) = _apply([dim], moves)
+        assert moved.text_box[1] > self.SECTION[3]  # above the view
+        assert lay.find_overlaps([moved], outlines) == []
+
+    def test_a_vertical_dimension_on_both_halves(self) -> None:
+        # Origins at x = 0.12 (left half) and 0.16 (right half) of 0.10..0.17:
+        # right crosses 0.05 + 0.01, left 0.02 + 0.06.
+        dim = lay.DimensionGeometry(
+            key="v",
+            view="View1",
+            text_box=(0.175, 0.07, 0.178, 0.08),
+            position=(0.1765, 0.075),
+            lines=[
+                (0.12, 0.05, 0.18, 0.05),
+                (0.16, 0.10, 0.18, 0.10),
+                (0.179, 0.05, 0.179, 0.10),
+            ],
+        )
+
+        assert lay._side_order([0.12, 0.16], 0.10, 0.17, "right", "left") == [
+            "right",
+            "left",
+        ]
+        # A tie keeps the first origin's side.
+        assert lay._side_order([0.11, 0.16], 0.10, 0.17, "right", "left") == [
+            "left",
+            "right",
+        ]
+        assert not lay.crosses_own_view(dim, (0.10, 0.04, 0.17, 0.11))

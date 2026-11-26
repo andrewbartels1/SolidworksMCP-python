@@ -2884,11 +2884,34 @@ class TestReferenceGeometryOutcomes:
         model = MagicMock()
         model.FeatureByName.return_value = _selectable_feature()
         model.FeatureManager.GetFeatureCount.side_effect = [5, 6]
+        made = {"axis": False}
+        model.InsertAxis2.side_effect = lambda *_a: made.update(axis=True) or True
+        # Every read before InsertAxis2 sees ``before`` (the plane lookup reads
+        # the tree too), every read after it ``after``.
         type(model).FirstFeature = PropertyMock(
-            side_effect=[self._tree(*before), self._tree(*after)]
+            side_effect=lambda: self._tree(*(after if made["axis"] else before))
         )
         adapter.currentModel = model
         return adapter
+
+    def test_an_axis_on_a_french_part_selects_its_own_planes(self, monkeypatch) -> None:
+        # #262: the English plane names don't exist on a translated part.
+        part = [
+            ("RefPlane", "Plan de face"),
+            ("RefPlane", "Plan de dessus"),
+            ("RefPlane", "Plan de droite"),
+            ("OriginProfileFeature", "Origine"),
+        ]
+        adapter = self._axis_adapter(monkeypatch, part, [*part, ("RefAxis", "Axe1")])
+
+        result = _create_axis_impl(adapter, "z")
+
+        assert result.data["name"] == "Axe1"
+        looked_up = [
+            c.args[0] for c in adapter.currentModel.FeatureByName.call_args_list
+        ]
+        assert looked_up == ["Plan de dessus", "Plan de droite"]
+        assert result.data["planes"] == ["Plan de dessus", "Plan de droite"]
 
     def test_axis_reports_its_planes(self, monkeypatch) -> None:
         part = [("RefPlane", "Top Plane"), ("Extrusion", "Boss-Extrude1")]
@@ -3153,6 +3176,49 @@ def test_solid_extrusion_honours_mid_plane(params: ExtrusionParameters) -> None:
     assert calls[0][3] == 6  # T1 = swEndCondMidPlane
     assert calls[0][5] == pytest.approx(0.012)  # total depth, split by SW
     assert result.data.parameters["end_condition"] == "MidPlane"
+
+
+def _renamed_sketch_adapter(selected: int, picked: list) -> _FakeFeatureAdapter:
+    """A part whose sketch exit_sketch renamed SK_Base; ``selected`` entities."""
+    adapter = _extrusion_adapter(
+        FeatureExtrusion3=lambda *a: SimpleNamespace(Name="Boss-Extrude1")
+    )
+    sketch = SimpleNamespace(
+        GetTypeName2=lambda: "ProfileFeature",
+        Name="SK_Base",
+        GetNextFeature=lambda: None,
+    )
+    adapter.currentModel.FirstFeature = lambda: sketch
+    adapter.currentModel.ClearSelection2 = lambda *_a: True
+    adapter.currentModel.SelectionManager = SimpleNamespace(
+        GetSelectedObjectCount2=lambda _mark: selected
+    )
+    adapter.currentModel.Extension = SimpleNamespace(
+        SelectByID2=lambda name, *_a: picked.append(name) or True
+    )
+    adapter._last_sketch_name = "SK_Base"
+    return adapter
+
+
+def test_an_extrusion_after_a_renamed_sketch_selects_it_by_name() -> None:
+    """#270: renaming the sketch on exit cleared the selection."""
+    picked: list[str] = []
+    adapter = _renamed_sketch_adapter(0, picked)
+
+    result = features._create_extrusion_impl(adapter, ExtrusionParameters(depth=20))
+
+    assert result.is_success, result.error
+    assert picked == ["SK_Base"]
+
+
+def test_an_extrusion_with_the_sketch_still_selected_selects_nothing() -> None:
+    picked: list[str] = []
+    adapter = _renamed_sketch_adapter(1, picked)
+
+    result = features._create_extrusion_impl(adapter, ExtrusionParameters(depth=20))
+
+    assert result.is_success, result.error
+    assert picked == []
 
 
 def test_legacy_solid_extrusion_also_honours_mid_plane() -> None:
@@ -3728,8 +3794,71 @@ def test_select_revolve_inputs_names_an_axis_that_is_not_there(monkeypatch) -> N
     )
     params = SimpleNamespace(sketch_name=None, axis_entity="Line1")
 
-    with pytest.raises(Exception, match="Axis 'Line1' is not a reference axis"):
+    with pytest.raises(Exception, match="Axis 'Line1' is neither a sketch line's id"):
         features._select_revolve_inputs(adapter, params)
+
+
+class _NamedLine:
+    """An ``ISketchSegment`` with a name in its sketch."""
+
+    def __init__(self, name: str | None = "Line1") -> None:
+        self.name = name
+
+    def GetName(self) -> str | None:
+        return self.name
+
+
+def _with_lines(
+    adapter: _FakeFeatureAdapter, monkeypatch: pytest.MonkeyPatch, **lines: Any
+) -> None:
+    monkeypatch.setattr(features.sw_type_info, "flagged", lambda obj, *_: obj)
+    monkeypatch.setattr(
+        features, "_resolve_profile_sketch", lambda _a, name, purpose: "Sketch1"
+    )
+    adapter._closed_sketch = ("Sketch1", dict(lines))  # type: ignore[attr-defined]
+
+
+def test_a_centreline_id_is_the_revolve_axis(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The id add_centerline returned is selected by its name in the closed
+    sketch, appended with mark 4 (the mark FeatureRevolve2 reads its axis
+    from); no reference axis is looked up."""
+    adapter = _revolve_adapter(axis_selects=False)
+    _with_lines(adapter, monkeypatch, Centerline_1=_NamedLine("Line1"))
+    params = SimpleNamespace(sketch_name=None, axis_entity="Centerline_1")
+
+    assert features._select_revolve_inputs(adapter, params) == "Sketch1"
+    assert adapter.picks == [("Line1@Sketch1", "EXTSKETCHSEGMENT", True, 4)]
+
+
+def test_a_centreline_id_from_another_sketch_is_not_used(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ids repeat in every sketch: Centerline_1 of Sketch2 isn't Sketch1's."""
+    adapter = _revolve_adapter(axis_selects=False)
+    _with_lines(adapter, monkeypatch, Centerline_1=_NamedLine("Line1"))
+    adapter._closed_sketch = ("Sketch2", adapter._closed_sketch[1])  # type: ignore[attr-defined]
+    params = SimpleNamespace(sketch_name=None, axis_entity="Centerline_1")
+
+    with pytest.raises(Exception, match="neither a sketch line's id"):
+        features._select_revolve_inputs(adapter, params)
+    assert adapter.picks == [("Centerline_1", "AXIS", True, 4)]
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [{"Polygon_1": (object(), object())}, {"Centerline_1": _NamedLine(None)}],
+)
+def test_a_polygon_or_unnamed_line_falls_back_to_a_reference_axis(
+    monkeypatch: pytest.MonkeyPatch, lines: dict[str, Any]
+) -> None:
+    adapter = _revolve_adapter(axis_selects=True)
+    _with_lines(adapter, monkeypatch, **lines)
+    name = next(iter(lines))
+    params = SimpleNamespace(sketch_name=None, axis_entity=name)
+
+    features._select_revolve_inputs(adapter, params)
+
+    assert adapter.picks == [(name, "AXIS", True, 4)]
 
 
 class TestScopedSuppression:

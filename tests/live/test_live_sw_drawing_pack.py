@@ -110,6 +110,18 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
 
     px, py = _centre(views[plan]["outline_mm"])
     box = views[plan]["outline_mm"]
+    evidence(
+        "the views on the A2 sheet (outlines, mm)",
+        {name: view["outline_mm"] for name, view in views.items()},
+    )
+    # The section lands at `position` since #273 (it used to stay on its
+    # parent), so it needs a spot with room for its dimensions on every side.
+    # At (500, 300) its right edge was 15 mm from the frame, and a vertical
+    # auto-dimension SolidWorks put on that edge had nowhere to go (it can't
+    # cross to the left of its own view): arrange_dimensions refused in 3 of
+    # 5 runs. At (460, 300) it sat 5 mm above the isometric view (outline
+    # (238, 162, 397, 277) mm). The band above y = 280 mm is empty, so at
+    # (300, 345) the section (about 137 x 37 mm) has some 50 mm on each side.
     section = await call(
         "4. a section through the hole",
         "create_section_view",
@@ -117,7 +129,7 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
             "view": plan,
             "line_start": [box[0] - 5, py],
             "line_end": [box[2] + 5, py],
-            "position": [500, 300],
+            "position": [300, 345],
         },
     )
     sx, sy = _centre(section["view"]["outline_mm"])
@@ -162,6 +174,9 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
         "arrange_dimensions",
         {"view_name": section_name},
     )
+    if arranged.get("status") != "success":
+        # The caption keeps only the message; the data says why.
+        evidence("arrange_dimensions failed: its data", arranged.get("data"))
     note(
         "Next, on purpose: a section line that misses the view",
         "The line runs along the bottom of the sheet, far from the plan view. "

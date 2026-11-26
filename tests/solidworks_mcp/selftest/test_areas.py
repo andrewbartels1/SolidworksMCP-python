@@ -99,6 +99,8 @@ async def test_assembly_mates_by_faces_and_checks_counts(tmp_path: Path) -> None
         ("concentric", ex.HOLE_WALL_POINT, ex.PIN_SIDE_POINT),
         ("coincident", ex.BLOCK_BOTTOM_POINT, ex.PIN_BOTTOM_POINT),
     ]
+    # #264: 'aligned' on the concentric mate over-defined the pin on SW 2024.
+    assert [m["alignment"] for m in mates] == ["closest", "aligned"]
     assert mates[0]["component_a"] == "selftest_block-1"
     assert [c.name for c in checks] == [
         "assembly: component_count",

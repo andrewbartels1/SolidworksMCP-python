@@ -1092,28 +1092,109 @@ Found 2026-11-18 building the equations demo.
 
 ## 39. Default plane, origin and standard view names are translated on non-English installs
 
-**Symptom:** on SolidWorks 2026 French, `create_sketch` with `plane: "Top"` fails with
-`Failed to select plane: Top Plane`, and drawing views named `*Isometric` are not created.
+**Symptom:** on SolidWorks 2026 French or 2025 German, `create_sketch` with
+`plane: "Top"` fails with `Failed to select plane: Top Plane` (on German, with
+`Typenkonflikt`, the bare-`None` callout of pitfall 1), and drawing views named
+`*Isometric` are not created.
 
-**Cause:** the default features and named views carry the UI language's names:
-`Plan de face`, `Plan de dessus`, `Plan de droite`, `Origine`, `*Face`, `*Dessus`,
-`*Isométrique`, … `FeatureByName`, `SelectByID2` and `CreateDrawViewFromModelView3` match
-names exactly, so the English names find nothing.
+**Cause:** the default planes and the origin carry the template's names, and the
+standard views the UI language's: `Plan de dessus` / `Ebene oben`, `Origine` /
+`Ursprung`, `*Isométrique` / `*Isometrisch`. A user can rename the planes too.
+`FeatureByName`, `SelectByID2` and `CreateDrawViewFromModelView3` match names
+exactly, so the English names find nothing.
 
-**Fix:** `adapters/solidworks/l10n.py` hooks late-bound dispatch once, when the adapter
-connects. The call always runs first with the name it was given, so English documents
-behave as before. Only when it fails and the name is an English default, it is retried
-with the document's own name:
+**Fix:** find them by identity, per call, in the document being worked on
+(`adapters/solidworks/default_entities.py`), never by a translation table:
 
-- the default planes are the first three `RefPlane` features before the
-  `OriginProfileFeature`, in Front, Top, Right order, in every language;
-- `GetModelViewNames` lists the ten standard views first, in a fixed order;
-- a built-in French table is the last resort.
+- `entity_name(adapter, name)`: `Front`, `Top`, `Right`, `XY` (Front), `XZ`
+  (Top), `YZ` (Right), `Front Plane`…, `Origin`, any case, are the first three
+  `RefPlane` features before the `OriginProfileFeature` (Front, Top, Right
+  order) and that origin, in every language. A `@component@assembly` suffix
+  reads that component's tree. Any other name is used as given. A tree that
+  reaches its origin with fewer than three planes fails `not_found`, listing
+  them and the install's language.
+- `standard_view_name(adapter, model, "*Isometric")`: `GetModelViewNames`
+  lists the ten standard views first, in a fixed order (normal to, front,
+  back, left, right, top, bottom, isometric, trimetric, dimetric); the view is
+  taken from the model's list by its position. Where a call takes an ID
+  (`ShowNamedView2("", id)`), use the `swStandardViews_e` ID instead.
 
-A `@component@assembly` suffix is kept. Unit tests:
-`tests/solidworks_mcp/adapters/solidworks/test_l10n.py`.
+Call `entity_name` wherever a plane name reaches SolidWorks. Unit tests:
+`tests/solidworks_mcp/adapters/solidworks/test_default_entities.py`.
 
-Found 2026-11-22 on SolidWorks 2026 SP0, French.
+Found 2026-11-22 on SolidWorks 2026 SP0, French (#261), and 2025 German (#262).
+The first fix, in #261, was a process-wide hook on pywin32's dispatch; the
+per-call lookup replaced it so no COM call outside a default name changes.
+
+---
+
+## 40. A table on the sheet format's anchor can't be moved
+
+**Symptom:** `IAnnotation.SetPosition` on a BOM inserted with `UseAnchorPoint`
+returns `False` and the table stays put; setting `ITableAnnotation.Anchored =
+False` is ignored. Code that didn't check the return value reported a move that
+never happened (#262).
+
+**Fix:** decide where it goes, delete it (select its `BomFeat` feature,
+`Extension.DeleteSelection2(0)`) and insert it again unanchored at that point. An
+unanchored table moves with `SetPosition` as expected. Measured live on
+SolidWorks 2026, 2026-11-24 (`drawing_standard.bom_target`).
+
+---
+
+## 41. A section view stays aligned with its parent
+
+**Symptom:** `CreateSectionViewAt5(x, y, ...)` puts the view on the parent's x
+(or y), whatever x was given (#273, SolidWorks 2024 and 2026).
+
+**Fix:** `IView.RemoveAlignment()`, then `IView.Position` as an explicit
+`VARIANT(VT_ARRAY | VT_R8)` (pitfall 31), then once more by what the outline still
+misses (a view's position point need not be its outline's centre). Read the outline
+back to confirm (`drawing_pack._pack_place`).
+
+---
+
+## 42. ISO and DIN thread tables name a coarse thread without its pitch
+
+**Symptom:** `InsertCosmeticThread3(..., "M8x1.25", ...)` stores `M8x1.0`: the
+first pitched M8 row (#274). `"M8X1.25"` and `"M8 x 1.25"` do the same.
+
+**Fix:** send the coarse designation (`M8`), which the table stores as `M8` with
+callout `M8`; a fine pitch keeps its pitch (`M8x1.0`). Read
+`ICosmeticThreadFeatureData.Size` and `ThreadCallout` back.
+`IFeature.ModifyDefinition` with a new `Size` raised under late binding, so it has
+to be right on creation. The Hole Wizard library does the same match
+(`hole_library.match_size`).
+
+---
+
+## 43. A note's position is its top-left on 2026, its centre on 2024
+
+**Symptom:** `IAnnotation.SetPosition(x, y)` on a new note puts its top-left
+corner there on SolidWorks 2026 (extent read back: left 29.9 mm for x = 30), but
+centred it on SolidWorks 2024, so a note near the left edge ran off the sheet
+(#275).
+
+**Fix:** read `INote.GetExtent()` after placing it and move it by the difference,
+so it lands the same on both (`io._note_top_left`). The general rule for a
+release difference in *where* something lands: place, measure, correct.
+
+---
+
+## 44. The same member answers as another dispatch kind on another release
+
+**Symptom:** `COM error ... (-2147352573, 'Member not found.')` on a member every
+release has (#265: every `IEquationMgr` call on SolidWorks 2024, all passing on
+2026). Indexed properties such as `Equation(i)`, `Value(i)` and
+`GlobalVariable(i)` are generated as methods by makepy and flagged as methods; a
+release whose dispatch only answers them as properties says "Member not found".
+
+**Fix:** `compat.invoke(obj, name, *args)` / `compat.read(obj, name)` make the
+call as before and only on "Member not found" retry through `IDispatch.Invoke`
+with `DISPATCH_METHOD | DISPATCH_PROPERTYGET`. Every member that needed it is in
+`compat.fallbacks`, which the selftest summary prints, so a report from a release
+we don't have names it. Route calls on interfaces reported broken on another
+release through it; 2026 is unchanged because the first try is the same call.
 
 ---
 
@@ -1236,3 +1317,47 @@ Found 2026-09-05 wiring `execute_macro` end-to-end against live SW 2026 (issue #
 | Does a method return IFeature? | Check return type: `(9, 0)` = VT_DISPATCH (object); `(24, 0)` = VT_I4 (integer) |
 | Full COM threading rules | See "COM threading architecture" in [CLAUDE.md](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/CLAUDE.md) |
 | Runbook for live debugging | See "Troubleshooting Runbook" section in [CLAUDE.md](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/CLAUDE.md) |
+
+---
+
+## 45. A Hole Wizard hole sits where the face was picked, not at the point
+
+**Symptom:** `HoleWizard5` after `SelectByID2("", "FACE", x, y, z, ...)` makes
+the hole about 0.04 mm from (x, y, z): a Ø6 hole asked for at (-20, 20, -12) mm
+had its axis at (-20.043, -12.039) on SolidWorks 2026, radius exact. The hole
+goes where the selection point landed, and the pick is not exact.
+
+**Fix:** after the hole is made, find its position sketch (the sub-feature
+sketch with a point near the pick), move that point onto the exact point with
+`ISketchPoint.SetCoords` inside `EditSketch` / `InsertSketch(True)`, and read
+it back (`part_features._place_holes`).
+
+---
+
+## 46. A closed sketch's line selects by name as `EXTSKETCHSEGMENT`
+
+**Symptom:** after `InsertSketch(True)`,
+`SelectByID2("Line1@Sketch1", "SKETCHSEGMENT", ...)` returns `False` (seen live
+on SolidWorks 2026), so a revolve can't be given the sketch's centreline as its
+axis that way.
+
+**Fix:** read the segment's name (`ISketchSegment.GetName()`, e.g. `Line1`)
+while the handle is held and select `"Line1@Sketch1"` as `EXTSKETCHSEGMENT`,
+appended with mark 4 for `FeatureRevolve2` (`features._select_sketch_axis`).
+
+---
+
+## 47. A sketch point's name is translated: don't select the origin as `Point1@Origin`
+
+**Symptom:** `SelectByID2("Point1@<origin>", "EXTSKETCHPOINT", ...)` selects the
+origin on English SolidWorks, but `Point1` is a translated name, so it isn't
+found on other languages even when the origin feature itself is found by its
+place in the tree.
+
+**Fix:** use the origin feature's own sketch:
+`FeatureByName(origin).GetSpecificFeature2().GetSketchPoints2()[0]` is the
+origin point, and `ISketchRelationManager.AddRelation` takes it as it is (seen
+live on SolidWorks 2026: a line's start coincident with it moves to 0, 0).
+`sketch._sketch_origin_point` does this. Pass the entities to `AddRelation` as a
+`VARIANT(VT_ARRAY | VT_DISPATCH, ...)`; a plain Python list makes SolidWorks
+throw "The server threw an exception".

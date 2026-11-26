@@ -184,6 +184,12 @@ async def test_base_default_sketch_helpers_return_error() -> None:
     result = await adapter.set_component_appearance("base-1", False, True)
     assert "set_component_appearance is not implemented" in (result.error or "")
 
+    result = await adapter.pack_and_go_assembly("C:/a/asm.sldasm", "C:/out")
+    assert "pack_and_go_assembly is not implemented" in (result.error or "")
+
+    result = await adapter.save_copy("C:/out/copy.sldprt")
+    assert "save_copy is not implemented" in (result.error or "")
+
     result = await adapter.add_balloons("Drawing View1", "circle")
     assert "add_balloons is not implemented" in (result.error or "")
 

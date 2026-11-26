@@ -140,7 +140,7 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_step(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the active document to STEP, like File > Save As with the STEP type.
+        """Write a STEP copy of the active document; it stays open on its own file.
 
         Use it to hand a model to another CAD system; it is the most widely read
         exchange format. SolidWorks picks the format from the file's extension, so end
@@ -185,7 +185,7 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_iges(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the active document to IGES, like File > Save As with the IGES type.
+        """Write a IGES copy of the active document; it stays open on its own file.
 
         Use it only when the receiver can't read STEP; prefer `export_step`. SolidWorks
         picks the format from the file's extension, so end `file_path` in .igs or .iges.
@@ -228,7 +228,7 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_stl(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the active document to STL, like File > Save As with the STL type.
+        """Write a STL copy of the active document; it stays open on its own file.
 
         Use it for 3D printing. An assembly is exported whole, with lightweight
         components resolved first. SolidWorks picks the format from the file's
@@ -279,7 +279,7 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_pdf(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the active document to PDF, like File > Save As with the PDF type.
+        """Write a PDF copy of the active document; it stays open on its own file.
 
         Use it to share a drawing; `generate_drawing_package` (drawing toolset) already
         saves a PDF with the drawing it creates. SolidWorks picks the format from the file's extension,
@@ -324,7 +324,7 @@ async def register_export_tools(
 
     @mcp.tool()
     async def export_dwg(input_data: ExportFileInput) -> dict[str, Any]:
-        """Export the active document to DWG, like File > Save As with the DWG type.
+        """Write a DWG copy of the active document; it stays open on its own file.
 
         Use it to hand a drawing to AutoCAD users. SolidWorks picks the format from the
         file's extension, so end `file_path` in .dwg. Needs: an open, active drawing.

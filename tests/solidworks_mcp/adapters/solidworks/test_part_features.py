@@ -23,11 +23,26 @@ from solidworks_mcp.adapters.solidworks.part_features import (
 from solidworks_mcp.adapters.solidworks.rebuild_diagnostics import RawRebuildIssue
 
 
+def _first_sub(*_args: Any) -> Any:
+    """A hole's position sketch with one point, where the hole was asked for."""
+    sketch = SimpleNamespace(GetSketchPoints2=lambda: [SimpleNamespace(X=0, Y=0, Z=0)])
+    return SimpleNamespace(
+        GetTypeName2=lambda: "ProfileFeature",
+        GetSpecificFeature2=lambda: sketch,
+        GetNextSubFeature=lambda: None,
+    )
+
+
+def _hole(name: str) -> Any:
+    """A hole feature with a position sketch whose point is in place."""
+    return SimpleNamespace(Name=name, GetFirstSubFeature=_first_sub)
+
+
 class FakeAdapter(SolidWorksPartFeaturesMixin):
     """Just enough of PyWin32Adapter for the part-feature methods."""
 
     def __init__(self, volumes: list[float | None], feature: Any = "made") -> None:
-        made = SimpleNamespace(Name="Feature9") if feature == "made" else feature
+        made = _hole("Feature9") if feature == "made" else feature
         self.manager = MagicMock()
         for method in (
             "FeatureLinearPattern5",
@@ -113,6 +128,8 @@ def picks(
     monkeypatch.setattr(pf, "_BodyEntityPicker", lambda adapter: None)
     monkeypatch.setattr(pf.sw_type_info, "flagged", lambda obj, *_: obj)
     monkeypatch.setattr(pf, "collect_rebuild_issues", lambda adapter, model: [])
+    # Every point lies at the sketch origin unless a test says otherwise.
+    monkeypatch.setattr(pf, "_to_sketch", lambda adapter, sketch, p: [0.0, 0.0, 0.0])
     return seen
 
 
@@ -332,11 +349,55 @@ async def test_cosmetic_thread_keeps_the_volume(picks: list[Any]) -> None:
 
     result = await adapter.add_cosmetic_thread([5, 0, 20], "M10x1.5", 10, "blind", 15)
 
+    # M10x1.5 is ISO coarse, which the table names "M10" (#274).
     adapter.manager.InsertCosmeticThread3.assert_called_once_with(
-        8, "Machine Threads", "M10x1.5", 0.01, 0, 0.015, "M10x1.5"
+        8, "Machine Threads", "M10", 0.01, 0, 0.015, "M10"
     )
     assert result.data["volume_change"] == 0.0
+    assert result.data["size"] == "M10x1.5"
     assert picks[0][3:] == (False, 0, "EDGE")
+
+
+@pytest.mark.parametrize(
+    ("size", "standard", "table"),
+    [
+        ("M8x1.25", "iso", "M8"),
+        ("m8 X 1.25", "din", "M8"),
+        ("M8x1.0", "iso", "M8x1.0"),  # fine: kept
+        ("M8", "iso", "M8"),
+        ("M2.5x0.45", "iso", "M2.5"),
+        ("M8x1.25", "ansi_metric", "M8x1.25"),  # another table
+        ("1/4-20", "ansi_inch", "1/4-20"),
+        ("M9x1.25", "iso", "M9x1.25"),  # no such coarse size
+    ],
+)
+def test_thread_table_size(size: str, standard: str, table: str) -> None:
+    assert pf.thread_table_size(size, standard) == table
+
+
+def _thread(stored: str | None, callout: str | None = None) -> Any:
+    data = SimpleNamespace(Size=stored, ThreadCallout=callout or stored)
+    return SimpleNamespace(Name="Cosmetic Thread1", GetDefinition=lambda: data)
+
+
+@pytest.mark.asyncio
+async def test_a_thread_reports_what_solidworks_stored(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 1000.0], feature=_thread("M8"))
+
+    result = await adapter.add_cosmetic_thread([5, 0, 20], "M8x1.25", 8, "blind", 10)
+
+    assert result.data["stored_size"] == "M8"
+    assert result.data["callout"] == "M8"
+    assert "warning" not in result.data
+
+
+@pytest.mark.asyncio
+async def test_a_thread_stored_as_another_size_warns(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 1000.0], feature=_thread("M8x1.0"))
+
+    result = await adapter.add_cosmetic_thread([5, 0, 20], "M8x0.75", 8, "blind", 10)
+
+    assert "stored the thread as M8x1.0, not M8x0.75" in result.data["warning"]
 
 
 @pytest.mark.asyncio
@@ -502,6 +563,8 @@ class _Hole:
     def GetDefinition(self) -> Any:
         return self.definition
 
+    GetFirstSubFeature = _first_sub
+
     def ModifyDefinition(self, data: Any, model: Any, component: Any) -> bool:
         self.saved = data
         return self.saves
@@ -578,7 +641,7 @@ async def test_a_simple_hole_through_all_falls_back_to_blind(picks: list[Any]) -
     """SolidWorks makes no simple hole through all (seen live); it is retried
     blind, as deep as the part box's diagonal + 1 mm."""
     adapter = FakeAdapter([1000.0, 900.0])
-    made = SimpleNamespace(Name="Hole1")
+    made = _hole("Hole1")
     adapter.manager.HoleWizard5.side_effect = [None, made]
     adapter.currentModel.GetPartBox.return_value = (0, 0, 0, 0.03, 0.04, 0)
 
@@ -596,7 +659,7 @@ async def test_a_simple_hole_through_all_falls_back_to_blind(picks: list[Any]) -
 @pytest.mark.asyncio
 async def test_an_unreadable_part_box_gives_a_metre(picks: list[Any]) -> None:
     adapter = FakeAdapter([1000.0, 900.0])
-    adapter.manager.HoleWizard5.side_effect = [None, SimpleNamespace(Name="Hole1")]
+    adapter.manager.HoleWizard5.side_effect = [None, _hole("Hole1")]
     adapter.currentModel.GetPartBox.return_value = None
 
     result = await adapter.create_hole([0, 20, 0], "simple", "iso", "Ø6.0")
@@ -711,6 +774,65 @@ async def test_a_failed_position_removes_the_hole(
     assert message in (result.error or "")
     assert (result.error or "").endswith("The hole Hole1 was removed again.")
     assert adapter.deleted == ["Hole1"]
+
+
+class _MovablePoint:
+    """An ``ISketchPoint`` that moves when ``SetCoords`` takes."""
+
+    def __init__(self, x: float, y: float, moves: bool = True) -> None:
+        self.X, self.Y, self.Z = x, y, 0.0
+        self.moves = moves
+        self.set_to: tuple[float, float, float] | None = None
+
+    def SetCoords(self, x: float, y: float, z: float) -> bool:
+        self.set_to = (x, y, z)
+        if self.moves:
+            self.X, self.Y, self.Z = x, y, z
+        return self.moves
+
+
+@pytest.mark.asyncio
+async def test_a_hole_off_its_point_is_moved_onto_it(
+    picks: list[Any], sketch_space: None
+) -> None:
+    """The Hole Wizard puts the hole where the pick landed, 0.043 mm off on
+    2026; its position sketch point is moved exactly onto the point (#271)."""
+    point = _MovablePoint(0.0000427, 0.0000394)
+    sketch = _PositionSketch([])
+    sketch.points = [point]
+    adapter = FakeAdapter([1000.0, 900.0], feature=_hole_with_sketch(sketch))
+
+    result = await adapter.create_hole([0, 0, 20], "simple", "iso", "Ø6.0")
+
+    assert result.data["hole_count"] == 1
+    assert point.set_to == (0.0, 0.0, 0.0)
+    adapter.currentModel.EditSketch.assert_called_once()
+    adapter.currentModel.SketchManager.InsertSketch.assert_called_once_with(True)
+    adapter.currentModel.SketchManager.CreatePoint.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_a_hole_that_wont_move_is_removed(
+    picks: list[Any], sketch_space: None
+) -> None:
+    sketch = _PositionSketch([])
+    sketch.points = [_MovablePoint(0.0000427, 0.0, moves=False)]
+    adapter = FakeAdapter([1000.0], feature=_hole_with_sketch(sketch))
+
+    result = await adapter.create_hole([0, 0, 20], "simple", "iso", "Ø6.0")
+
+    assert "The hole is 0.043 mm from [0, 0, 20] mm" in (result.error or "")
+    assert adapter.deleted == ["Hole1"]
+
+
+@pytest.mark.asyncio
+async def test_a_hole_in_place_leaves_its_sketch_closed(picks: list[Any]) -> None:
+    adapter = FakeAdapter([1000.0, 900.0])
+
+    result = await adapter.create_hole([0, 0, 20], "simple", "iso", "Ø6.0")
+
+    assert result.data["hole_count"] == 1
+    adapter.currentModel.EditSketch.assert_not_called()
 
 
 def test_a_model_point_in_sketch_space(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -10,6 +10,16 @@ from typing import Any
 
 from .. import sw_type_info as _sw_type_info
 
+#: Named in 2.2.0 (#276 and the export comments that called Copy "Silent").
+#: ``SaveAs`` version: the running release's format.
+SAVE_AS_CURRENT_VERSION = 0
+#: ``swSaveAsOptions_e`` flags for ``SaveAs3`` / ``Extension.SaveAs2``. Save
+#: As and Save a Copy are different things: with neither flag the open
+#: document becomes the file written (File > Save As); ``SAVE_AS_COPY`` writes
+#: the file and the open document keeps its own path, as an export does.
+SAVE_AS_SILENT = 1
+SAVE_AS_COPY = 2
+
 
 def attempt(adapter: Any, fn: Any, default: Any = None) -> Any:
     """Run ``fn`` through the adapter's ``_attempt`` (exceptions -> default)."""

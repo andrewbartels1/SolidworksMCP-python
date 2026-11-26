@@ -535,6 +535,13 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "save_file", lambda adapter: adapter.save_file(file_path)
         )
 
+    # Added in 2.2.0 (#276).
+    async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Write a copy and keep the original open, using pool."""
+        return await self._execute_with_pool(
+            "save_copy", lambda adapter: adapter.save_copy(file_path)
+        )
+
     async def create_base_flange(
         self,
         thickness: float,
@@ -1464,6 +1471,17 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             lambda adapter: adapter.replace_component(
                 component, file_path, all_instances
             ),
+        )
+
+    # Forwarded since 2.2.0 (#267: it raised AttributeError before reaching
+    # SolidWorks).
+    async def pack_and_go_assembly(
+        self, source_path: str, target_dir: str
+    ) -> AdapterResult[dict[str, Any]]:
+        """Copy an assembly and its files into one folder, using pool."""
+        return await self._execute_with_pool(
+            "pack_and_go_assembly",
+            lambda adapter: adapter.pack_and_go_assembly(source_path, target_dir),
         )
 
     async def set_component_appearance(

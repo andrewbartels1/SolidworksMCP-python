@@ -187,7 +187,7 @@ Revolve the sketch you just closed around the centreline drawn in it, adding a s
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `sketch_name` | `str?` | — | `null` | Sketch to use, by its name in the feature tree (e.g. "Sketch2"); omit to use the sketch `exit_sketch` closed last |
-| `axis_entity` | `str?` | — | `null` | A reference axis to revolve about, by its name in the feature tree (e.g. "Axis1" from `create_axis`); omit to use the centreline drawn in the sketch |
+| `axis_entity` | `str?` | — | `null` | The axis to revolve about: the id `add_centerline` (or `add_line`) returned, e.g. "Centerline_1", or a reference axis by its name in the feature tree, e.g. "Axis1" from `create_axis`; omit to use the centreline drawn in the sketch |
 | `angle` | `float` | ✅ |  | Revolve angle in degrees |
 | `reverse_direction` | `bool` | — | `false` | Reverse revolve direction |
 | `both_directions` | `bool` | — | `false` | Revolve in both directions |

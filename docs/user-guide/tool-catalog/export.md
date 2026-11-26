@@ -10,7 +10,7 @@ Convert SolidWorks models to industry-standard interchange and manufacturing for
 
 ### `export_step`
 
-Export the active document to STEP, like File > Save As with the STEP type.
+Write a STEP copy of the active document; it stays open on its own file.
 
 **Prerequisite:** Active or specified model document
 
@@ -34,7 +34,7 @@ Export the active document to STEP, like File > Save As with the STEP type.
 
 ### `export_iges`
 
-Export the active document to IGES, like File > Save As with the IGES type.
+Write a IGES copy of the active document; it stays open on its own file.
 
 **Prerequisite:** Active or specified model document
 
@@ -58,7 +58,7 @@ Export the active document to IGES, like File > Save As with the IGES type.
 
 ### `export_stl`
 
-Export the active document to STL, like File > Save As with the STL type.
+Write a STL copy of the active document; it stays open on its own file.
 
 **Prerequisite:** Active or specified model document
 
@@ -82,7 +82,7 @@ Export the active document to STL, like File > Save As with the STL type.
 
 ### `export_pdf`
 
-Export the active document to PDF, like File > Save As with the PDF type.
+Write a PDF copy of the active document; it stays open on its own file.
 
 **Prerequisite:** Active or specified drawing document
 
@@ -106,7 +106,7 @@ Export the active document to PDF, like File > Save As with the PDF type.
 
 ### `export_dwg`
 
-Export the active document to DWG, like File > Save As with the DWG type.
+Write a DWG copy of the active document; it stays open on its own file.
 
 **Prerequisite:** Active or specified drawing document
 

@@ -492,6 +492,9 @@ async def test_overlaps_that_remain_are_an_error_with_the_list() -> None:
     assert result.is_error
     assert result.data["moved"] == 0
     assert result.data["overlaps_after"] == len(result.data["remaining_overlaps"])
+    named = {o["dimension"] for o in result.data["remaining_overlaps"]}
+    assert {g["key"] for g in result.data["conflict_geometry"]} <= named
+    assert result.data["conflict_geometry"], result.data
     assert result.error == _overlap_summary(result.data)
     assert result.execution_time == 0.5
 

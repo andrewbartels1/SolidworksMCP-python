@@ -1438,11 +1438,15 @@ class MockSolidWorksAdapter(
         if isinstance(sketch, AdapterResult):
             return sketch
         axis = getattr(params, "axis_entity", None)
-        if axis and axis not in self._axes:
+        # A sketch line's id is an axis since 2.2.0, as on the real adapter.
+        if axis and axis not in self._axes and axis not in self._sketch_entity_ids:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=f"Axis '{axis}' is not a reference axis in the "
-                "model. Create one with create_axis.",
+                error=f"Axis '{axis}' is neither a sketch line's id (from "
+                "add_centerline or add_line) nor a reference axis in the model. "
+                "Give the id add_centerline returned, create an axis with "
+                "create_axis, or leave axis_entity out to use the sketch's "
+                "centreline.",
             )
 
         await asyncio.sleep(self._delays["feature_operation"])
@@ -1731,6 +1735,30 @@ class MockSolidWorksAdapter(
             status=AdapterResultStatus.SUCCESS,
             data={"file_path": resolved_path, "saved": True},
             execution_time=0.02,
+        )
+
+    # Added in 2.2.0 (#276).
+    async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
+        """Mock writing a copy; the open document keeps its path.
+
+        Args:
+            file_path (str): Where the copy goes.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: The copy's path and the open one.
+        """
+        if not self._current_model:
+            return AdapterResult(
+                status=AdapterResultStatus.ERROR, error="No active model"
+            )
+        self._operation_count += 1
+        return AdapterResult(
+            status=AdapterResultStatus.SUCCESS,
+            data={
+                "file_path": file_path,
+                "current_path": self._current_model.path,
+                "kept_original": True,
+            },
         )
 
     async def add_line(

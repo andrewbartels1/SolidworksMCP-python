@@ -173,8 +173,22 @@ class _View:
         return self.orientation
 
     def InsertBomTable4(self, *args):  # noqa: N802
+        """An anchored insert gives ``bom_result``; an unanchored one after it
+        (the tool putting it back inside the border) a table of the same size
+        at the given bottom-left corner. Each adds a BOM feature."""
         self.bom = args
-        return self.bom_result
+        self.inserts = [*getattr(self, "inserts", []), args]
+        result = self.bom_result
+        if not args[0] and len(self.inserts) > 1 and isinstance(result, _Table):
+            if getattr(self, "reinsert_fails", False):
+                return None
+            placed = _Table((args[1], args[2]), anchor=3)
+            placed.GetColumnWidth = result.GetColumnWidth  # type: ignore[method-assign]
+            result = placed
+        drawing = getattr(self, "drawing", None)
+        if result is not None and drawing is not None:
+            drawing.add_bom()
+        return result
 
 
 class _Sheet:
@@ -230,6 +244,32 @@ class _Drawing:
         self.notes: list[_Ann] = []
         self.note_mode = "ok"  # "ok", "no_note", "no_annotation", "no_format"
         self.prefs: dict[int, Any] = {}
+        self.boms: list[SimpleNamespace] = []
+        self.selected: Any = None
+        self.delete_ok = True
+        self.Extension = SimpleNamespace(DeleteSelection2=self._delete_selection)
+
+    # The BOM features in the tree, for the tool's delete-and-re-place.
+    def add_bom(self) -> None:
+        self.bom_count = getattr(self, "bom_count", 0) + 1
+        feature = SimpleNamespace(
+            Name=f"Bill of Materials{self.bom_count}", GetTypeName2="BomFeat"
+        )
+        feature.Select2 = lambda *_a, f=feature: setattr(self, "selected", f) or True
+        self.boms.append(feature)
+
+    def FirstFeature(self):  # noqa: N802
+        chain: Any = None
+        for feature in reversed(self.boms):
+            feature.GetNextFeature = lambda n=chain: n
+            chain = feature
+        return chain
+
+    def _delete_selection(self, _options):
+        if not self.delete_ok or self.selected not in self.boms:
+            return False
+        self.boms.remove(self.selected)
+        return True
 
     def GetType(self):  # noqa: N802
         return 3
@@ -256,6 +296,8 @@ class _Drawing:
         self.views["Drawing View3"] = _View(
             "Drawing View3", "*Right", (0.2, 0.1, 0.27, 0.11)
         )
+        for view in self.views.values():
+            view.drawing = self
         return self.third_angle == "views"
 
     def CreateDrawViewFromModelView3(self, *_):  # noqa: N802
@@ -344,6 +386,10 @@ class _Harness(SolidWorksDrawingStandardMixin):
             return operation()
         except Exception:
             return default
+
+    def _get_attr_or_call(self, obj, name):
+        attr = getattr(obj, name, None)
+        return attr() if callable(attr) else attr
 
     def _require_drawing(self):
         if getattr(self.currentModel, "GetType", lambda: 0)() != 3:
@@ -545,17 +591,32 @@ class TestBomTableLandsOnTheSheet:
         assert _Harness()._table_box(table) is None
 
     @pytest.mark.asyncio
-    async def test_a_table_on_the_sheet_reports_its_box(self) -> None:
+    async def test_a_table_inside_the_border_reports_its_box(self) -> None:
+        adapter = _drawing_harness()
+        adapter.drawing.views["Drawing View1"].bom_result = _Table((0.05, 0.05))
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["table_box_mm"] == [50.0, 50.0, 110.0, 65.0]
+        assert result.data["moved_onto_sheet"] is False
+
+    @pytest.mark.asyncio
+    async def test_an_anchored_table_in_the_corner_is_slid_inside_the_border(
+        self,
+    ) -> None:
+        # #262: on the sheet but across its border, in the corner.
         adapter = _drawing_harness()
         adapter.drawing.views["Drawing View1"].bom_result = _Table()
 
         result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
 
-        assert result.data["table_box_mm"] == [0.0, 0.0, 60.0, 15.0]
-        assert result.data["moved_onto_sheet"] is False
+        assert result.data["table_box_mm"] == [10.0, 10.0, 70.0, 25.0]
+        assert result.data["moved_onto_sheet"] is True
 
     @pytest.mark.asyncio
-    async def test_an_anchored_table_off_the_top_is_slid_onto_the_sheet(self) -> None:
+    async def test_an_anchored_table_off_the_top_is_slid_inside_the_border(
+        self,
+    ) -> None:
         # The ISO A3 format's anchor (20, 287) mm, growing up: live on SW 2026.
         adapter = _drawing_harness()
         table = _Table((0.020, 0.287), anchor=3)
@@ -564,7 +625,7 @@ class TestBomTableLandsOnTheSheet:
         result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
 
         assert result.data["moved_onto_sheet"] is True
-        assert result.data["table_box_mm"] == [20.0, 282.0, 80.0, 297.0]
+        assert result.data["table_box_mm"] == [20.0, 272.0, 80.0, 287.0]
 
     @pytest.mark.asyncio
     async def test_an_anchored_table_off_the_left_and_bottom_is_slid_on(self) -> None:
@@ -574,7 +635,32 @@ class TestBomTableLandsOnTheSheet:
 
         result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
 
-        assert result.data["table_box_mm"] == [0.0, 0.0, 60.0, 15.0]
+        assert result.data["table_box_mm"] == [10.0, 10.0, 70.0, 25.0]
+
+    @pytest.mark.asyncio
+    async def test_a_table_wider_than_the_border_is_slid_onto_the_sheet(self) -> None:
+        # 410 mm wide: too wide for the 400 mm inside the border, not the sheet.
+        adapter = _drawing_harness()
+        wide = _Table((0.02, 0.0))
+        wide.GetColumnWidth = lambda _i: 0.1025  # type: ignore[method-assign]
+        adapter.drawing.views["Drawing View1"].bom_result = wide
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["moved_onto_sheet"] is True
+        assert result.data["table_box_mm"] == [10.0, 0.0, 420.0, 15.0]
+
+    @pytest.mark.asyncio
+    async def test_a_wide_table_already_on_the_sheet_is_left_alone(self) -> None:
+        adapter = _drawing_harness()
+        wide = _Table((0.005, 0.0))
+        wide.GetColumnWidth = lambda _i: 0.1025  # type: ignore[method-assign]
+        adapter.drawing.views["Drawing View1"].bom_result = wide
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["moved_onto_sheet"] is False
+        assert result.data["table_box_mm"] == [5.0, 0.0, 415.0, 15.0]
 
     @pytest.mark.asyncio
     async def test_a_table_placed_off_the_sheet_is_an_error(self) -> None:
@@ -594,10 +680,60 @@ class TestBomTableLandsOnTheSheet:
         assert hanging.corner == (0.0, 0.0)  # a given position is never moved
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        "table",
-        [
-            _Table((0.0, 0.0), anchor=1),
+    async def test_a_re_placed_table_is_unanchored_and_replaces_the_first(
+        self,
+    ) -> None:
+        # Live on SW 2026: an anchored table won't move (SetPosition returns
+        # False), so it is deleted and inserted again where it fits.
+        adapter = _drawing_harness()
+        view = adapter.drawing.views["Drawing View1"]
+        view.bom_result = _Table()
+
+        await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert [args[0] for args in view.inserts] == [True, False]
+        assert view.inserts[1][1:3] == pytest.approx((0.01, 0.01))
+        assert [f.Name for f in adapter.drawing.boms] == ["Bill of Materials2"]
+
+    @pytest.mark.asyncio
+    async def test_a_table_that_wont_delete_stays_where_it_is(self) -> None:
+        adapter = _drawing_harness()
+        adapter.drawing.delete_ok = False
+        adapter.drawing.views["Drawing View1"].bom_result = _Table()
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert result.data["moved_onto_sheet"] is False
+        assert result.data["table_box_mm"] == [0.0, 0.0, 60.0, 15.0]
+
+    def test_a_feature_that_wont_select_isnt_deleted(self) -> None:
+        drawing = _Drawing()
+        drawing.add_bom()
+        feature = drawing.boms[0]
+        feature.Select2 = lambda *_a: False
+
+        assert _Harness()._delete_feature(drawing, feature) is False
+        assert drawing.boms == [feature]
+
+    @pytest.mark.asyncio
+    async def test_a_re_insert_that_fails_is_an_error(self) -> None:
+        adapter = _drawing_harness()
+        view = adapter.drawing.views["Drawing View1"]
+        view.bom_result = _Table()
+        view.reinsert_fails = True
+
+        result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
+
+        assert "could not be inserted again inside it" in result.error
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("delete_ok", [True, False], ids=["too large", "stuck"])
+    async def test_a_table_that_cannot_be_put_on_the_sheet_is_an_error(
+        self, delete_ok
+    ) -> None:
+        adapter = _drawing_harness()
+        adapter.drawing.delete_ok = delete_ok
+        table: Any = (
             SimpleNamespace(
                 RowCount=3,
                 ColumnCount=4,
@@ -605,20 +741,38 @@ class TestBomTableLandsOnTheSheet:
                 GetRowHeight=lambda _i: 0.5,  # 1.5 m tall: larger than the sheet
                 GetColumnWidth=lambda _i: 0.015,
                 GetAnnotation=lambda: SimpleNamespace(GetPosition=lambda: (0, 0, 0)),
-            ),
-        ],
-        ids=["position unreadable after measuring", "larger than the sheet"],
-    )
-    async def test_a_table_that_cannot_be_slid_on_is_an_error(self, table) -> None:
-        adapter = _drawing_harness()
-        if isinstance(table, _Table):
-            positions = iter([(0.0, 0.0, 0.0)])  # measured once, then unreadable
-            table.annotation.GetPosition = lambda: next(positions, None)
+            )
+            if delete_ok
+            else _Table((0.0, 0.0), anchor=1)  # hangs below; can't be removed
+        )
         adapter.drawing.views["Drawing View1"].bom_result = table
 
         result = await adapter.insert_bom_table("Drawing View1", "C:/t.sldbomtbt")
 
         assert "runs off the sheet" in result.error
+
+
+class TestWhereABomGoes:
+    SHEET = (0.0, 0.0, 0.42, 0.297)
+
+    @pytest.mark.parametrize(
+        ("box", "target"),
+        [
+            ((0.05, 0.05, 0.11, 0.065), None),  # inside the border
+            ((0.0, 0.0, 0.06, 0.015), (0.01, 0.01, 0.07, 0.025)),  # corner
+            ((0.02, 0.287, 0.08, 0.302), (0.02, 0.272, 0.08, 0.287)),  # off the top
+            ((0.005, 0.0, 0.415, 0.015), None),  # too wide, but on the sheet
+            ((0.02, 0.0, 0.43, 0.015), (0.01, 0.0, 0.42, 0.015)),  # too wide, off
+            ((0.0, 0.0, 0.06, 1.5), None),  # larger than the sheet
+        ],
+    )
+    def test_bom_target(self, box, target) -> None:
+        got = std.bom_target(box, self.SHEET)
+        assert got == (None if target is None else pytest.approx(target))
+
+    @pytest.mark.parametrize("box", [None, (0.0, 0.0, 0.06, 0.015)])
+    def test_nothing_to_measure(self, box) -> None:
+        assert std.bom_target(box, None if box else self.SHEET) is None
 
 
 class TestSetSheetScale:

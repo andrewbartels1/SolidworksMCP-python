@@ -83,6 +83,10 @@ Save the active document under a new path, as a SolidWorks file or in an exchang
 | `file_path` | `str` | ✅ | `` | Full path for the new file |
 | `format_type` | `str` | — | `solidworks` | File format (solidworks, step, iges, etc.) |
 | `overwrite` | `bool` | — | `False` | Overwrite existing file |
+| `as_copy` | `bool` | — | `False` | SolidWorks formats only: write a copy and keep the original open, as Save As's "Save as copy and continue" does, so assemblies keep using the original |
+
+Without `as_copy`, a SolidWorks format is File > Save As: the open document becomes
+the new file, and open assemblies that use it follow it.
 
 **Sample call:**
 
