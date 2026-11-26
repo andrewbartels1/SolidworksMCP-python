@@ -1309,6 +1309,7 @@ def _sketch_origin_point(adapter: Any) -> Any:
     return point
 
 
+# Added in 2.2.0 (#269): 'origin' and '<id>.start' / '<id>.end'.
 def _relation_entity(adapter: Any, entity_id: str) -> Any:
     """The sketch object a relation takes for ``entity_id``.
 

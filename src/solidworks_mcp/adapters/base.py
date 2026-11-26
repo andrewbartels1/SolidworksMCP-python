@@ -435,6 +435,7 @@ class SolidWorksAdapter(ABC):
             error="save_file is not implemented by this adapter",
         )
 
+    # Added in 2.2.0 (#276).
     async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
         """Write a copy of the active document and keep the original open.
 
@@ -1130,6 +1131,7 @@ class SolidWorksAdapter(ABC):
             error="replace_component is not implemented by this adapter",
         )
 
+    # Forwarded by both wrappers since 2.2.0 (#267).
     async def pack_and_go_assembly(
         self, source_path: str, target_dir: str
     ) -> AdapterResult[dict[str, Any]]:

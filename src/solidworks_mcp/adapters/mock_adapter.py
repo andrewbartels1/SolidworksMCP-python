@@ -1438,6 +1438,7 @@ class MockSolidWorksAdapter(
         if isinstance(sketch, AdapterResult):
             return sketch
         axis = getattr(params, "axis_entity", None)
+        # A sketch line's id is an axis since 2.2.0, as on the real adapter.
         if axis and axis not in self._axes and axis not in self._sketch_entity_ids:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -1736,6 +1737,7 @@ class MockSolidWorksAdapter(
             execution_time=0.02,
         )
 
+    # Added in 2.2.0 (#276).
     async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
         """Mock writing a copy; the open document keeps its path.
 

@@ -34,6 +34,7 @@ class CreateSketchInput(CompatInput):
         sketch_name (str | None): The sketch name value.
     """
 
+    # Found by identity in any language, and XY = Front, since 2.2.0 (#262).
     plane: str | None = Field(
         default=None,
         description=(
@@ -305,6 +306,7 @@ class AddRelationInput(BaseModel):
         relation_type (str): The relation type value.
     """
 
+    # 'origin' and '<id>.start' / '<id>.end' since 2.2.0 (#269).
     entity1: str = Field(
         description=(
             "First entity: an ID from add_line/add_arc/..., '<id>.start' or "

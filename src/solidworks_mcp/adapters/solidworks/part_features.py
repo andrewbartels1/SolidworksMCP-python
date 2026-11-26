@@ -104,6 +104,7 @@ def thread_table_size(size: str, standard: str) -> str:
     return size
 
 
+# Added in 2.2.0 (#274): what SolidWorks stored, read back.
 def _stored_thread(adapter: Any, feature: Any) -> dict[str, str | None]:
     """The size and callout SolidWorks stored for a cosmetic thread."""
     data = adapter._attempt(
