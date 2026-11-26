@@ -88,7 +88,10 @@ class SolidWorksSweptMixin:
         """
         adapter: Any = self
         sketch = adapter._attempt(
-            lambda: sw_type_info.flagged(feature.GetSpecificFeature2(), "ISketch"),
+            lambda: sw_type_info.flagged(
+                sw_type_info.flagged(feature, "IFeature").GetSpecificFeature2(),
+                "ISketch",
+            ),
             default=None,
         )
         segments = as_list(
