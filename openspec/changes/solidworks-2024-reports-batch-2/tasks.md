@@ -31,3 +31,4 @@
 - [x] 5.4 The U-joint replay leaves the live suite (`demo_ujoint_replay.py`); its calls and today's answers are recorded, the nine differences explained
 - [x] 5.5 The measure live test reads a face's centre, not an edge point
 - [x] 5.6 Rerun the live files that make holes and revolves: 7 files pass; `drawing_pack` failed once in `arrange_dimensions` (one auto-dimension outside the frame) and passed on rerun, a follow-up
+- [x] 5.7 `test_live_sw_drawing_pack`: the section placed where its dimensions have room (a test fix), and `arrange_dimensions` accepts a dimension whose extension lines start on both halves of its view, putting it where they cross least (a code fix); `conflict_geometry` on failure. Live: 4 of 4 pass, after 3 of 5 failing

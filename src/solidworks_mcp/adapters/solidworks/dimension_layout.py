@@ -29,6 +29,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 Box = tuple[float, float, float, float]
 Segment = tuple[float, float, float, float]
@@ -307,11 +308,97 @@ def extension_origins(dim: DimensionGeometry) -> list[float]:
     ]
 
 
+def describe_conflicts(
+    dims: list[DimensionGeometry],
+    outlines: dict[str, Box],
+    overlaps: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    """The geometry behind each dimension that is still in conflict, in mm.
+
+    ``arrange_dimensions`` reports this with an error, so a failure can be
+    diagnosed from the reply alone: which way the dimension runs, where its
+    lines and text are, where its extension lines start, and its view's
+    outline. Added in 2.2.0, to diagnose a section dimension whose extension
+    line crossed its own view in some runs only.
+
+    Args:
+        dims: Every dimension, as read back after arranging.
+        outlines: View name -> outline.
+        overlaps: :func:`find_overlaps`' result.
+
+    Returns:
+        list[dict[str, Any]]: One entry per dimension named in ``overlaps``,
+        in the order first named: ``key``, ``view``, ``orientation``,
+        ``text_box_mm``, ``lines_mm``, ``extension_origins_mm`` and
+        ``view_outline_mm``.
+
+    Example:
+        >>> describe_conflicts(dims, outlines, find_overlaps(dims, outlines))  # doctest: +SKIP
+        [{'key': 'Section View A-A#0', 'orientation': 'h', ...}]
+    """
+    by_key = {d.key: d for d in dims}
+    named = list(dict.fromkeys(o["dimension"] for o in overlaps))
+
+    def mm(values: Any) -> list[float]:
+        return [round(float(v) * 1000.0, 3) for v in values]
+
+    out: list[dict[str, Any]] = []
+    for key in named:
+        dim = by_key.get(key)
+        if dim is None:
+            # A conflict can name something that isn't a dimension (a view,
+            # the frame); only dimensions have geometry to describe.
+            continue
+        outline = outlines.get(dim.view)
+        out.append(
+            {
+                "key": key,
+                "view": dim.view,
+                "orientation": classify(dim.lines)[0],
+                "text_box_mm": mm(dim.text_box),
+                "lines_mm": [mm(line) for line in dim.lines],
+                "extension_origins_mm": mm(extension_origins(dim)),
+                "view_outline_mm": mm(outline) if outline is not None else None,
+            }
+        )
+    return out
+
+
+def _starts_on_both_halves(dim: DimensionGeometry, outline: Box) -> bool:
+    """Whether the extension lines start on both halves of the view.
+
+    Seen live on SW 2026 (2.2.0): a section's auto-dimension can attach one
+    extension line to a point in the top half and the other to a point in
+    the bottom half. Then the dimension crosses its view on whichever side
+    it goes, so that crossing is the drawing's, not a misplaced dimension.
+
+    Args:
+        dim: A linear dimension.
+        outline: Its view's outline.
+
+    Returns:
+        bool: ``True`` when one extension line starts below the view's middle
+        and another above it (left and right for a vertical dimension).
+    """
+    origins = extension_origins(dim)
+    if not origins:
+        return False
+    axis = 1 if classify(dim.lines)[0] == "h" else 0
+    middle = (outline[axis] + outline[axis + 2]) / 2.0
+    return min(origins) < middle < max(origins)
+
+
 def crosses_own_view(dim: DimensionGeometry, outline: Box) -> bool:
-    """True when an extension line runs across its own view to the far side.
+    """True when an extension line runs across its own view to the far side
+    and the dimension had a side where it would not.
 
     Measured live on SW 2026: a height dimension moved from the left of the
     top view to its right drew both extension lines straight across the view.
+    When the extension lines start on both halves of the view
+    (:func:`_starts_on_both_halves`), every side crosses it, so the crossing
+    isn't reported; the planner puts such a dimension on the side where the
+    lines cross least (:func:`_side_order`). Fixed in 2.2.0: before, that
+    case was an overlap no pass could clear.
 
     Args:
         dim: The dimension.
@@ -320,6 +407,8 @@ def crosses_own_view(dim: DimensionGeometry, outline: Box) -> bool:
     Returns:
         bool: ``False`` for leaders, which have no extension lines.
     """
+    if _starts_on_both_halves(dim, outline):
+        return False
     axis = 1 if classify(dim.lines)[0] == "h" else 0
     low, high = outline[axis], outline[axis + 2]
     middle = (low + high) / 2.0
@@ -328,6 +417,43 @@ def crosses_own_view(dim: DimensionGeometry, outline: Box) -> bool:
         if (start < middle and end > high) or (start > middle and end < low):
             return True
     return False
+
+
+def _side_order(
+    origins: list[float], low: float, high: float, near: str, far: str
+) -> list[str]:
+    """The sides to try for a linear dimension, best first.
+
+    Each extension line starts on the side nearer its origin. When they
+    start on both halves of the view, both sides are possible and both
+    cross the view; the side where the extension lines cross less of it
+    comes first (Added in 2.2.0).
+
+    Args:
+        origins: Where the extension lines start, along the measuring axis.
+        low: The view's low edge on that axis (bottom or left).
+        high: The view's high edge (top or right).
+        near: The side name past ``high`` (``"above"`` or ``"right"``).
+        far: The side name past ``low`` (``"below"`` or ``"left"``).
+
+    Returns:
+        list[str]: One or two side names, the one to try first first.
+
+    Example:
+        >>> _side_order([0.356, 0.336], 0.3266, 0.3634, "above", "below")
+        ['above', 'below']
+    """
+    middle = (low + high) / 2.0
+    sides = list(dict.fromkeys(near if o >= middle else far for o in origins))
+    if len(sides) < 2:
+        return sides
+    # Length of view each side's extension lines would cross: going past
+    # `high`, a line runs from its origin up to `high`; past `low`, down.
+    crossing = {
+        near: sum(high - o for o in origins),
+        far: sum(o - low for o in origins),
+    }
+    return sorted(sides, key=lambda side: crossing[side])
 
 
 def leader_anchor(dim: DimensionGeometry) -> tuple[float, float] | None:
@@ -556,7 +682,7 @@ def _candidates(dim: DimensionGeometry, outline: Box) -> list[tuple[str, float, 
     origins = extension_origins(dim)
     out: list[tuple[str, float, float]] = []
     if dim.orientation == "h":
-        sides = list(dict.fromkeys("above" if o >= oy else "below" for o in origins))
+        sides = _side_order(origins, outline[1], outline[3], "above", "below")
         pitch = max(ROW_PITCH, h + STACK_GAP)
         for side in sides:
             for step in range(MAX_STEPS):
@@ -564,7 +690,7 @@ def _candidates(dim: DimensionGeometry, outline: Box) -> list[tuple[str, float, 
                 target = outline[3] + off if side == "above" else outline[1] - off
                 out.append((side, 0.0, target - cy))
     elif dim.orientation == "v":
-        sides = list(dict.fromkeys("right" if o >= ox else "left" for o in origins))
+        sides = _side_order(origins, outline[0], outline[2], "right", "left")
         pitch = max(COLUMN_PITCH, w + STACK_GAP)
         for side in sides:
             for step in range(MAX_STEPS):

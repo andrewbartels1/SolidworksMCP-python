@@ -59,6 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (-20.043, -12.039) on SolidWorks 2026. The hole's position sketch point is
   now moved onto the exact point (`ISketchPoint.SetCoords`) and read back; a
   hole that can't be moved is removed and the call fails.
+- **`arrange_dimensions` no longer fails on a dimension that has to cross its
+  view.** SolidWorks can attach a section's auto-dimension to one point in
+  the top half of the view and one in the bottom half; then it crosses the
+  view on either side. The check called that an overlap no pass could clear
+  (about 1 run in 3 of the drawing-pack live test). It is now reported only
+  when another side would have avoided it, and such a dimension goes where
+  its lines cross the least. A failed arrange also reports
+  `conflict_geometry`: each conflicting dimension's lines, text box,
+  extension-line starts and view outline, in mm.
 - **Save As and Save a Copy are kept apart in the code and the tool
   descriptions.** The exports passed `SaveAs3` option 2 with a comment calling
   it Silent; 2 is `swSaveAsOptions_Copy` (Silent is 1). Copy is what an export

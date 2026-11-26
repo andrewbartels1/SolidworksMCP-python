@@ -174,6 +174,9 @@ async def test_a_drawing_finished_by_hand(scratch: Any, tmp_path: Any) -> None:
         "arrange_dimensions",
         {"view_name": section_name},
     )
+    if arranged.get("status") != "success":
+        # The caption keeps only the message; the data says why.
+        evidence("arrange_dimensions failed: its data", arranged.get("data"))
     note(
         "Next, on purpose: a section line that misses the view",
         "The line runs along the bottom of the sheet, far from the plan view. "

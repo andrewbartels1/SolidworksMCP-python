@@ -1619,6 +1619,12 @@ class SolidWorksDocumentationMixin:
             "remaining_overlaps": after[:50],
             "sheet_size_m": [sheet[2], sheet[3]] if sheet else None,
         }
+        if after:
+            # A failure carries the geometry behind it, so it can be read
+            # from the reply alone (Added in 2.2.0).
+            result["conflict_geometry"] = _layout.describe_conflicts(
+                geometries, outlines, after[:50]
+            )
         return result
 
     def _apply_moves(
