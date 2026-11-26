@@ -75,10 +75,10 @@ async def run_analysis_demo(out_dir: Path) -> None:
         sk1 = await adapter.create_sketch("Front")
         _check("create_sketch Front (box)", sk1)
         for x1, y1, x2, y2 in [
-            (-20, -20,  20, -20),
-            ( 20, -20,  20,  20),
-            ( 20,  20, -20,  20),
-            (-20,  20, -20, -20),
+            (-20, -20, 20, -20),
+            (20, -20, 20, 20),
+            (20, 20, -20, 20),
+            (-20, 20, -20, -20),
         ]:
             await adapter.add_line(x1, y1, x2, y2)
         _check("exit_sketch (box)", await adapter.exit_sketch())
@@ -131,8 +131,16 @@ async def run_analysis_demo(out_dir: Path) -> None:
         features = r.data or []
         print(f"      {len(features)} features in tree:")
         for feat in features[:10]:
-            name = feat.get("name", "?") if isinstance(feat, dict) else getattr(feat, "name", "?")
-            ftype = feat.get("type", "?") if isinstance(feat, dict) else getattr(feat, "type", "?")
+            name = (
+                feat.get("name", "?")
+                if isinstance(feat, dict)
+                else getattr(feat, "name", "?")
+            )
+            ftype = (
+                feat.get("type", "?")
+                if isinstance(feat, dict)
+                else getattr(feat, "type", "?")
+            )
             print(f"        {ftype:<22} {name}")
         if len(features) > 10:
             print(f"        ... ({len(features) - 10} more)")
@@ -155,10 +163,14 @@ async def run_analysis_demo(out_dir: Path) -> None:
         mp = r.data
         print(f"      volume      : {mp.volume:,.1f} mm³")
         print(f"      surface_area: {mp.surface_area:,.1f} mm²")
-        print(f"      mass        : {mp.mass:.6f} kg  (no material assigned -> 0.0 expected)")
+        print(
+            f"      mass        : {mp.mass:.6f} kg  (no material assigned -> 0.0 expected)"
+        )
         com = mp.center_of_mass
         print(f"      center of mass: ({com[0]:.2f}, {com[1]:.2f}, {com[2]:.2f}) mm")
-        print(f"      Ixx: {mp.moments_of_inertia['Ixx']:.4f}  Iyy: {mp.moments_of_inertia['Iyy']:.4f}  Izz: {mp.moments_of_inertia['Izz']:.4f}")
+        print(
+            f"      Ixx: {mp.moments_of_inertia['Ixx']:.4f}  Iyy: {mp.moments_of_inertia['Iyy']:.4f}  Izz: {mp.moments_of_inertia['Izz']:.4f}"
+        )
 
         # ------------------------------------------------------------------
         # 5. get_dimension / set_dimension
@@ -172,7 +184,7 @@ async def run_analysis_demo(out_dir: Path) -> None:
         dim_name = f"D1@{sk2.data}"
         r_get = await adapter.get_dimension(dim_name)
         if r_get.is_success:
-            orig = r_get.data
+            orig = r_get.data["value"]  # {value, units} since the dimension units fix
             print(f"  OK  get_dimension('{dim_name}') = {orig:.2f} mm")
 
             r_set = await adapter.set_dimension(dim_name, 25.0)
@@ -180,14 +192,18 @@ async def run_analysis_demo(out_dir: Path) -> None:
                 print(f"  OK  set_dimension('{dim_name}', 25.0)")
                 r_verify = await adapter.get_dimension(dim_name)
                 if r_verify.is_success:
-                    print(f"  OK  verify after set: {r_verify.data:.2f} mm (expected 25.00)")
+                    print(
+                        f"  OK  verify after set: {r_verify.data['value']:.2f} mm (expected 25.00)"
+                    )
                 else:
                     print(f"  --  post-set verify: {r_verify.error}")
             else:
                 print(f"  --  set_dimension: {r_set.error}")
         else:
             print(f"  --  get_dimension('{dim_name}'): {r_get.error}")
-            print(f"       (dimension name varies by SW version; covered by unit tests)")
+            print(
+                f"       (dimension name varies by SW version; covered by unit tests)"
+            )
 
         # ------------------------------------------------------------------
         # Simulated tools — noted but not exercised

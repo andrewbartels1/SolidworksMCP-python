@@ -96,8 +96,16 @@ async def _server(adapter: object = None) -> FastMCP:
 
 @pytest_asyncio.fixture
 async def agent(tmp_path, monkeypatch) -> AsyncIterator[_Agent]:
-    """An MCP client on the docs tools, with the index in an empty folder."""
+    """An MCP client on the docs tools, with the index in an empty folder.
+
+    The working folder hides the old project-relative index folders, and the
+    user folder (``~/.solidworks_mcp/docs-index``, where the index is saved
+    since it moved there) is pointed at the same empty folder.
+    """
+    from solidworks_mcp.tools import docs_discovery
+
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(docs_discovery, "USER_INDEX_DIR", tmp_path / "docs-index")
     async with Client(await _server()) as client:
         yield _Agent(client)
 

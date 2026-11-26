@@ -676,7 +676,7 @@ class TestLevelCRealCOM:
 
         save_as = await _find_tool(real_server, "save_as")
         assert save_as, "save_as not registered"
-        result = await save_as({"file_path": str(part_path)})
+        result = await save_as({"file_path": str(part_path), "overwrite": True})
         assert result["status"] == "success", f"save_as failed: {result}"
         assert part_path.exists(), f"Part file not created: {part_path}"
 
@@ -693,7 +693,7 @@ class TestLevelCRealCOM:
         assert result["status"] == "success"
 
         save_as = await _find_tool(real_server, "save_as")
-        result = await save_as({"file_path": str(part_path)})
+        result = await save_as({"file_path": str(part_path), "overwrite": True})
         assert result["status"] == "success"
         assert part_path.exists()
 
@@ -775,7 +775,7 @@ class TestLevelCRealCOM:
         assert result["status"] == "success"
 
         save_as = await _find_tool(real_server, "save_as")
-        result = await save_as({"file_path": str(asm_path)})
+        result = await save_as({"file_path": str(asm_path), "overwrite": True})
         assert result["status"] == "success"
         assert asm_path.exists()
 
