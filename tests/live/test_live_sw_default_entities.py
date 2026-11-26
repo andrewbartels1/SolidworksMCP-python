@@ -144,6 +144,23 @@ async def test_a_translated_part(scratch: Any) -> None:
     evidence("select_feature('Front Plane')", picked)
     assert picked["status"] == "success", picked
 
+    # A relation to the origin ('Origine' here): the origin's point is found
+    # by the origin feature's place in the tree, not by its name ('Point1'
+    # on English; translated on other installs).
+    await _ok(await tools["create_sketch"]({"plane": "Front"}))
+    line = await _ok(await tools["add_line"]({"x1": 5, "y1": 5, "x2": 20, "y2": 5}))
+    line_id = line["line"]["id"]
+    tied = await tools["add_sketch_constraint"](
+        {
+            "entity1": f"{line_id}.start",
+            "entity2": "origin",
+            "relation_type": "coincident",
+        }
+    )
+    evidence("a line's start tied to the origin ('Origine')", tied)
+    assert tied["status"] == "success", tied
+    await _ok(await tools["exit_sketch"]())
+
     missing = await tools["create_sketch"]({"plane": "Plane7"})
     evidence("a plane that doesn't exist is an error, not a default plane", missing)
     assert missing["status"] == "error", missing

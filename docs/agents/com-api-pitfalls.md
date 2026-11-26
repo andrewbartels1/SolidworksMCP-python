@@ -1344,3 +1344,20 @@ axis that way.
 **Fix:** read the segment's name (`ISketchSegment.GetName()`, e.g. `Line1`)
 while the handle is held and select `"Line1@Sketch1"` as `EXTSKETCHSEGMENT`,
 appended with mark 4 for `FeatureRevolve2` (`features._select_sketch_axis`).
+
+---
+
+## 47. A sketch point's name is translated: don't select the origin as `Point1@Origin`
+
+**Symptom:** `SelectByID2("Point1@<origin>", "EXTSKETCHPOINT", ...)` selects the
+origin on English SolidWorks, but `Point1` is a translated name, so it isn't
+found on other languages even when the origin feature itself is found by its
+place in the tree.
+
+**Fix:** use the origin feature's own sketch:
+`FeatureByName(origin).GetSpecificFeature2().GetSketchPoints2()[0]` is the
+origin point, and `ISketchRelationManager.AddRelation` takes it as it is (seen
+live on SolidWorks 2026: a line's start coincident with it moves to 0, 0).
+`sketch._sketch_origin_point` does this. Pass the entities to `AddRelation` as a
+`VARIANT(VT_ARRAY | VT_DISPATCH, ...)`; a plain Python list makes SolidWorks
+throw "The server threw an exception".

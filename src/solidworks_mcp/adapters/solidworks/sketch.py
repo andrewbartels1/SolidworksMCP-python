@@ -1280,33 +1280,52 @@ _UNKNOWN_ENTITY = (
 def _sketch_origin_point(adapter: Any) -> Any:
     """The part's origin as a point the open sketch can relate to (#269, fixed in 2.2.0).
 
-    Selected as ``Point1@<origin>`` (``EXTSKETCHPOINT``), the origin found by
-    identity so any language works, and read back from the selection; the
-    selection is cleared again. ``ISketchRelationManager.AddRelation`` takes
-    it (seen live on SW 2026: a line end coincident with it).
+    The origin feature is found by its place in the tree
+    (:func:`~.default_entities.entity_name`), and its own sketch's first point
+    is the origin point. No name is used: the point's name (``Point1`` on
+    English) is translated on other installs, so ``Point1@<origin>`` would
+    not select on a German one. ``ISketchRelationManager.AddRelation`` takes
+    the point as it is (seen live on SW 2026: a line's start coincident with
+    it moves to 0, 0).
+
+    Args:
+        adapter: A connected adapter with a sketch open.
+
+    Returns:
+        Any: The origin's ``ISketchPoint``.
 
     Raises:
-        LookupError: When the origin can't be selected.
+        LookupError: When the origin or its point can't be read.
+
+    Example:
+        >>> point = _sketch_origin_point(adapter)  # doctest: +SKIP
+        >>> manager.AddRelation(dispatch_array([line_start, point]), 9)  # doctest: +SKIP
     """
     model = adapter.currentModel
     origin = entity_name(adapter, "Origin")
-    adapter._attempt(lambda: model.ClearSelection2(True), default=None)
-    picked = adapter._attempt(
-        lambda: model.Extension.SelectByID2(
-            f"Point1@{origin}", "EXTSKETCHPOINT", 0, 0, 0, False, 0, _null_callout(), 0
-        ),
-        default=False,
-    )
-    point = None
-    if picked:
-        selection = _sw_type_info.flagged(model.SelectionManager, "ISelectionMgr")
-        point = adapter._attempt(lambda: selection.GetSelectedObject6(1, -1), None)
-    adapter._attempt(lambda: model.ClearSelection2(True), default=None)
-    if point is None:
-        raise LookupError(
-            f"The sketch origin ('Point1@{origin}') couldn't be selected."
+    # The origin feature (OriginProfileFeature) holds a sketch whose only
+    # point is the origin itself.
+    feature = adapter._attempt(lambda: model.FeatureByName(origin), default=None)
+    sketch = (
+        adapter._attempt(
+            lambda: _sw_type_info.flagged(feature, "IFeature").GetSpecificFeature2(),
+            default=None,
         )
-    return point
+        if feature is not None
+        else None
+    )
+    points = (
+        adapter._attempt(
+            lambda: _sw_type_info.flagged(sketch, "ISketch").GetSketchPoints2(),
+            default=None,
+        )
+        if sketch is not None
+        else None
+    )
+    found = list(points or [])
+    if not found:
+        raise LookupError(f"The sketch origin ('{origin}') has no point to relate to.")
+    return found[0]
 
 
 # Added in 2.2.0 (#269): 'origin' and '<id>.start' / '<id>.end'.

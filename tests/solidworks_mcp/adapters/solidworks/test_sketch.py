@@ -287,18 +287,14 @@ class TestRelationEntities:
 
     ORIGIN_POINT = object()
 
-    def _adapter(self, selectable: bool = True) -> _FakeSketchAdapter:
+    def _adapter(self, points: list[Any] | None = None) -> _FakeSketchAdapter:
         adapter = _FakeSketchAdapter()
-        picked: list[tuple] = []
+        origin_points = [self.ORIGIN_POINT] if points is None else points
+        origin_sketch = SimpleNamespace(GetSketchPoints2=lambda: origin_points)
+        origin = SimpleNamespace(GetSpecificFeature2=lambda: origin_sketch)
+        asked: list[str] = []
         adapter.currentModel = SimpleNamespace(
-            ClearSelection2=lambda *_a: True,
-            Extension=SimpleNamespace(
-                SelectByID2=lambda *a: picked.append(a) or selectable
-            ),
-            SelectionManager=SimpleNamespace(
-                GetSelectedObject6=lambda *_a: self.ORIGIN_POINT
-            ),
-            picked=picked,
+            FeatureByName=lambda name: asked.append(name) or origin, asked=asked
         )
         start, end = object(), object()
         adapter._sketch_entities = {
@@ -311,14 +307,31 @@ class TestRelationEntities:
         return adapter
 
     def test_the_origin_by_identity(self) -> None:
+        """The origin feature's own point: no translated ``Point1`` name."""
         adapter = self._adapter()
 
         assert sketch._relation_entity(adapter, " Origin ") is self.ORIGIN_POINT
-        assert adapter.currentModel.picked[0][:2] == ("Point1@Origin", "EXTSKETCHPOINT")
+        assert adapter.currentModel.asked == ["Origin"]
 
-    def test_an_origin_that_wont_select(self) -> None:
-        with pytest.raises(LookupError, match="Point1@Origin"):
-            sketch._relation_entity(self._adapter(selectable=False), "origin")
+    def test_an_origin_without_a_point(self) -> None:
+        with pytest.raises(LookupError, match="has no point to relate to"):
+            sketch._relation_entity(self._adapter(points=[]), "origin")
+
+    def test_no_origin_feature(self) -> None:
+        adapter = self._adapter()
+        adapter.currentModel.FeatureByName = lambda name: None
+
+        with pytest.raises(LookupError, match="'Origin'"):
+            sketch._relation_entity(adapter, "origin")
+
+    def test_an_origin_without_a_sketch(self) -> None:
+        adapter = self._adapter()
+        adapter.currentModel.FeatureByName = lambda name: SimpleNamespace(
+            GetSpecificFeature2=lambda: None
+        )
+
+        with pytest.raises(LookupError, match="has no point"):
+            sketch._relation_entity(adapter, "origin")
 
     def test_end_points(self) -> None:
         adapter = self._adapter()
