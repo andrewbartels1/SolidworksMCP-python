@@ -1,5 +1,7 @@
 """COM calls whose shape differs between SolidWorks releases.
 
+Added in 2.2.0 for #265 (the equation tools on SolidWorks 2024).
+
 The adapter is written and checked live against SolidWorks 2026. Reports
 from SolidWorks 2024 (#255, #264-#276) show two kinds of difference, and
 this module handles the first one in one place:
@@ -7,7 +9,7 @@ this module handles the first one in one place:
 1. **The same member, another dispatch kind.** A member SolidWorks 2026
    answers as a method may only answer as a property on another release, or
    the reverse; pywin32 then gets ``DISP_E_MEMBERNOTFOUND`` ("Member not
-   found", #265: every equation tool on 2024). :func:`invoke` and
+   found", #265, fixed in 2.2.0: every equation tool on 2024). :func:`invoke` and
    :func:`read` make the call exactly as before, so 2026 is unchanged, and
    only on "Member not found" retry it through ``IDispatch.Invoke`` with
    both dispatch kinds allowed.

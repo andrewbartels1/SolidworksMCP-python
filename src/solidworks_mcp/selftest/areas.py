@@ -173,7 +173,7 @@ class AssemblyArea:
         # The concentric mate takes 'closest': 'aligned' compares the hole's
         # and the pin's axis directions, which come from how each feature was
         # built; on SolidWorks 2024 it flipped the pin so the flush bottoms
-        # were over-defined (#264). Flat faces' normals are fixed, so the
+        # were over-defined (#264, fixed in 2.2.0). Flat faces' normals are fixed, so the
         # bottoms stay 'aligned'.
         for face_a, face_b, mate_type, alignment in (
             (ex.HOLE_WALL_POINT, ex.PIN_SIDE_POINT, "concentric", "closest"),

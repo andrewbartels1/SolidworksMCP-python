@@ -284,7 +284,7 @@ def _select_sketch_plane(adapter: Any, plane: str) -> None:
     """Select the reference plane a new sketch opens on.
 
     A default plane (``Top``, ``Front Plane``, ``XY``...) is found by its
-    place in the tree, so it works in every language and template (#262);
+    place in the tree, so it works in every language and template (#262, fixed in 2.2.0);
     any other name is used as given. The plane is selected by name
     (``FeatureByName`` then ``Select2``), then ``Extension.SelectByID2``
     with type ``"PLANE"``. A plane that isn't found is never swapped for
@@ -313,7 +313,7 @@ def _select_sketch_plane(adapter: Any, plane: str) -> None:
 
     if not selected:
         # The callout must be a VT_DISPATCH null: a bare None is a type
-        # mismatch (runbook #11; "Typenkonflikt" on German, #262).
+        # mismatch (runbook #11; "Typenkonflikt" on German, #262, fixed in 2.2.0).
         selected, selection_error_candidate = adapter._attempt_with_error(
             lambda: adapter.currentModel.Extension.SelectByID2(
                 actual_plane, "PLANE", 0, 0, 0, False, 0, _null_callout(), 0
@@ -1278,7 +1278,7 @@ _UNKNOWN_ENTITY = (
 
 
 def _sketch_origin_point(adapter: Any) -> Any:
-    """The part's origin as a point the open sketch can relate to (#269).
+    """The part's origin as a point the open sketch can relate to (#269, fixed in 2.2.0).
 
     Selected as ``Point1@<origin>`` (``EXTSKETCHPOINT``), the origin found by
     identity so any language works, and read back from the selection; the
@@ -2170,7 +2170,7 @@ def _sketch_linear_pattern_impl(
             _select_sketch_entities(adapter, entities, mark=0)
 
             # Angles in [0, 2π): atan2 gives -π/2 for (0, -1), which
-            # SolidWorks refuses (#272); the same direction as 3π/2 works.
+            # SolidWorks refuses (#272, fixed in 2.2.0); the same direction as 3π/2 works.
             angle_x = math.atan2(direction_y, direction_x) % math.tau
             # Direction 2 (Y) goes 90° from direction 1; NumY=1 keeps it
             # single-row so the second-axis spacing/angle aren't actually
@@ -2715,6 +2715,7 @@ def _exit_sketch_impl(adapter: Any) -> AdapterResult[None]:
         adapter.currentSketchManager = None
         # The closed sketch's ids stay readable for a feature made from it
         # next (create_revolve's axis_entity); a new sketch reuses the ids.
+        # Since 2.2.0, for create_revolve's axis_entity.
         adapter._closed_sketch = (
             getattr(adapter, "_last_sketch_name", None),
             dict(adapter._sketch_entities),
@@ -2861,7 +2862,7 @@ _CONSTRAINED_STATES: dict[int, tuple[str, bool | None]] = {
 
 
 def _constrained_status(adapter: Any, sketch_obj: Any) -> dict[str, Any] | None:
-    """The sketch's state from ``ISketch.GetConstrainedStatus`` (#268).
+    """The sketch's state from ``ISketch.GetConstrainedStatus`` (#268, fixed in 2.2.0).
 
     Returns:
         dict[str, Any] | None: ``is_fully_defined``, ``definition_state``,

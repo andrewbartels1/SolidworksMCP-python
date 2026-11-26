@@ -279,11 +279,12 @@ class SolidWorksDrawingPackMixin:
             "views_after": len(_view_names(adapter, drawing)),
         }
 
+    # Fixed in 2.2.0 (#273).
     def _pack_place(self, created: Any, position: list[float]) -> bool | None:
         """Put a new view's centre at ``position`` (sheet mm).
 
         A section view stays aligned with its parent, so SolidWorks keeps it
-        on the parent's x whatever position it was given (#273, live on SW
+        on the parent's x whatever position it was given (#273, fixed in 2.2.0; live on SW
         2024 and 2026). When it isn't where it was asked for, its alignment
         is removed and it is moved: ``IView.Position`` with an explicit
         array (pitfall 31), then once more by what its outline still misses,

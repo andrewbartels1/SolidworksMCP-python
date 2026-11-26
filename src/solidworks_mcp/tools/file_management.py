@@ -139,6 +139,7 @@ class SaveAsInput(CompatInput):
         default="solidworks", description="File format (solidworks, step, iges, etc.)"
     )
     overwrite: bool = Field(default=False, description="Overwrite existing file")
+    # Added in 2.2.0 (#276: save_as said it saved a copy; it is a Save As).
     as_copy: bool = Field(
         default=False,
         description=(

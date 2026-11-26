@@ -535,6 +535,7 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             "save_file", lambda adapter: adapter.save_file(file_path)
         )
 
+    # Added in 2.2.0 (#276).
     async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
         """Write a copy and keep the original open, using pool."""
         return await self._execute_with_pool(
@@ -1472,6 +1473,8 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
             ),
         )
 
+    # Forwarded since 2.2.0 (#267: it raised AttributeError before reaching
+    # SolidWorks).
     async def pack_and_go_assembly(
         self, source_path: str, target_dir: str
     ) -> AdapterResult[dict[str, Any]]:

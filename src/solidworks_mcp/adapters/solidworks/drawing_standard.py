@@ -156,7 +156,7 @@ def gtol_problem(
 
 #: How far inside the sheet edge the drawing border runs: ISO 5457's frame
 #: is at least 10 mm in. A table placed by the sheet format's anchor is kept
-#: inside it (#262: on a German SW 2025 template the BOM sat in the top-left
+#: inside it (#262, fixed in 2.2.0: on a German SW 2025 template the BOM sat in the top-left
 #: corner across the border).
 BORDER_INSET = 0.010
 
@@ -181,6 +181,7 @@ def shift_into(box: Box, area: Box) -> Box | None:
     return (box[0] + dx, box[1] + dy, box[2] + dx, box[3] + dy)
 
 
+# Added in 2.2.0 (#262).
 def bom_target(box: Box | None, sheet: Box | None) -> Box | None:
     """Where a BOM the format's anchor placed should go instead, if anywhere.
 
@@ -836,7 +837,7 @@ class SolidWorksDrawingStandardMixin:
         if target is not None:
             # A table on the format's anchor can't be moved (SetPosition
             # returns False, Anchored can't be cleared; measured live on SW
-            # 2026), so it is put back unanchored where it fits (#262).
+            # 2026), so it is put back unanchored where it fits (#262, fixed in 2.2.0).
             new = [
                 f for f in self._bom_features(model) if str(f.Name) not in boms_before
             ][-1:]
@@ -1431,7 +1432,7 @@ class SolidWorksDrawingStandardMixin:
             for n, v in s.views.items()
         }
         # The model's own names for its standard views, so the front and the
-        # isometric are found in any language (#262).
+        # isometric are found in any language (#262, fixed in 2.2.0).
         model = self._attempt(
             lambda: self.swApp.GetOpenDocumentByName(s.path), default=None
         )

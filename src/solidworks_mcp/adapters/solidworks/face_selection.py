@@ -52,7 +52,7 @@ _PARALLEL = 0.999  # |cos| threshold for "same direction"
 _ON_PLANE_M = 1e-6  # metres
 #: A point is on the nearest face when this close (metres, 0.1 mm). 0.01 mm
 #: missed a Hole Wizard hole's wall, 0.043 mm from the reporter's point
-#: (#271); the nearest face is always the one taken, so this only decides
+#: (#271, fixed in 2.2.0); the nearest face is always the one taken, so this only decides
 #: whether a point counts as on a face at all.
 _ON_FACE_M = 1e-4
 
@@ -348,7 +348,7 @@ class FaceEdgeSelector:
         self, plane: str
     ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
         """Return ``(origin, normal)`` of a named reference plane; a default
-        plane is found by its place in the tree, in any language (#262)."""
+        plane is found by its place in the tree, in any language (#262, fixed in 2.2.0)."""
         plane = entity_name(self._adapter, plane, owner=self._model)
         feature = _attempt(self._adapter, lambda: self._model.FeatureByName(plane))
         if feature is None:

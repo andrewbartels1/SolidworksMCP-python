@@ -1,5 +1,8 @@
 """Equations and global variables: list, add or change, and delete them.
 
+Since 2.2.0 every IEquationMgr call goes through ``compat`` (#265: they
+failed with "Member not found" on SolidWorks 2024).
+
 One value (``"Width" = 60mm``) can drive several dimensions
 (``"D1@Sketch1" = "Width" / 2``), which is how a SolidWorks part becomes
 parametric.

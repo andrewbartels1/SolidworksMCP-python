@@ -69,7 +69,7 @@ THREAD_END_TYPES: dict[str, int] = {"blind": 0, "up_to_next": 1, "through": 2}
 
 #: ISO 261 coarse pitches (mm) by nominal diameter. SolidWorks' ISO and DIN
 #: thread tables name a coarse thread without its pitch ("M8"); asked for
-#: "M8x1.25", they store the first pitched M8 row, M8x1.0 (#274, live on
+#: "M8x1.25", they store the first pitched M8 row, M8x1.0 (#274, fixed in 2.2.0; live on
 #: SW 2026).
 ISO_COARSE_PITCH: dict[float, float] = {
     1.0: 0.25, 1.2: 0.25, 1.4: 0.3, 1.6: 0.35, 2.0: 0.4, 2.5: 0.45, 3.0: 0.5,
@@ -84,6 +84,7 @@ ISO_COARSE_PITCH: dict[float, float] = {
 _METRIC_THREAD_STANDARDS = {"iso", "din"}
 
 
+# Added in 2.2.0 (#274).
 def thread_table_size(size: str, standard: str) -> str:
     """The spelling SolidWorks' thread table has for ``size``.
 
@@ -277,6 +278,7 @@ def _position_sketch(adapter: Any, feature: Any, first_m: list[float]) -> Any:
 _HOLE_AT_POINT_M = 1e-7
 
 
+# Fixed in 2.2.0: found while checking #271, the hole sat 0.04 mm off.
 def _place_holes(
     adapter: Any,
     model: Any,

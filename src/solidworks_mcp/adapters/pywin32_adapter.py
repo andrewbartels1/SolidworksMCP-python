@@ -1446,7 +1446,7 @@ class _FeatureSelectionService:
         """
         target_doc = self._adapter.currentModel
         # A default plane or the origin is found by its place in the tree,
-        # in any language (#262); the result keeps the caller's name.
+        # in any language (#262, fixed in 2.2.0); the result keeps the caller's name.
         name = default_entities.entity_name(self._adapter, feature_name)
 
         result = self.try_select_by_feature_name(target_doc, name, append)

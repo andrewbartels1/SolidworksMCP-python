@@ -117,6 +117,7 @@ class AddNoteInput(BaseModel):
     """
 
     text: str = Field(description="Note text content")
+    # The position is the top-left corner on every release since 2.2.0 (#275).
     position_x: float = Field(
         description="X of the note's top-left corner, mm from the sheet's left edge"
     )

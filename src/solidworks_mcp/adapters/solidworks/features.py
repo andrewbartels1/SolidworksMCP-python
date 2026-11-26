@@ -560,7 +560,7 @@ def _create_extrusion_impl(
         if requested is None and selection_count(adapter, adapter.currentModel) == 0:
             # Nothing is selected: exit_sketch renamed the sketch (renaming
             # clears the selection), so the sketch it closed is selected by
-            # its tracked name, as create_cut_extrude does (#270).
+            # its tracked name, as create_cut_extrude does (#270, fixed in 2.2.0).
             requested = getattr(adapter, "_last_sketch_name", None) or None
         sketch_used = (
             _resolve_profile_sketch(adapter, requested, purpose="extrude")
@@ -751,6 +751,7 @@ def _select_revolve_inputs(adapter: Any, params: RevolveParameters) -> str | Non
     return sketch
 
 
+# Added in 2.2.0: a sketch line's id as the revolve axis.
 def _select_sketch_axis(adapter: Any, axis: str, sketch: str) -> bool:
     """Append the sketch line ``axis`` (an id ``add_centerline`` returned)
     to the selection with mark 4, the mark ``FeatureRevolve2`` reads its axis
@@ -983,7 +984,7 @@ def _select_named_feature(
         name: Feature name (e.g. ``"Sketch1"`` or ``"Helix/Spiral1"``).  Any
             ``@document`` qualifier is stripped before lookup. A default
             plane (``"Top Plane"``, ``"Right"``...) or the origin is found by
-            its place in the tree, in any language (#262).
+            its place in the tree, in any language (#262, fixed in 2.2.0).
         mark: Selection mark — 1=profile, 2=guide curve, 4=sweep path.
         append: ``True`` to add to the current selection set, ``False`` to
             replace it.
@@ -3328,7 +3329,7 @@ def _create_axis_impl(adapter: Any, reference: str) -> AdapterResult[dict[str, A
 
     def _axis_operation() -> dict[str, Any]:
         # The document's own names for the two planes, so the reply says
-        # which planes were really used (#262).
+        # which planes were really used (#262, fixed in 2.2.0).
         plane_a, plane_b = (entity_name(adapter, p) for p in _AXIS_PLANE_PAIRS[key])
         before = _feature_count(adapter)
         names_before = {name for _, name in _tree_features(adapter)}

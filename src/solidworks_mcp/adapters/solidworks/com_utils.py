@@ -10,6 +10,7 @@ from typing import Any
 
 from .. import sw_type_info as _sw_type_info
 
+#: Named in 2.2.0 (#276 and the export comments that called Copy "Silent").
 #: ``SaveAs`` version: the running release's format.
 SAVE_AS_CURRENT_VERSION = 0
 #: ``swSaveAsOptions_e`` flags for ``SaveAs3`` / ``Extension.SaveAs2``. Save

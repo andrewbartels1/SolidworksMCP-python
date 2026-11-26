@@ -513,6 +513,7 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             input_dict={"file_path": file_path},
         )
 
+    # Added in 2.2.0 (#276).
     async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
         """Write a copy and keep the original open, through circuit breaker."""
         return await self._execute_with_circuit_breaker(
@@ -1622,6 +1623,8 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             lambda: self.adapter.replace_component(component, file_path, all_instances),
         )
 
+    # Forwarded since 2.2.0 (#267: it raised AttributeError before reaching
+    # SolidWorks).
     async def pack_and_go_assembly(
         self, source_path: str, target_dir: str
     ) -> AdapterResult[dict[str, Any]]:

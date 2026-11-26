@@ -50,6 +50,7 @@ _MATE_ALIGNMENTS: dict[str, int] = {
 }
 
 #: What each ``swAddMateError_e`` refusal means, and what to try.
+#: Added in 2.2.0 (#264): why SolidWorks refused a mate, by swAddMateError_e.
 _MATE_ERRORS: dict[int, str] = {
     2: "The two entities can't take this mate type.",
     3: "The alignment doesn't fit these entities; try alignment 'closest'.",
@@ -58,7 +59,7 @@ _MATE_ERRORS: dict[int, str] = {
         "The mate conflicts with the mates already there (over-defined). A "
         "concentric mate's 'aligned' compares the cylinders' axis "
         "directions, which depend on how each feature was built and can flip "
-        "the part against an earlier mate; try alignment 'closest' (#264)."
+        "the part against an earlier mate; try alignment 'closest'."
     ),
 }
 
@@ -103,6 +104,7 @@ def _note_extent_mm(adapter: Any, note: Any) -> list[float] | None:
     return [round(float(v) * 1000.0, 2) for v in (raw[0], raw[1], raw[3], raw[4])]
 
 
+# Added in 2.2.0 (#275).
 def _note_top_left(
     adapter: Any, note: Any, annotation: Any, x: float, y: float
 ) -> list[float] | None:
@@ -110,7 +112,7 @@ def _note_top_left(
 
     ``IAnnotation.SetPosition`` puts the top-left there on SW 2026; on SW
     2024 the note was centred on the point instead and ran off the sheet
-    (#275). The note's extent is read back and the note moved by the
+    (#275, fixed in 2.2.0). The note's extent is read back and the note moved by the
     difference, so it lands the same on both.
 
     Returns:
@@ -2008,9 +2010,10 @@ class SolidWorksIOMixin:
                 and len(_configuration_names(adapter)) > 1
             ):
                 # A dimension never yet set per configuration takes a
-                # SystemValue write in every configuration (#266, seen on SW
+                # SystemValue write in every configuration (#266, fixed in 2.2.0; seen on SW
                 # 2024 and 2026), so with several configurations "this" names
                 # the active one, as an explicit list does.
+                # Fixed in 2.2.0 (#266).
                 option, array = SPECIFY_CONFIGURATION, string_array(names)
             if option == THIS_CONFIGURATION:
                 # SetValue3 has gen_py parameter mapping issues on SW 2025.
@@ -2195,11 +2198,12 @@ class SolidWorksIOMixin:
             adapter._handle_com_operation("save_file", _save),
         )
 
+    # Added in 2.2.0 (#276).
     async def save_copy(self, file_path: str) -> AdapterResult[dict[str, Any]]:
         """Write a copy of the active document and keep working on the original.
 
         ``IModelDoc2.SaveAs3(path, 0, swSaveAsOptions_Copy)``: File > Save As
-        with "Save as copy and continue" (#276). The open document keeps its
+        with "Save as copy and continue" (#276, fixed in 2.2.0). The open document keeps its
         own path, so an assembly using it still uses it.
 
         Args:
@@ -3120,7 +3124,7 @@ class SolidWorksIOMixin:
                     )
                     continue
                 # A default plane is found in the component's own tree, in
-                # any language (#262).
+                # any language (#262, fixed in 2.2.0).
                 local_name = default_entities.entity_name(
                     adapter, entity_name, owner=wrapped
                 )
@@ -3414,7 +3418,7 @@ class SolidWorksIOMixin:
         # With no orientation, a view_type that names a view ("top",
         # "isometric", or a model view's own "*Name") is the orientation; any
         # other ("orthographic") is front (#256: view_type alone used to leave
-        # every view a front view; #262: "*Isometrisch" fell back to front).
+        # every view a front view; #262, fixed in 2.2.0: "*Isometrisch" fell back to front).
         view_type = str(_first(data, "view_type", default="")).strip()
         names_a_view = view_type.lower() in _NAMED_VIEWS or view_type.startswith("*")
         requested = str(
@@ -3475,7 +3479,7 @@ class SolidWorksIOMixin:
                 )
 
             # A standard view goes by the model's own name for it, read from
-            # its view list by position, so it is right in any language (#262).
+            # its view list by position, so it is right in any language (#262, fixed in 2.2.0).
             local_view = default_entities.standard_view_name(adapter, opened, view_name)
             view = adapter._attempt(
                 lambda: drawing.CreateDrawViewFromModelView3(

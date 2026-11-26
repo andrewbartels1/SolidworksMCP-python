@@ -1,5 +1,8 @@
 """Find the default planes, the origin and the standard views by identity.
 
+Added in 2.2.0 for #262 (German SolidWorks 2025) and #261 (French): it
+replaces the name tables and the process-wide pywin32 hook.
+
 The tools name these in English (``"Top"``, ``"Front Plane"``,
 ``"*Isometric"``), but their names in a document depend on the template and
 the install's language: ``"Plan de dessus"`` on French, ``"Ebene oben"`` on
