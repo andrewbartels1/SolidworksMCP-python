@@ -203,6 +203,22 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
     ErrorRule(
         error_type=INVALID_INPUT,
         hint=(
+            "Name sketches the message lists. A helix's base sketch holds one "
+            "circle; a sweep's path is a sketch or a curve (create_helix's "
+            "name) and its profile a different, closed sketch, or give "
+            "circular_profile_diameter instead."
+        ),
+        patterns=(
+            r"A helix's base sketch must hold exactly one circle",
+            r"No sketch named '[^']*' for the helix",
+            r"Found no sketch (or curve )?named '[^']*' for the (path|profile)",
+            r"The profile '[^']*' is the path itself",
+            r"A sweep needs a (profile sketch|'path')",
+        ),
+    ),
+    ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
             "face_point must lie on a flat face of the active part's body, in "
             "mm. Read the faces' centres with select_face_edges, or sketch on "
             "a plane instead."

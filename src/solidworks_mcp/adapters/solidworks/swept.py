@@ -265,14 +265,11 @@ class SolidWorksSweptMixin:
 
     # ── sweeps ───────────────────────────────────────────────────────────
 
-    def _sweep_sketches(
-        self, params: SweepParameters, operation: str
-    ) -> tuple[str, str | None]:
+    def _sweep_sketches(self, params: SweepParameters) -> tuple[str, str | None]:
         """The path's and the profile's names, as the tree spells them.
 
         Args:
             params: The sweep's path and profile choice.
-            operation: ``create_sweep`` or ``create_cut_sweep``, for messages.
 
         Returns:
             tuple[str, str | None]: The path and the profile sketch; the
@@ -296,7 +293,7 @@ class SolidWorksSweptMixin:
         )
         if found is None:
             raise InputRefused(
-                f"{operation}: no sketch or curve named '{params.path}' for the "
+                f"Found no sketch or curve named '{params.path}' for the "
                 f"path. Sketches: {listed}."
             )
         if params.circular_profile_diameter is not None:
@@ -305,12 +302,12 @@ class SolidWorksSweptMixin:
             profile = spelled(params.profile)
             if profile == path:
                 raise InputRefused(
-                    f"{operation}: the profile '{params.profile}' is the path "
+                    f"The profile '{params.profile}' is the path "
                     f"itself; name another sketch. Sketches: {listed}."
                 )
             if profile not in sketches:
                 raise InputRefused(
-                    f"{operation}: no sketch named '{params.profile}' for the "
+                    f"Found no sketch named '{params.profile}' for the "
                     f"profile. Sketches: {listed}."
                 )
             return path, profile
@@ -323,7 +320,7 @@ class SolidWorksSweptMixin:
         profile_name = next((s for s in reversed(sketches) if s != path), None)
         if profile_name is None:
             raise InputRefused(
-                f"{operation} needs a profile sketch distinct from the path "
+                f"A sweep needs a profile sketch distinct from the path "
                 f"'{params.path}' (or circular_profile_diameter). Sketches: "
                 f"{listed}."
             )
@@ -352,7 +349,7 @@ class SolidWorksSweptMixin:
         if not params.path:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
-                error=f"{operation} needs a 'path': a sketch or a curve's name.",
+                error="A sweep needs a 'path': a sketch or a curve's name.",
             )
         diameter = params.circular_profile_diameter
         if diameter is not None and diameter <= 0:
@@ -362,7 +359,7 @@ class SolidWorksSweptMixin:
             )
 
         def build() -> dict[str, Any]:
-            path, profile = self._sweep_sketches(params, operation)
+            path, profile = self._sweep_sketches(params)
             model = adapter.currentModel
             adapter._attempt(lambda: model.ClearSelection2(True), default=None)
             if profile is not None and not _select_named_feature(

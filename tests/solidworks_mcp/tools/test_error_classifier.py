@@ -67,6 +67,18 @@ def classifier() -> ErrorClassifier:
             "feature_not_built",
         ),
         (
+            "Failed to create the helix: Error in create_helix: A helix's base "
+            "sketch must hold exactly one circle (...); 'Sketch4' holds 4 lines.",
+            "invalid_input",
+        ),
+        (
+            "Error in create_cut_sweep: The profile 'Helix/Spiral1' is the path "
+            "itself; name another sketch.",
+            "invalid_input",
+        ),
+        ("Found no sketch named 'Sketch9' for the profile.", "invalid_input"),
+        ("A sweep needs a 'path': a sketch or a curve's name.", "invalid_input"),
+        (
             f"COM error in x: ({DISP_E_TYPEMISMATCH}, 'Type mismatch.', None, None)",
             "com_type_mismatch",
         ),

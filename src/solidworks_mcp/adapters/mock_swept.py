@@ -144,11 +144,10 @@ class MockSweptMixin:
         Returns:
             AdapterResult[SolidWorksFeature]: The sweep, or the refusal.
         """
-        operation = "create_cut_sweep" if cut else "create_sweep"
         if not self._current_model:
             return _error("No active model")
         if not params.path:
-            return _error(f"{operation} needs a 'path': a sketch or a curve's name.")
+            return _error("A sweep needs a 'path': a sketch or a curve's name.")
         diameter = params.circular_profile_diameter
         if diameter is not None and diameter <= 0:
             return _error(
@@ -158,7 +157,7 @@ class MockSweptMixin:
         path = self._spelled(params.path)
         if path is None:
             return _error(
-                f"{operation}: no sketch or curve named '{params.path}' for the "
+                f"Found no sketch or curve named '{params.path}' for the "
                 f"path. Sketches: {listed}."
             )
         profile: str | None = None
@@ -167,12 +166,12 @@ class MockSweptMixin:
                 profile = self._spelled(params.profile)
                 if profile == path:
                     return _error(
-                        f"{operation}: the profile '{params.profile}' is the path "
+                        f"The profile '{params.profile}' is the path "
                         f"itself; name another sketch. Sketches: {listed}."
                     )
                 if profile is None or profile not in self._sketches:
                     return _error(
-                        f"{operation}: no sketch named '{params.profile}' for the "
+                        f"Found no sketch named '{params.profile}' for the "
                         f"profile. Sketches: {listed}."
                     )
             else:
@@ -181,7 +180,7 @@ class MockSweptMixin:
                 profile = last if last in others else (others[-1] if others else None)
                 if profile is None:
                     return _error(
-                        f"{operation} needs a profile sketch distinct from the "
+                        f"A sweep needs a profile sketch distinct from the "
                         f"path '{params.path}' (or circular_profile_diameter). "
                         f"Sketches: {listed}."
                     )

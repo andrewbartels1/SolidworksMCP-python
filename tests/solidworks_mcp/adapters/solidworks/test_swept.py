@@ -516,7 +516,7 @@ async def test_a_sweep_needs_an_active_model() -> None:
         (
             SweepParameters(path="Sketch3", profile="SKETCH3"),
             None,
-            "the profile 'SKETCH3' is the path itself",
+            "The profile 'SKETCH3' is the path itself",
         ),
         (
             SweepParameters(path="Sketch3", profile="Sketch9"),

@@ -321,7 +321,7 @@
     "name": "create_cut_sweep",
     "family": "modeling",
     "level": "beta",
-    "reason": "not yet checked on SolidWorks by a live demo.",
+    "reason": "new: checked live once (a thread cut on a rod), not yet in wide use.",
     "summary": "Sweep a closed profile along a path to remove material (Insert > Cut > Sweep)."
    },
    {
@@ -363,7 +363,7 @@
     "name": "create_helix",
     "family": "modeling",
     "level": "beta",
-    "reason": "not yet checked on SolidWorks by a live demo.",
+    "reason": "new: checked live once (a spring and a threaded rod), not yet in wide use.",
     "summary": "Make a helix or a flat spiral from a sketch holding one circle (Insert > Curve > Helix/Spiral)."
    },
    {

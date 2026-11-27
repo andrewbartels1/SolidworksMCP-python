@@ -289,10 +289,12 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_sweep": _STABLE,
     # Beta until queue item 34's live demo (task 6.3).
     "create_cut_sweep": Support(
-        SupportLevel.BETA, "not yet checked on SolidWorks by a live demo."
+        SupportLevel.BETA,
+        "new: checked live once (a thread cut on a rod), not yet in wide use.",
     ),
     "create_helix": Support(
-        SupportLevel.BETA, "not yet checked on SolidWorks by a live demo."
+        SupportLevel.BETA,
+        "new: checked live once (a spring and a threaded rod), not yet in wide use.",
     ),
     "delete_feature": _STABLE,
     "get_dimension": _STABLE,

@@ -29,5 +29,5 @@
 ## 6. Live demo and sign-off
 
 - [x] 6.1 `tests/live/test_live_sw_helix_and_swept_cuts.py`: a compression spring (a 20 mm helix, pitch 6, height 48; a 2 mm wire by `circular_profile_diameter`; volume 1,586.2 mm³, the circle's area times the reported length) and a threaded rod (a rod, a helix on it, a triangular thread profile at the helix's start, `create_cut_sweep`; the volume removed against the hand calculation); one refused call each
-- [ ] 6.2 The user runs the demo; fix what it finds; record the GIF (captions held long enough to read)
-- [ ] 6.3 Promote the two tools to stable; commit; ask before pushing
+- [x] 6.2 The user runs the demo; fix what it finds; record the GIF (captions held long enough to read). Both passed 2026-11-26 after one fix (the base sketch was read through an unflagged `IFeature`, so every sketch read as empty): the spring's wire 1,585.9 mm³ against 1,586.3, the thread cut -177.8 mm³ against -178.4. Refusals now read as `invalid_input` without a repeated prefix. GIF: the user's to record
+- [x] 6.3 ~~Promote the two tools to stable~~ Kept at beta by the user's choice (2026-11-26), with the reason "checked live once"; commit; ask before pushing
