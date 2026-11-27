@@ -144,6 +144,17 @@ follows the Hole Wizard's drill depth, with no runout.
 5. Metric runout follows the ISO 3508 rules, normal ≈ 2.5P and short ≈
    1.25P, with the standard cited. The rounded printed table is **not**
    shipped as data for now; that waits until we look into it further.
+6. Inch runout (2026-11-27): start with the ISO 3508 rule applied to the
+   inch pitch (P = 1 / TPI), as a reasoned default, not a standard. The
+   reply labels it (`runout_basis`, e.g. "ISO 3508 rule applied to the
+   inch pitch; no free inch standard dimensions a runout"), and a runout
+   length the user gives overrides it.
+7. Sizes (2026-11-27): every standard ISO metric size from M1 to about M10
+   (and the larger ones the library has), coarse and fine. M3, M4, M5 and
+   M6 are the most used, with their bolt head types (socket head, button,
+   countersunk, hex), so tests and examples centre on those. The library's
+   ISO tapped-hole table (62 rows, coarse and fine) is the source; the head
+   types match `create_hole`'s fastener types (`list_hole_sizes`).
 
 ## Inch runout: NBS Handbook H28 (1969), Part I
 
