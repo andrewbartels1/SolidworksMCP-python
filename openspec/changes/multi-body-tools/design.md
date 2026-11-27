@@ -62,6 +62,50 @@ Motivation: see proposal.md, under "Why".
    The answers go into this file before the adapter is written, as was done
    for the helix probe. Guessing would give silent no-ops, which is the
    failure the measurement exists to catch.
+
+   **Probe answers** (SolidWorks 2026 SP4, 2026-11-26, four scratch
+   probes; every value below was read back from the bodies):
+
+   - **Body order:** `GetBodies2(swSolidBody, False)` lists the bodies
+     newest first, not in tree order. `list_bodies` gives them in the order
+     SolidWorks lists them.
+   - **Combine:** the tool bodies must be passed as a
+     `VARIANT(VT_ARRAY | VT_DISPATCH)`; a plain list makes nothing.
+     - Subtract takes `(15902, main, [tools])`. A 40 × 40 × 10 block minus
+       a crossing cylinder gave the expected volume.
+     - Add (15903) and common (15901) need **every** body in the array,
+       the main body included; `(code, main, [main, *tools])` works. With
+       only the others in the array they return None, and a Python `None`
+       as `MainBody` is a type mismatch (a null `VT_DISPATCH` works too).
+     - A 16,000 and a 4,000 mm³ block overlapping by 1,000 gave 19,000
+       (add) and 1,000 (common).
+     - The result is renamed `Combine1`.
+   - **Split:** select the plane (`Select2(False, 0)`), then
+     `PreSplitBody2()` returns the pieces (2 for a block across Right
+     Plane). `PostSplitBody2(pieces, False, origins, paths, "")` then makes
+     the split:
+     - `origins` is a `VT_DISPATCH` array of nulls and `paths` a `VT_BSTR`
+       array of empty strings, both as long as `pieces`;
+     - with no arrays it makes nothing;
+     - `ConsumeCut` true removes the pieces, so it is false;
+     - the pieces are named `Split1[1]` and `Split1[2]`, 8,000 mm³ each.
+   - **Move/copy:** the bodies are selected with mark 1 (mark 0 makes
+     nothing).
+     - Translation is in metres, rotation in radians about the model axes
+       through the rotation point.
+     - When both a rotation and a translation are given, SolidWorks applies
+       only the rotation. `move_copy_body` therefore refuses both in one
+       call; the agent moves twice.
+     - A moved body is renamed `Body-Move/Copy1`; copies are
+       `Body-Move/Copy1[1]` to `[n]`, copy n sitting n translations away.
+   - **Delete/keep:** the bodies are selected with mark 0 (append for
+     more). `InsertDeleteBody2(keep)` makes the `Body-Delete/Keep` feature.
+     Keep two of three left exactly the two selected.
+   - **Scale:** with no body selected `InsertScale` makes nothing. Selected
+     with mark 0 or 1 (append for more), it scales them; we use 1.
+     - Type 0 is the centroid and type 1 the origin.
+     - The scaled bodies are renamed `Scale1`, or `Scale1[n]` for several.
+     - Uniform ×2 gives 8× the volume, and 1 × 2 × 3 gives 6×.
 2. **A body is found by name each time,** case-insensitive, never cached:
    bodies are renamed by the very features we add. The lookup gives the
    `IBody2` dispatch and the list of names for refusals.

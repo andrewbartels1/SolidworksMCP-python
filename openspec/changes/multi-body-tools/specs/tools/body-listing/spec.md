@@ -2,7 +2,7 @@
 
 ### Requirement: The part's solid bodies, by name
 `list_bodies` SHALL take no arguments and SHALL reply, for the active part,
-with `bodies`, a list in feature-tree order. Each entry SHALL carry `name`
+with `bodies`, a list in the order SolidWorks gives them. Each entry SHALL carry `name`
 (the name every body tool accepts), `volume_mm3` and `bounding_box_mm`, the
 box's `min` and `max` corners `[x, y, z]` and its `size`. The reply SHALL
 also carry `count` and `total_volume_mm3`. Only solid bodies are listed;

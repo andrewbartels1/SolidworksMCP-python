@@ -46,10 +46,10 @@ are consumed.
 - **THEN** the call fails with `invalid_input` and nothing changes
 
 ### Requirement: Split a body
-`split_body` SHALL take `tool`, the name of a plane or a sketch that crosses
-the part's bodies, and optionally `bodies`, the ones to split (all by
-default). The result SHALL have more bodies than before and the same
-volume. The reply SHALL name the bodies made.
+`split_body` SHALL take `tool`, the name of a plane or a sketch, and SHALL
+split every body the tool crosses, as SolidWorks does. The result SHALL
+have more bodies than before and the same volume. The reply SHALL name the
+bodies made.
 
 #### Scenario: A block split at its middle
 - **WHEN** a 40 × 40 × 10 mm block centred on the origin is split by the
@@ -58,13 +58,13 @@ volume. The reply SHALL name the bodies made.
   unchanged
 
 #### Scenario: A plane that misses the body
-- **WHEN** the tool is a plane that doesn't cross any named body
+- **WHEN** the tool is a plane that doesn't cross any body
 - **THEN** the call fails, and no split feature remains
 
 ### Requirement: Move or copy bodies
 `move_copy_body` SHALL take `bodies`, a `translate` `[x, y, z]` in mm, and
 optionally a `rotate` `[x, y, z]` in degrees about `rotation_point`
-`[x, y, z]` mm (the origin by default). With `copy: true` and `copies` N
+`[x, y, z]` mm (the origin by default). With `as_copy: true` and `copies` N
 (1 by default, at most 50), the bodies SHALL be copied N times instead of
 moved.
 
@@ -73,6 +73,9 @@ moved.
 - A copy SHALL add N bodies per body copied, and N times their volume.
 - A call with no translation and no rotation SHALL fail with
   `invalid_input`.
+- A call with both a translation and a rotation SHALL fail with
+  `invalid_input`, saying to move twice. SolidWorks would apply only the
+  rotation.
 
 #### Scenario: A block moved 50 mm along x
 - **WHEN** a block is moved by `[50, 0, 0]`
