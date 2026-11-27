@@ -967,3 +967,44 @@ async def test_a_first_feature_reads_the_volume_before_from_the_summary(
 
     assert result.data["volume_before"] == before
     assert result.data["volume_after"] == 12000.0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("direction", "volumes", "named", "message"),
+    [
+        (-1, [1000.0, 1100.0], True, "should remove material but added 100.0 mm³"),
+        (1, [1000.0, 900.0], False, "should add material but removed 100.0 mm³"),
+    ],
+)
+async def test_a_feature_that_moves_the_volume_the_wrong_way_is_removed(
+    direction: int,
+    volumes: list[float],
+    named: bool,
+    message: str,
+    picks: list[tuple[Any, ...]],
+) -> None:
+    """A cut sweep that adds material, or a boss that removes it (queue item 34)."""
+    adapter = FakeAdapter(list(volumes))
+    data = {"name": "Cut-Sweep1"} if named else {}
+
+    result = await adapter._measured(
+        "create_cut_sweep", lambda: dict(data), direction=direction
+    )
+
+    assert message in (result.error or "")
+    assert adapter.deleted == (["Cut-Sweep1"] if named else [])
+
+
+@pytest.mark.asyncio
+async def test_a_feature_moving_the_volume_the_right_way_is_kept(
+    picks: list[tuple[Any, ...]],
+) -> None:
+    adapter = FakeAdapter([1000.0, 880.0])
+
+    result = await adapter._measured(
+        "create_cut_sweep", lambda: {"name": "Cut-Sweep1"}, direction=-1
+    )
+
+    assert result.is_success, result.error
+    assert result.data["volume_change"] == -120.0

@@ -12,6 +12,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Helices and swept cuts** (queue item 34): the path most mechanical
+  sweeps follow, and a sweep that removes material, so an agent can model a
+  spring, a modelled thread or a helical groove without a macro. 159 tools
+  in all. `create_helix` makes a helix or a flat spiral on a sketch holding
+  one circle, from two of height, pitch and revolutions; the reply gives all
+  three, the length and the start point (both read from the curve), so a
+  profile can be drawn where the helix starts. `create_cut_sweep` sweeps a
+  closed profile along a path and removes material. Beta until the live
+  demo.
+
+### Changed
+
+- **`create_sweep`** takes `profile` (name the profile sketch instead of
+  relying on the sketch closed last) and `circular_profile_diameter` (sweep
+  a circle, such as a spring's wire, with no profile sketch);
+  `create_cut_sweep` takes both too. Both sweeps report the volume before,
+  after and the change, and a sweep that adds nothing, or a cut that adds
+  material, is removed again and fails. Without the new options
+  `create_sweep` picks its profile as before.
+- The sweep code moved from `adapters/solidworks/features.py` into
+  `adapters/solidworks/swept.py`, beside the helix.
+
 ## [2.2.0] - 2026-11-24
 
 ### Added

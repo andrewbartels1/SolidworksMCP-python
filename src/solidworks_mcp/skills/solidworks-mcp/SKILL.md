@@ -39,7 +39,8 @@ A solid feature always comes from a closed sketch:
    sketch, or make a reference axis with `create_axis`.
 4. `exit_sketch`.
 5. The feature: `create_extrusion` (add material), `create_cut_extrude`
-   (remove it), `create_revolve`, `create_sweep`, `create_loft`.
+   (remove it), `create_revolve`, `create_sweep` or `create_cut_sweep`
+   (along a sketch or a `create_helix` curve), `create_loft`.
    Each takes `sketch_name`; without it, the sketch you closed last is
    used. `create_revolve` turns about the sketch's centreline, or about
    the reference axis `axis_entity` names.

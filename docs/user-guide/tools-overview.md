@@ -51,9 +51,9 @@ These read SolidWorks' installed files and never start it
 
     ---
 
-    Parts, assemblies and drawings: extrusions, revolves, sweeps, lofts, cuts, Hole Wizard holes, cosmetic threads, shells, drafts, ribs, fillets, chamfers, linear and circular patterns, reference geometry, mates, dimensions and the feature tree.
+    Parts, assemblies and drawings: extrusions, revolves, helices, sweeps and swept cuts, lofts, cuts, Hole Wizard holes, cosmetic threads, shells, drafts, ribs, fillets, chamfers, linear and circular patterns, reference geometry, mates, dimensions and the feature tree.
 
-    [**42 tools available** :octicons-arrow-right-24:](tool-catalog/modeling.md)
+    [**44 tools available** :octicons-arrow-right-24:](tool-catalog/modeling.md)
 
 - :material-function-variant:{ .lg .middle } **Equation Tools**
 
@@ -193,7 +193,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 157 Tools**
+**Total: 159 Tools**
 
 ## Deprecated tools
 

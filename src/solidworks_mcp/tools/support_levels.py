@@ -287,6 +287,15 @@ SUPPORT_LEVELS: dict[str, Support] = {
     "create_reference_point": _STABLE,
     "create_revolve": _STABLE,
     "create_sweep": _STABLE,
+    # Beta until queue item 34's live demo (task 6.3).
+    "create_cut_sweep": Support(
+        SupportLevel.BETA,
+        "new: checked live once (a thread cut on a rod), not yet in wide use.",
+    ),
+    "create_helix": Support(
+        SupportLevel.BETA,
+        "new: checked live once (a spring and a threaded rod), not yet in wide use.",
+    ),
     "delete_feature": _STABLE,
     "get_dimension": _STABLE,
     "insert_component": _STABLE,

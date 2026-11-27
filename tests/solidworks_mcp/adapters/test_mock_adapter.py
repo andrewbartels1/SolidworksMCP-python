@@ -347,11 +347,7 @@ async def test_mock_adapter_additional_feature_and_dimension_paths(mock_config):
             )
         )
     ).is_success
-    assert (
-        await adapter.create_sweep(
-            SimpleNamespace(path="Sketch2", twist_along_path=True, twist_angle=30)
-        )
-    ).is_success
+    # The sweeps are covered in test_mock_swept.py.
     assert (
         await adapter.create_loft(
             SimpleNamespace(

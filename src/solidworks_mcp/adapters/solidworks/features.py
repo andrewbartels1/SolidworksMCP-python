@@ -16,7 +16,6 @@ from ..base import (
     MassProperties,
     RevolveParameters,
     SolidWorksFeature,
-    SweepParameters,
 )
 from .com_utils import as_list, selection_count
 from .com_utils import attempt as _attempt
@@ -52,11 +51,6 @@ class SolidWorksFeaturesMixin:
         self, params: RevolveParameters
     ) -> AdapterResult[SolidWorksFeature]:
         return _create_revolve_impl(self, params)
-
-    async def create_sweep(
-        self, params: SweepParameters
-    ) -> AdapterResult[SolidWorksFeature]:
-        return _create_sweep_impl(self, params)
 
     async def create_loft(
         self, params: LoftParameters
@@ -1121,163 +1115,6 @@ def _tree_features(adapter: Any) -> list[tuple[str, str]]:
     except Exception:
         pass
     return found
-
-
-def _create_sweep_impl(
-    adapter: Any, params: SweepParameters
-) -> AdapterResult[SolidWorksFeature]:
-    """Create a swept boss/protrusion from a profile sketch along a path sketch.
-
-    Uses ``IFeatureManager::InsertProtrusionSwept4``.  Two sketches are
-    required in the active part: a closed **profile** sketch and an open
-    **path** sketch named by ``params.path``.  The path is selected under
-    mark 4 and the profile under mark 1, per the SolidWorks selection-mark
-    contract for sweeps.
-
-    Because :class:`SweepParameters` only names the path, the profile is
-    inferred as the first ``ProfileFeature`` sketch in the feature tree whose
-    name is **not** the path.  In the common "draw profile, draw path, sweep"
-    workflow this is unambiguous (exactly two sketches exist).
-
-    Args:
-        adapter: A fully connected ``PyWin32Adapter`` with a non-``None``
-            ``currentModel``.
-        params: Sweep parameter bag.  Relevant fields:
-            - ``path`` (str): Name of the path sketch (e.g. ``"Sketch2"``).
-            - ``twist_along_path`` (bool): Apply a constant twist along the
-              path.
-            - ``twist_angle`` (float): Twist angle in **degrees** (used only
-              when ``twist_along_path`` is true).
-            - ``merge_result`` (bool): Merge with existing bodies.
-
-    Returns:
-        AdapterResult[SolidWorksFeature]: On success, ``data`` is a
-        ``SolidWorksFeature`` whose ``type`` is ``"Sweep"``.  On failure,
-        ``status`` is ``ERROR`` with a descriptive message.
-
-    Raises:
-        Exception: Propagated through ``_handle_com_operation`` when the
-            profile/path cannot be selected or the COM call returns ``None``.
-
-    Example::
-
-        from solidworks_mcp.adapters.base import SweepParameters
-
-        params = SweepParameters(path="Sketch2", merge_result=True)
-        result = await adapter.create_sweep(params)
-        print(result.data.name)  # e.g. "Sweep1"
-    """
-    if not adapter.currentModel:
-        return AdapterResult(status=AdapterResultStatus.ERROR, error="No active model")
-
-    if not getattr(params, "path", None):
-        return AdapterResult(
-            status=AdapterResultStatus.ERROR,
-            error="Sweep requires a 'path' sketch name",
-        )
-
-    def _sweep_operation() -> SolidWorksFeature:
-        """Inner COM closure that selects profile + path and runs the sweep.
-
-        Returns:
-            SolidWorksFeature: Populated feature descriptor on success.
-
-        Raises:
-            Exception: When selections fail or ``InsertProtrusionSwept4``
-                returns ``None``.
-        """
-        import math
-
-        feature_manager = adapter.currentModel.FeatureManager
-
-        # Resolve the path name against the actual tree sketches so the
-        # profile/path comparison is on bare names, then pick the first
-        # non-path sketch as the profile.
-        sketch_names = _profile_feature_names(adapter)
-        path_name = params.path
-        for name in sketch_names:
-            if name == params.path or name.lower() == params.path.lower():
-                path_name = name
-                break
-
-        # Profile = the most recently created sketch that isn't the path.
-        # Preferring the latest sketch handles both a sketch path (profile is
-        # drawn first, so it's the only non-path sketch) and a helix/curve
-        # path (the helix's base-circle sketch precedes the profile in the
-        # tree, so "first non-path" would wrongly pick the base circle).
-        profile_name = None
-        last = getattr(adapter, "_last_sketch_name", None)
-        if last and last != path_name and last in sketch_names:
-            profile_name = last
-        if profile_name is None:
-            profile_name = next(
-                (name for name in reversed(sketch_names) if name != path_name), None
-            )
-        if profile_name is None:
-            raise Exception(
-                "Sweep needs a profile sketch distinct from the path "
-                f"'{params.path}'. Sketches found: {sketch_names or 'none'}"
-            )
-
-        adapter._attempt(
-            lambda: adapter.currentModel.ClearSelection2(True), default=None
-        )
-
-        if not _select_named_feature(adapter, profile_name, 1, False):
-            raise Exception(f"Failed to select sweep profile sketch: {profile_name}")
-        if not _select_named_feature(adapter, path_name, 4, True):
-            raise Exception(f"Failed to select sweep path: {path_name}")
-
-        twist = bool(getattr(params, "twist_along_path", False))
-        twist_angle_deg = float(getattr(params, "twist_angle", 0.0))
-        # swTwistControlType_e: 0 = follow path, 8 = constant twist along path.
-        twist_ctrl = 8 if twist else 0
-        twist_angle_rad = math.radians(twist_angle_deg) if twist else 0.0
-
-        feature = feature_manager.InsertProtrusionSwept4(
-            False,  # Propagate to next tangent edge
-            False,  # Alignment (go through end faces)
-            twist_ctrl,  # TwistCtrlOption (swTwistControlType_e)
-            False,  # KeepTangency
-            False,  # BAdvancedSmoothing
-            0,  # StartMatchingType (swTangencyType_e)
-            0,  # EndMatchingType
-            False,  # IsThinBody
-            0.0,  # Thickness1
-            0.0,  # Thickness2
-            0,  # ThinType (swThinWallType_e)
-            0,  # PathAlign
-            bool(getattr(params, "merge_result", True)),  # Merge
-            True,  # UseFeatScope
-            True,  # UseAutoSelect
-            twist_angle_rad,  # TwistAngle (radians)
-            True,  # BMergeSmoothFaces
-            False,  # CircularProfile
-            0.0,  # CircularProfileDiameter
-            0,  # Direction
-        )
-
-        if not feature:
-            raise Exception("Failed to create sweep feature")
-
-        return SolidWorksFeature(
-            name=feature.Name,
-            type="Sweep",
-            id=adapter._get_feature_id(feature),
-            parameters={
-                "profile": profile_name,
-                "path": path_name,
-                "twist_along_path": twist,
-                "twist_angle": twist_angle_deg,
-                "merge_result": bool(getattr(params, "merge_result", True)),
-            },
-            properties={"created": datetime.now().isoformat()},
-        )
-
-    return cast(
-        AdapterResult[SolidWorksFeature],
-        adapter._handle_com_operation("create_sweep", _sweep_operation),
-    )
 
 
 def _create_loft_impl(

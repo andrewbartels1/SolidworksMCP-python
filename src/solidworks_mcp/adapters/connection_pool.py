@@ -17,6 +17,7 @@ from .base import (
     AdapterResult,
     AdapterResultStatus,
     ExtrusionParameters,
+    HelixParameters,
     LoftParameters,
     MassProperties,
     RevolveParameters,
@@ -1101,6 +1102,22 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """
         return await self._execute_with_pool(
             "create_sweep", lambda adapter: adapter.create_sweep(params)
+        )
+
+    async def create_cut_sweep(
+        self, params: SweepParameters
+    ) -> AdapterResult[SolidWorksFeature]:
+        """A sweep that removes material. Using the pool."""
+        return await self._execute_with_pool(
+            "create_cut_sweep", lambda adapter: adapter.create_cut_sweep(params)
+        )
+
+    async def create_helix(
+        self, params: HelixParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A helix or a flat spiral. Using the pool."""
+        return await self._execute_with_pool(
+            "create_helix", lambda adapter: adapter.create_helix(params)
         )
 
     async def create_loft(

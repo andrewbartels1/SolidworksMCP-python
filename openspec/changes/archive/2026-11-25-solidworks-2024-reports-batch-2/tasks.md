@@ -20,7 +20,7 @@
 
 - [x] 4.1 Unit suite at 100% coverage, ruff, mypy, mkdocs strict
 - [x] 4.2 Every test in the live file passes on SolidWorks 2026
-- [ ] 4.3 The user reviews; the reporter reruns the selftest and the reports on 2024 (the user posts replies)
+- [x] 4.3 The user reviews; the reporter reruns the selftest and the reports on 2024 (the user posts replies) — replies posted 2026-11-25; merged in #277
 - [x] 4.4 Asked: the hole offset is to be fixed now; Save As and Save a Copy kept apart
 
 ## 5. Follow-ups from the full live run (2026-11-25)

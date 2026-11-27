@@ -12,6 +12,7 @@ from .part_features import SolidWorksPartFeaturesMixin
 from .selection import SolidWorksSelectionMixin
 from .sheet_metal import SolidWorksSheetMetalMixin
 from .sketch import SolidWorksSketchMixin
+from .swept import SolidWorksSweptMixin
 from .templates import SolidWorksTemplatesMixin
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "SolidWorksSelectionMixin",
     "SolidWorksSheetMetalMixin",
     "SolidWorksSketchMixin",
+    "SolidWorksSweptMixin",
     "SolidWorksTemplatesMixin",
 ]

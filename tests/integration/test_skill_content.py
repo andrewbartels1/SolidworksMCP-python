@@ -38,9 +38,11 @@ _RESPONSE_KEYS = {
     "length_m",
     "length_mm",
     "measured_change",
+    "start_point_mm",
     "system_value",
     "usage_instructions",
     "vba_code",
+    "volume_change",
 }
 
 _SKILL_FILES = sorted(

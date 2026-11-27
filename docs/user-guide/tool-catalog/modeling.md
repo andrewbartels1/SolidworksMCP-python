@@ -4,7 +4,7 @@ Create and manipulate SolidWorks parts, assemblies, and drawings. These are the 
 
 > **Prerequisite:** An active SolidWorks session. Most feature tools require an open Part document.
 
-**Total tools in this category: 42**
+**Total tools in this category: 44**
 
 ## Measured change
 
@@ -799,13 +799,19 @@ Bevel edges of the active part with a chamfer: `distance` along one face at `ang
 
 ### `create_sweep`
 
-Sweep a closed profile sketch along a path sketch to make a solid (Insert > Boss/Base > Sweep).
+Sweep a closed profile along a path to add material (Insert > Boss/Base > Sweep).
+
+The path is a sketch or a curve such as a helix from `create_helix`. The profile is a circle of `circular_profile_diameter` mm (a spring's wire, no sketch needed), the sketch named `profile`, or else the sketch closed last that isn't the path. The volume must grow, or the sweep is removed and the call fails; the reply has `volume_before`, `volume_after` and `volume_change` (mm³).
+
+**Prerequisite:** Active part with the path (and the profile sketch, drawn where the path starts).
 
 **Parameters:**
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `path` | `str` | ✅ |  | Name or ID of the sweep path |
+| `path` | `str` | ✅ |  | The path: a sketch's name, or a curve's such as `Helix/Spiral1` |
+| `profile` | `str?` | — | `null` | The closed profile sketch; the sketch closed last that isn't the path when omitted |
+| `circular_profile_diameter` | `float?` | — | `null` | Sweep a circle this wide, mm, with no profile sketch; overrides `profile` |
 | `twist_along_path` | `bool` | — | `false` | Twist along path |
 | `twist_angle` | `float` | — | `0.0` | Twist angle in degrees |
 | `merge_result` | `bool` | — | `true` | Merge with existing geometry |
@@ -813,7 +819,64 @@ Sweep a closed profile sketch along a path sketch to make a solid (Insert > Boss
 **Sample call:**
 
 ```json
-{"path": "Sketch2"}
+{"path": "Helix/Spiral1", "circular_profile_diameter": 2}
+```
+
+---
+
+### `create_cut_sweep`
+
+Sweep a closed profile along a path to remove material (Insert > Cut > Sweep).
+
+For a modelled thread, a helical groove or a channel along a curve: as `create_cut_extrude` is to `create_extrusion`. The path and profile are chosen as for `create_sweep`. The volume must go down, or the cut is removed and the call fails.
+
+**Prerequisite:** Active part with a solid the profile overlaps.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `path` | `str` | ✅ |  | The path: a sketch's name, or a curve's such as `Helix/Spiral1` |
+| `profile` | `str?` | — | `null` | The closed profile sketch; the sketch closed last that isn't the path when omitted |
+| `circular_profile_diameter` | `float?` | — | `null` | Cut a round groove this wide, mm, with no profile sketch; overrides `profile` |
+| `twist_along_path` | `bool` | — | `false` | Twist along path |
+| `twist_angle` | `float` | — | `0.0` | Twist angle in degrees |
+
+**Sample call:**
+
+```json
+{"path": "Helix/Spiral1", "profile": "Sketch3"}
+```
+
+---
+
+### `create_helix`
+
+Make a helix or a flat spiral from a sketch holding one circle (Insert > Curve > Helix/Spiral).
+
+The path for a spring, a modelled thread or a coil. The circle's diameter and centre are the helix's, and its axis is normal to the sketch. Give two of `height`, `pitch` and `revolutions`, as `defined_by` names; the reply gives all three, `length_mm` (read from the curve) and `start_point_mm`, where to draw a sweep profile. On a Top-plane circle, `start_angle` 0 starts the helix at +z and 90 at +x, on the Front plane.
+
+**Prerequisite:** Active part with the circle's sketch closed.
+
+**Parameters:**
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `sketch` | `str` | ✅ |  | The base sketch: exactly one circle |
+| `defined_by` | `str` | — | `height_and_pitch` | `height_and_pitch`, `height_and_revolutions`, `pitch_and_revolutions` or `spiral` (flat; pitch and revolutions) |
+| `height` | `float?` | — | `null` | Height, mm |
+| `pitch` | `float?` | — | `null` | Distance between turns, mm |
+| `revolutions` | `float?` | — | `null` | Number of turns |
+| `clockwise` | `bool` | — | `false` | Wind clockwise |
+| `reverse` | `bool` | — | `false` | Grow from the other side of the sketch |
+| `start_angle` | `float` | — | `0.0` | Where on the circle it starts, degrees |
+| `taper_angle` | `float?` | — | `null` | A taper, degrees (a cone spring) |
+| `taper_outward` | `bool` | — | `false` | The taper widens rather than narrows |
+
+**Sample call:**
+
+```json
+{"sketch": "Sketch1", "height": 48, "pitch": 6}
 ```
 
 ---

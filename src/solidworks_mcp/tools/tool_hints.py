@@ -200,6 +200,8 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "add_fillet": _adds("Add Fillet"),
     "add_chamfer": _adds("Add Chamfer"),
     "create_sweep": _adds("Create Sweep"),
+    "create_cut_sweep": _adds("Create Cut Sweep"),
+    "create_helix": _adds("Create Helix"),
     "create_loft": _adds("Create Loft"),
     "insert_component": _adds("Insert Component"),
     "add_mate": _adds("Add Mate"),

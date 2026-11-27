@@ -21,5 +21,5 @@
 ## 4. Checks and sign-off
 
 - [x] 4.1 Unit suite at 100% coverage, ruff, mypy, mkdocs strict
-- [ ] 4.2 Live: `tests/live/test_live_sw_default_entities.py`, three tests (a translated part; the standard view list; a BOM inside the border on SW 2026); ask before running
-- [ ] 4.3 Ask the #261 and #262 reporters to try it on French and German (the user decides when and how)
+- [x] 4.2 Live: `tests/live/test_live_sw_default_entities.py`, three tests (a translated part; the standard view list; a BOM inside the border on SW 2026); ask before running
+- [x] 4.3 Ask the #261 and #262 reporters to try it on French and German (the user decides when and how) — asked on #262, 2026-11-25
