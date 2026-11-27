@@ -217,6 +217,42 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
         ),
     ),
     ErrorRule(
+        error_type="feature_not_built",
+        hint=(
+            "The body operation did nothing, so it was undone. Read the bodies "
+            "with list_bodies: an add or common needs bodies that touch or "
+            "overlap, a subtract a tool that overlaps the main body, and a "
+            "split a plane or sketch that crosses a body all the way."
+        ),
+        patterns=(
+            r"SolidWorks (combined|split|moved|copied|deleted|scaled)\b.* nothing",
+            r"should .* but the part went from \d+ bodies",
+        ),
+    ),
+    ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
+            "Name bodies as list_bodies gives them, and planes or sketches as "
+            "the feature tree does. Move by translate or rotate, one per call."
+        ),
+        patterns=(
+            r"No body named '",
+            r"Name at least one (tool )?body",
+            r"can't also be a tool body",
+            r"Give a translate or a rotate",
+            r"copies must be 1 to",
+            r"would delete every body",
+            r"Keeping every body deletes nothing",
+            r"Give scale \(one factor\)",
+            r"Scale factors must be greater than 0",
+            r"A scale of 1 on every axis",
+            r"No plane or sketch named '[^']*' to split",
+            r"The body tools read a part's solid bodies",
+            r"(operation|about) must be one of",
+            r"(translate|rotate|rotation_point|scale_xyz) must be \[x, y, z\]",
+        ),
+    ),
+    ErrorRule(
         error_type=INVALID_INPUT,
         hint=(
             "face_point must lie on a flat face of the active part's body, in "

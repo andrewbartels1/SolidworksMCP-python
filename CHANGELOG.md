@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-body tools** (queue item 35): `list_bodies` names a part's solid
+  bodies with each one's volume and bounding box; `combine_bodies` adds,
+  subtracts or keeps the common volume of bodies (a mould core: a block
+  minus a part); `split_body` splits them at a plane or sketch;
+  `move_copy_body` moves them by a translation or a rotation, or copies
+  them up to 50 times; `delete_bodies` deletes them, or keeps only the
+  named ones; `scale_body` scales them about their centroid or the origin.
+  165 tools in all. Every reply gives the body names, counts and volume
+  before and after; a step that does nothing (a subtract of a tool lying
+  elsewhere, a split that makes no new body) fails and is undone. How each
+  SolidWorks call takes its bodies was measured by probes on SolidWorks
+  2026: a move with both a translation and a rotation is refused, since
+  SolidWorks would apply only the rotation. Beta until the live demo.
 - **Helices and swept cuts** (queue item 34): the path most mechanical
   sweeps follow, and a sweep that removes material, so an agent can model a
   spring, a modelled thread or a helical groove without a macro. 159 tools

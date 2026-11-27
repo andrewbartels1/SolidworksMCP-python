@@ -30,9 +30,12 @@ volumes it found. Volumes count as unchanged within 0.1%.
 ### Requirement: Combine bodies
 `combine_bodies` SHALL take `operation` (`add`, `subtract` or `common`),
 `main_body` and `tool_bodies` (one or more names, none of them the main
-body). `add` SHALL leave fewer bodies and no more volume than before.
-`subtract` and `common` SHALL leave less volume than before. The tool bodies
-are consumed.
+body). The tool bodies are consumed. The result is measured by its own
+volume: the part's volume after, less the bodies the combine didn't touch.
+`add` SHALL leave fewer bodies and a result no larger than the combined
+bodies were. `subtract` and `common` SHALL leave a result smaller than the
+main body was. A tool lying elsewhere is consumed without cutting, so the
+part's total alone can't show the cut.
 
 #### Scenario: A block minus a cylinder
 - **WHEN** a 40 × 40 × 10 mm block has a 10 mm diameter cylinder through

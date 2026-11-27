@@ -63,6 +63,14 @@ These read SolidWorks' installed files and never start it
 
     [**3 tools available** :octicons-arrow-right-24:](tool-catalog/equations.md)
 
+- :material-cube-scan:{ .lg .middle } **Body Tools**
+
+    ---
+
+    A part's solid bodies by name: combine, split, move, copy, delete and scale them, each step measured.
+
+    [**6 tools available** :octicons-arrow-right-24:](tool-catalog/bodies.md)
+
 - :material-cogs:{ .lg .middle } **Assembly Tools**
 
     ---
@@ -193,7 +201,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 159 Tools**
+**Total: 165 Tools**
 
 ## Deprecated tools
 

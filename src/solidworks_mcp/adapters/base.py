@@ -322,6 +322,81 @@ class HelixParameters(BaseModel):
     taper_outward: bool = False
 
 
+class CombineBodiesParameters(BaseModel):
+    """Combine a main body with tool bodies: add, subtract or keep the common.
+
+    Attributes:
+        operation (str): ``add``, ``subtract`` or ``common``.
+        main_body (str): The body the others are combined into.
+        tool_bodies (list[str]): The bodies added to, subtracted from or
+            intersected with the main body; they are consumed.
+    """
+
+    operation: str
+    main_body: str
+    tool_bodies: list[str]
+
+
+class SplitBodyParameters(BaseModel):
+    """Split a part's bodies with a plane or a sketch.
+
+    Every body the tool crosses is split, as in SolidWorks.
+
+    Attributes:
+        tool (str): The plane or sketch that cuts the bodies.
+    """
+
+    tool: str
+
+
+class MoveCopyBodyParameters(BaseModel):
+    """Move bodies, or copy them, by a translation and a rotation.
+
+    Attributes:
+        bodies (list[str]): The bodies to move or copy.
+        translate (list[float]): ``[x, y, z]``, mm.
+        rotate (list[float]): ``[x, y, z]`` about ``rotation_point``, degrees.
+        rotation_point (list[float]): ``[x, y, z]``, mm.
+        as_copy (bool): Copy the bodies instead of moving them.
+        copies (int): How many copies, when ``as_copy``.
+    """
+
+    bodies: list[str]
+    translate: list[float] = [0.0, 0.0, 0.0]
+    rotate: list[float] = [0.0, 0.0, 0.0]
+    rotation_point: list[float] = [0.0, 0.0, 0.0]
+    as_copy: bool = False
+    copies: int = 1
+
+
+class DeleteBodiesParameters(BaseModel):
+    """Delete bodies, or keep only them.
+
+    Attributes:
+        bodies (list[str]): The bodies named.
+        keep (bool): Keep the named bodies and delete the rest.
+    """
+
+    bodies: list[str]
+    keep: bool = False
+
+
+class ScaleBodyParameters(BaseModel):
+    """Scale bodies, uniformly or per axis.
+
+    Attributes:
+        scale (float | None): One factor for every axis.
+        scale_xyz (list[float] | None): ``[x, y, z]`` factors.
+        about (str): ``centroid`` or ``origin``.
+        bodies (list[str] | None): The bodies to scale; all when None.
+    """
+
+    scale: float | None = None
+    scale_xyz: list[float] | None = None
+    about: str = "centroid"
+    bodies: list[str] | None = None
+
+
 class LoftParameters(BaseModel):
     """Parameters for loft operations.
 
@@ -758,6 +833,97 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="create_helix is not implemented by this adapter",
+        )
+
+    async def list_bodies(self) -> AdapterResult[dict[str, Any]]:
+        """The active part's solid bodies: name, volume and box.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_bodies is not implemented by this adapter",
+        )
+
+    async def combine_bodies(
+        self, params: CombineBodiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add, subtract or keep the common volume of bodies.
+
+        Args:
+            params: The operation, the main body and the tool bodies.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="combine_bodies is not implemented by this adapter",
+        )
+
+    async def split_body(
+        self, params: SplitBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Split bodies with a plane or a sketch.
+
+        Args:
+            params: The cutting tool and the bodies to split.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="split_body is not implemented by this adapter",
+        )
+
+    async def move_copy_body(
+        self, params: MoveCopyBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move bodies, or copy them.
+
+        Args:
+            params: The bodies, the translation, the rotation and the copies.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="move_copy_body is not implemented by this adapter",
+        )
+
+    async def delete_bodies(
+        self, params: DeleteBodiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Delete bodies, or keep only them.
+
+        Args:
+            params: The bodies and whether to keep them.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="delete_bodies is not implemented by this adapter",
+        )
+
+    async def scale_body(
+        self, params: ScaleBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Scale bodies about their centroid or the origin.
+
+        Args:
+            params: The factors, the centre and the bodies.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="scale_body is not implemented by this adapter",
         )
 
     @abstractmethod

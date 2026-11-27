@@ -16,14 +16,19 @@ from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
+    CombineBodiesParameters,
+    DeleteBodiesParameters,
     ExtrusionParameters,
     HelixParameters,
     LoftParameters,
     MassProperties,
+    MoveCopyBodyParameters,
     RevolveParameters,
+    ScaleBodyParameters,
     SolidWorksAdapter,
     SolidWorksFeature,
     SolidWorksModel,
+    SplitBodyParameters,
     SweepParameters,
 )
 
@@ -1118,6 +1123,52 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """A helix or a flat spiral. Using the pool."""
         return await self._execute_with_pool(
             "create_helix", lambda adapter: adapter.create_helix(params)
+        )
+
+    async def list_bodies(self) -> AdapterResult[dict[str, Any]]:
+        """The active part's solid bodies. Using the pool."""
+        return await self._execute_with_pool(
+            "list_bodies", lambda adapter: adapter.list_bodies()
+        )
+
+    async def combine_bodies(
+        self, params: CombineBodiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Combine bodies. Using the pool."""
+        return await self._execute_with_pool(
+            "combine_bodies", lambda adapter: adapter.combine_bodies(params)
+        )
+
+    async def split_body(
+        self, params: SplitBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Split bodies. Using the pool."""
+        return await self._execute_with_pool(
+            "split_body", lambda adapter: adapter.split_body(params)
+        )
+
+    async def move_copy_body(
+        self, params: MoveCopyBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move or copy bodies. Using the pool."""
+        return await self._execute_with_pool(
+            "move_copy_body", lambda adapter: adapter.move_copy_body(params)
+        )
+
+    async def delete_bodies(
+        self, params: DeleteBodiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Delete or keep bodies. Using the pool."""
+        return await self._execute_with_pool(
+            "delete_bodies", lambda adapter: adapter.delete_bodies(params)
+        )
+
+    async def scale_body(
+        self, params: ScaleBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Scale bodies. Using the pool."""
+        return await self._execute_with_pool(
+            "scale_body", lambda adapter: adapter.scale_body(params)
         )
 
     async def create_loft(

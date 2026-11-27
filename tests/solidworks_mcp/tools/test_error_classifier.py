@@ -79,6 +79,23 @@ def classifier() -> ErrorClassifier:
         ("Found no sketch named 'Sketch9' for the profile.", "invalid_input"),
         ("A sweep needs a 'path': a sketch or a curve's name.", "invalid_input"),
         (
+            "Error in combine_bodies: SolidWorks combined (add) nothing; the "
+            "bodies are unchanged.",
+            "feature_not_built",
+        ),
+        (
+            "split_body should make more bodies and keep the volume but the part "
+            "went from 1 bodies, 8000.0 mm³ to 1 bodies, 8000.0 mm³; the feature "
+            "was removed.",
+            "feature_not_built",
+        ),
+        ("No body named 'Nope'. Bodies in the part: Block.", "invalid_input"),
+        ("Give a translate or a rotate, not both", "invalid_input"),
+        ("That would delete every body in the part", "invalid_input"),
+        ("A scale of 1 on every axis does nothing.", "invalid_input"),
+        ("No plane or sketch named 'P9' to split with.", "invalid_input"),
+        ("The body tools read a part's solid bodies; make a part", "invalid_input"),
+        (
             f"COM error in x: ({DISP_E_TYPEMISMATCH}, 'Type mismatch.', None, None)",
             "com_type_mismatch",
         ),

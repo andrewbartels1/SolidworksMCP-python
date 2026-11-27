@@ -21,6 +21,7 @@ _MODULES = [
     "analysis",
     "assembly",
     "automation",
+    "bodies",
     "docs_discovery",
     "drawing",
     "drawing_analysis",
@@ -216,9 +217,10 @@ def test_the_field_check_follows_refs_and_nesting() -> None:
 #: ``volume_after`` (a reply field) does not. ``mirror`` and ``rebuild`` are
 #: left out: ``mirror_line`` and ``rebuild_status`` are reply fields.
 _TOOL_VERBS = (
-    "add|analyze|apply|batch|check|close|compare|convert|create|delete|execute|"
-    "export|extract|generate|get|insert|list|load|manage|measure|open|optimize|"
-    "pattern|rename|replace|save|select|set|sketch|suppress|validate|verify"
+    "add|analyze|apply|batch|check|close|combine|compare|convert|create|delete|"
+    "execute|export|extract|generate|get|insert|list|load|manage|measure|move|"
+    "open|optimize|pattern|rename|replace|save|scale|select|set|sketch|split|"
+    "suppress|validate|verify"
 )
 _TOOL_LIKE = re.compile(rf"`((?:{_TOOL_VERBS})_[a-z0-9_]+)`")
 

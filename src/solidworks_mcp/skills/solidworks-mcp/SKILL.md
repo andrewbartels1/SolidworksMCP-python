@@ -42,7 +42,9 @@ A solid feature always comes from a closed sketch:
    (remove it), `create_revolve`, `create_sweep` or `create_cut_sweep`
    (along a sketch or a `create_helix` curve), `create_loft`.
    Each takes `sketch_name`; without it, the sketch you closed last is
-   used. `create_revolve` turns about the sketch's centreline, or about
+   used. With `merge_result: false` a boss stays its own body; the body
+   tools (`list_bodies`, `combine_bodies`, `split_body`...) then work on
+   it. `create_revolve` turns about the sketch's centreline, or about
    the reference axis `axis_entity` names.
 6. Last, once every boss and cut is in: edge treatments,
    `select_face_edges`, then `add_fillet` or `add_chamfer` with empty

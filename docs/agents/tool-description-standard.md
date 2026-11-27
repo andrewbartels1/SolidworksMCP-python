@@ -114,8 +114,9 @@ name and tell two tools apart by name alone. Pick the verb by meaning:
 | `list_` | reads a collection |
 | `set_` | changes one value |
 | `replace_` | swaps one thing for another (a component for another file) |
+| `combine_`, `split_`, `move_`, `scale_` | changes a part's solid bodies (`list_bodies` names them) |
 | `open_`, `save_`, `close_`, `export_` | file operations |
-| `activate_`, `delete_` | makes a document or configuration the active one; removes a feature, configuration or equation |
+| `activate_`, `delete_` | makes a document or configuration the active one; removes a feature, configuration, equation or body |
 | `check_`, `verify_`, `measure_`, `compare_` | read-only checks |
 
 `tests/integration/test_tool_descriptions.py` fails on any other name, except
