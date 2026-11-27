@@ -1083,6 +1083,41 @@ part by its centre, and the pattern runs along the axis's own direction
 7. `create_drawing`, `create_drawing_view({"view_type": "isometric", "exploded": true})`, `insert_bom_table`, `add_balloons({"view_name": "Drawing View1", "layout": "square"})`
 8. `verify_model` after each step
 
+## Helices and swept cuts {#helix}
+
+Source: [`tests/live/test_live_sw_helix_and_swept_cuts.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_helix_and_swept_cuts.py).
+
+### A threaded rod {#threaded-rod}
+
+![A 10 mm rod, a 15-turn helix on its surface starting on the Front plane, a small triangle drawn where the helix starts, and the thread cut along the helix](assets/demos/helix-and-swept-cuts/test_a_threaded_rod-motion.gif)
+
+> *Example prompt:* Make a 10 mm rod, 40 mm long, and cut a 2 mm pitch
+> thread along 30 mm of it with a triangular profile 0.8 mm deep.
+
+**What it shows.** A helix and a swept cut. The helix's start point,
+read from the curve, places the thread profile. The volume the cut removes
+is checked against the hand calculation:
+
+| Step | Tools | Expected | Measured |
+| --- | --- | --- | --- |
+| A rod 10 mm across and 40 mm long | `create_extrusion` | 3,141.59 mm³ | 3,141.59 mm³ |
+| A helix 30 mm high at a 2 mm pitch, starting at 90° | `create_helix` | 15 turns, starting at (5, 0, 0) | 15 turns, starting at (5, 0, 0) |
+| A triangle 1 mm wide and 0.8 mm deep, cut along the helix | `create_cut_sweep` | −178.4 mm³ (Pappus) | −177.8 mm³ |
+
+By Pappus's theorem, the volume removed is the triangle's area, 0.4 mm²,
+times the distance its centroid travels: 15 turns of a 4.733 mm radius. The
+first call fails **on purpose**: a profile that is the path itself is
+refused as `invalid_input`, and the message lists the sketches that could
+be used instead.
+
+**Tool calls**
+
+1. `create_part`, `create_sketch({"plane": "Top"})`, `add_circle({"radius": 5})`, `exit_sketch`, `create_extrusion({"depth": 40})`
+2. `create_sketch({"plane": "Top"})`, `add_circle({"radius": 5})`, `exit_sketch`, `create_helix({"sketch": "Sketch2", "height": 30, "pitch": 2, "start_angle": 90})`
+3. `create_sketch({"plane": "Front"})`, three `add_line` at the helix's `start_point_mm`, `exit_sketch`
+4. `create_cut_sweep({"path": "Helix/Spiral1", "profile": "Helix/Spiral1"})`, refused on purpose
+5. `create_cut_sweep({"path": "Helix/Spiral1", "profile": "Sketch3"})`
+
 ## Run a demo yourself
 
 The demos need Windows, SolidWorks open and idle, and the project's `.venv`.
