@@ -167,7 +167,7 @@ class SolidWorksBodiesMixin:
         operation: str,
         act: Callable[[list[Measured]], tuple[Any, str]],
         verdict: Callable[[list[BodyState], list[BodyState]], tuple[str, bool]],
-        extra: Callable[[list[BodyState], list[BodyState]], dict[str, Any]],
+        own_fields: Callable[[list[BodyState], list[BodyState]], dict[str, Any]],
     ) -> AdapterResult[dict[str, Any]]:
         """Measure, act, measure again and judge one body operation.
 
@@ -177,7 +177,7 @@ class SolidWorksBodiesMixin:
                 when SolidWorks made nothing) and what it did in words, for
                 the "made nothing" message. Raises InputRefused to refuse.
             verdict: The rule: the expectation in words and whether it held.
-            extra: The reply's own fields, from the bodies before and after.
+            own_fields: The reply's own fields, from the bodies before and after.
 
         Returns:
             AdapterResult[dict[str, Any]]: The measured reply, or the refusal.
@@ -208,7 +208,7 @@ class SolidWorksBodiesMixin:
                 raise RuntimeError(failed)
             return {
                 **rules.measured_reply(name, before, after),
-                **extra(before, after),
+                **own_fields(before, after),
             }
 
         return cast(
