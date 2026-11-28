@@ -183,7 +183,7 @@ class MockBodiesMixin:
         operation: str,
         change: Callable[[list[BodyState], str], list[BodyState]],
         verdict: Callable[[list[BodyState], list[BodyState]], tuple[str, bool]],
-        extra: Callable[[], dict[str, Any]],
+        own_fields: Callable[[], dict[str, Any]],
     ) -> AdapterResult[dict[str, Any]]:
         """Apply one body operation and judge it by its rule.
 
@@ -193,7 +193,7 @@ class MockBodiesMixin:
             change: Gives the bodies after, from those before and the
                 feature's name; raises InputRefused to refuse.
             verdict: The rule: the expectation in words and whether it held.
-            extra: The reply's own fields, read after ``change``.
+            own_fields: The reply's own fields, read after ``change``.
 
         Returns:
             AdapterResult[dict[str, Any]]: The measured reply, or the
@@ -217,7 +217,7 @@ class MockBodiesMixin:
         self._body_store()[id(self._current_model)] = after
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
-            data={**rules.measured_reply(feature, before, after), **extra()},
+            data={**rules.measured_reply(feature, before, after), **own_fields()},
             execution_time=self._delays["feature_operation"],
         )
 

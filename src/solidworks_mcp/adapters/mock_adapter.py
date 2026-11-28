@@ -29,9 +29,11 @@ from .base import (
     SolidWorksFeature,
     SolidWorksModel,
 )
+from .mock_appearance import MockAppearanceMixin
 from .mock_bodies import MockBodiesMixin
 from .mock_drawing_pack import MockDrawingPackMixin
 from .mock_equations import MockEquationsMixin
+from .mock_reference_extras import MockReferenceExtrasMixin
 from .mock_sheet_metal import MockSheetMetalMixin
 from .mock_swept import MockSweptMixin
 from .mock_templates import MockTemplatesMixin
@@ -145,6 +147,8 @@ class _BoolCallable:
 
 
 class MockSolidWorksAdapter(
+    MockAppearanceMixin,
+    MockReferenceExtrasMixin,
     MockBodiesMixin,
     MockSheetMetalMixin,
     MockSweptMixin,

@@ -143,6 +143,22 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
    did nothing fails and is undone. `save_body_as_part` saves one body
    as its own part.
 
+## Colours, frames and measurements
+
+1. Colour with `set_appearance`: `color` [r, g, b] 0-255 or '#rrggbb', on
+   the whole part (no target), a `feature`, a `body` or the face at a
+   `face_point`. A face's colour shows over its feature's, a feature's
+   over its body's, a body's over the part's; `reset: true` removes a
+   level's own colour. `get_appearance` says which level shows.
+2. `create_coordinate_system` puts a frame at an `origin` (mm), axes along
+   the model's.
+3. `create_bounding_box` adds SolidWorks's box and gives the stock size
+   (`size_mm`); `create_center_of_mass_point` marks the centre of mass
+   (`center_of_mass_mm`). A part has one of each at most.
+4. `get_section_properties` reads a planar face's `area_mm2`, centroid and
+   second moments of area, picked by a point on the face. It changes
+   nothing.
+
 ## Changing an existing model
 
 1. `open_model`, then `list_features` and `list_model_dimensions`.

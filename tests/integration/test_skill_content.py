@@ -31,14 +31,17 @@ _NAME = re.compile(r"`([a-z][a-z0-9]*(?:_[a-z0-9]+)+)`")
 #: Response keys the skill quotes; they are not input fields or tools.
 _RESPONSE_KEYS = {
     "area_m2",
+    "area_mm2",
     "bodies_after",
     "center_mm",
+    "center_of_mass_mm",
     "direction_flipped",
     "distance_m",
     "error_type",
     "length_m",
     "length_mm",
     "measured_change",
+    "size_mm",
     "start_point_mm",
     "system_value",
     "usage_instructions",

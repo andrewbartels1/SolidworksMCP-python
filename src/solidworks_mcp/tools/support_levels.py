@@ -296,28 +296,59 @@ SUPPORT_LEVELS: dict[str, Support] = {
         SupportLevel.BETA,
         "new: checked live once (a spring and a threaded rod), not yet in wide use.",
     ),
-    # Queue item 35: beta until the multi-body live demo.
+    # Queue item 35: passed the live demo 2026-11-27; beta for a release.
     "combine_bodies": Support(
         SupportLevel.BETA,
-        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+        "new: passed its live demo (boolean logic on a cube and a sphere), "
+        "not yet in wide use.",
     ),
     "delete_bodies": Support(
         SupportLevel.BETA,
-        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+        "new: passed its live demo (boolean logic on a cube and a sphere), "
+        "not yet in wide use.",
     ),
     "list_bodies": Support(
         SupportLevel.BETA,
-        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+        "new: passed its live demo (boolean logic on a cube and a sphere), "
+        "not yet in wide use.",
     ),
     "move_copy_body": Support(
         SupportLevel.BETA,
-        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+        "new: passed its live demo (boolean logic on a cube and a sphere), "
+        "not yet in wide use.",
     ),
     "scale_body": Support(
         SupportLevel.BETA,
-        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+        "new: passed its live demo (boolean logic on a cube and a sphere), "
+        "not yet in wide use.",
     ),
     "split_body": Support(
+        SupportLevel.BETA,
+        "new: passed its live demo (boolean logic on a cube and a sphere), "
+        "not yet in wide use.",
+    ),
+    # Queue items 36 and 39: beta until their live demo.
+    "create_bounding_box": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    "create_center_of_mass_point": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    "create_coordinate_system": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    "get_appearance": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    "get_section_properties": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    "set_appearance": Support(
         SupportLevel.BETA,
         "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
     ),

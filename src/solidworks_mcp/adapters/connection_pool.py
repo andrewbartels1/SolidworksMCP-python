@@ -16,7 +16,11 @@ from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
+    AppearanceParameters,
+    AppearanceTarget,
+    BoundingBoxParameters,
     CombineBodiesParameters,
+    CoordinateSystemParameters,
     DeleteBodiesParameters,
     ExtrusionParameters,
     HelixParameters,
@@ -25,6 +29,7 @@ from .base import (
     MoveCopyBodyParameters,
     RevolveParameters,
     ScaleBodyParameters,
+    SectionPropertiesParameters,
     SolidWorksAdapter,
     SolidWorksFeature,
     SolidWorksModel,
@@ -1169,6 +1174,55 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Scale bodies. Using the pool."""
         return await self._execute_with_pool(
             "scale_body", lambda adapter: adapter.scale_body(params)
+        )
+
+    async def set_appearance(
+        self, params: AppearanceParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Colour a target, or remove its colour. Using the pool."""
+        return await self._execute_with_pool(
+            "set_appearance", lambda adapter: adapter.set_appearance(params)
+        )
+
+    async def get_appearance(
+        self, params: AppearanceTarget
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read a target's colour. Using the pool."""
+        return await self._execute_with_pool(
+            "get_appearance", lambda adapter: adapter.get_appearance(params)
+        )
+
+    async def create_coordinate_system(
+        self, params: CoordinateSystemParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A coordinate system at a point. Using the pool."""
+        return await self._execute_with_pool(
+            "create_coordinate_system",
+            lambda adapter: adapter.create_coordinate_system(params),
+        )
+
+    async def create_center_of_mass_point(self) -> AdapterResult[dict[str, Any]]:
+        """The Center of Mass point. Using the pool."""
+        return await self._execute_with_pool(
+            "create_center_of_mass_point",
+            lambda adapter: adapter.create_center_of_mass_point(),
+        )
+
+    async def create_bounding_box(
+        self, params: BoundingBoxParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """The Bounding Box feature. Using the pool."""
+        return await self._execute_with_pool(
+            "create_bounding_box", lambda adapter: adapter.create_bounding_box(params)
+        )
+
+    async def get_section_properties(
+        self, params: SectionPropertiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A face's section properties. Using the pool."""
+        return await self._execute_with_pool(
+            "get_section_properties",
+            lambda adapter: adapter.get_section_properties(params),
         )
 
     async def create_loft(

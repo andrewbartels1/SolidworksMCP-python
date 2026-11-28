@@ -80,7 +80,7 @@ Every tool's name, description and inputs are sent to the model on every turn, s
 
 | Toolset | Tools |
 | --- | --- |
-| `core` | Parts and assemblies: modelling, equations, multi-body tools, sketching, files, measuring and checking, materials and properties, export, the circuit-breaker reset |
+| `core` | Parts and assemblies: modelling, equations, multi-body tools, colours, reference geometry, sketching, files, measuring and checking, materials and properties, export, the circuit-breaker reset |
 | `drawing` | Drawings: views, dimensions, the title block and sheet, the drawing package and check |
 | `automation` | Macros, recording and batch automation |
 | `vba` | The VBA code generators |

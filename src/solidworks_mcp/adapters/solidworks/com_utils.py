@@ -114,3 +114,18 @@ def dispatch_array(values: list[Any]) -> Any:
         return w32.VARIANT(pythoncom.VT_ARRAY | pythoncom.VT_DISPATCH, list(values))
     except ImportError:  # non-Windows
         return tuple(values)
+
+
+def long_ref(value: int = 0) -> Any:
+    """``VARIANT(VT_BYREF | VT_I4)`` for a ``Long`` out-parameter (int when pywin32 is absent).
+
+    ``IFeatureManager.InsertGlobalBoundingBox``'s ``Status`` is a type
+    mismatch as a plain int (checked on SolidWorks 2026).
+    """
+    try:
+        import pythoncom
+        import win32com.client as w32
+
+        return w32.VARIANT(pythoncom.VT_BYREF | pythoncom.VT_I4, int(value))
+    except ImportError:  # non-Windows
+        return int(value)

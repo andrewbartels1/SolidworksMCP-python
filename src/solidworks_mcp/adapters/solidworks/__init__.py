@@ -1,5 +1,6 @@
 """Grouped SolidWorks mixins for the PyWin32 adapter."""
 
+from .appearance import SolidWorksAppearanceMixin
 from .assembly import SolidWorksAssemblyMixin
 from .bodies import SolidWorksBodiesMixin
 from .configurations import SolidWorksConfigurationsMixin
@@ -10,6 +11,7 @@ from .equations import SolidWorksEquationsMixin
 from .features import SolidWorksFeaturesMixin
 from .io import SolidWorksIOMixin
 from .part_features import SolidWorksPartFeaturesMixin
+from .reference_extras import SolidWorksReferenceExtrasMixin
 from .selection import SolidWorksSelectionMixin
 from .sheet_metal import SolidWorksSheetMetalMixin
 from .sketch import SolidWorksSketchMixin
@@ -17,6 +19,7 @@ from .swept import SolidWorksSweptMixin
 from .templates import SolidWorksTemplatesMixin
 
 __all__ = [
+    "SolidWorksAppearanceMixin",
     "SolidWorksAssemblyMixin",
     "SolidWorksBodiesMixin",
     "SolidWorksConfigurationsMixin",
@@ -27,6 +30,7 @@ __all__ = [
     "SolidWorksFeaturesMixin",
     "SolidWorksIOMixin",
     "SolidWorksPartFeaturesMixin",
+    "SolidWorksReferenceExtrasMixin",
     "SolidWorksSelectionMixin",
     "SolidWorksSheetMetalMixin",
     "SolidWorksSketchMixin",

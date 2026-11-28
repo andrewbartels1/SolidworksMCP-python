@@ -19,6 +19,7 @@ from solidworks_mcp.tools.tool_boundary import tool_family
 
 _MODULES = [
     "analysis",
+    "appearance",
     "assembly",
     "automation",
     "bodies",
@@ -32,6 +33,7 @@ _MODULES = [
     "file_management",
     "macro_recording",
     "modeling",
+    "reference_extras",
     "server_admin",
     "sketching",
     "template_management",

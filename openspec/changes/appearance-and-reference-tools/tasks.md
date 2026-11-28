@@ -1,0 +1,40 @@
+## 1. Probe
+
+- [x] 1.1 Probe colour (part, feature, face), the coordinate system (vertex,
+      edge, 3D-sketch point), the centre of mass, the bounding box and the
+      section properties on SolidWorks 2026 (two scripts; answers in
+      design.md)
+
+## 2. Adapter
+
+- [ ] 2.1 `base.py`: parameter models and non-abstract methods for the six
+      operations; wrappers in `circuit_breaker.py` and `connection_pool.py`
+- [ ] 2.2 `adapters/solidworks/appearance.py`: set, reset and read colours
+- [ ] 2.3 `adapters/solidworks/reference_extras.py`: coordinate system,
+      centre-of-mass point, bounding box, section properties
+- [ ] 2.4 Mocks: `mock_appearance.py`, `mock_reference_extras.py`
+- [ ] 2.5 Pure helpers (colour parsing and conversion, the section array,
+      the transform) in `adapters/appearance_rules.py`
+
+## 3. Tools
+
+- [ ] 3.1 `tools/appearance.py`: `set_appearance`, `get_appearance`
+- [ ] 3.2 `tools/reference_extras.py`: `create_coordinate_system`,
+      `create_center_of_mass_point`, `create_bounding_box`,
+      `get_section_properties`
+- [ ] 3.3 Register both; toolset families; support levels (beta); hints;
+      error classifier rules
+
+## 4. Tests
+
+- [ ] 4.1 Unit tests mirroring src, 100% coverage
+- [ ] 4.2 Live test `tests/live/test_live_sw_appearance_and_reference.py`:
+      a block with a coloured feature and face, read back; a coordinate
+      system, the centre of mass, the bounding box, the section properties;
+      one refusal per family. Run it, look at the images.
+
+## 5. Docs
+
+- [ ] 5.1 Tool-catalog pages, index and counts, tools overview, skill
+      workflow notes, description standard verbs, CHANGELOG, llms.txt
+- [ ] 5.2 A demo section and GIF once the user has seen it
