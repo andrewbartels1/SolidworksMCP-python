@@ -91,6 +91,7 @@ def _show(adapter: Any, bodies: list[dict[str, Any]]) -> None:
     the cube's starts at x = -20 (or -20 plus the copy offset).
     """
     from solidworks_mcp.adapters import sw_type_info
+    from solidworks_mcp.adapters.solidworks.com_utils import double_array
 
     model = adapter.currentModel
     cube_like = {
@@ -104,7 +105,10 @@ def _show(adapter: Any, bodies: list[dict[str, Any]]) -> None:
         for found in part.GetBodies2(0, False) or ():
             body = sw_type_info.flagged(found, "IBody2")
             rgb = _BLUE if body.Name in cube_like else _ORANGE
-            body.MaterialPropertyValues2 = [*rgb, 1.0, 1.0, 0.3, 0.3, 0.0, 0.0]
+            # R, G, B, ambient, diffuse, specular, shininess, transparency,
+            # emission, as a VT_R8 array: a plain list is misread.
+            values = [*rgb, 1.0, 1.0, 0.3, 0.3, 0.0, 0.0]
+            body.MaterialPropertyValues2 = double_array(values)
 
     adapter._attempt(paint, default=None)
     # A body left selected shows in the highlight colour, hiding its own.
