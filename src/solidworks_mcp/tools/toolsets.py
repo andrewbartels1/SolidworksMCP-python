@@ -29,7 +29,9 @@ TOOLSETS: dict[str, frozenset[str]] = {
             "server_admin",
         }
     ),
-    "drawing": frozenset({"drawing", "drawing_automation", "drawing_analysis"}),
+    "drawing": frozenset(
+        {"drawing", "drawing_automation", "drawing_analysis", "drawing_sheets"}
+    ),
     "automation": frozenset({"macro_recording", "automation", "template_management"}),
     "vba": frozenset({"vba_generation"}),
     "docs": frozenset({"docs_discovery"}),

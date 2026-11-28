@@ -17,6 +17,7 @@ from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
+    AddSheetParameters,
     CombineBodiesParameters,
     DeleteBodiesParameters,
     ExtrusionParameters,
@@ -1351,6 +1352,30 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
             "scale_body",
             lambda: self.adapter.scale_body(params),
             input_dict=_to_input_dict(params),
+        )
+
+    async def list_sheets(self) -> AdapterResult[dict[str, Any]]:
+        """The drawing's sheets. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_sheets", lambda: self.adapter.list_sheets(), input_dict={}
+        )
+
+    async def add_sheet(
+        self, params: AddSheetParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a sheet. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "add_sheet",
+            lambda: self.adapter.add_sheet(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def activate_sheet(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Activate a sheet. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "activate_sheet",
+            lambda: self.adapter.activate_sheet(name),
+            input_dict={"name": name},
         )
 
     async def create_loft(

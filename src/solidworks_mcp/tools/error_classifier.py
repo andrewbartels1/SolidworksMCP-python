@@ -255,6 +255,24 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
     ErrorRule(
         error_type=INVALID_INPUT,
         hint=(
+            "Read the sheets with list_sheets; a new sheet needs a name not in "
+            "use, a format such as 'a3 - iso' and a scale such as '1:2'."
+        ),
+        patterns=(
+            r"No sheet named '",
+            r"has a sheet named '[^']*' already",
+            r"A new sheet needs a name",
+            r"projection must be 'first' or 'third'",
+        ),
+    ),
+    ErrorRule(
+        error_type="feature_not_built",
+        hint="SolidWorks refused the sheet; read the sheets with list_sheets and retry.",
+        patterns=(r"SolidWorks (added no sheet|did not activate sheet)",),
+    ),
+    ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
             "face_point must lie on a flat face of the active part's body, in "
             "mm. Read the faces' centres with select_face_edges, or sketch on "
             "a plane instead."

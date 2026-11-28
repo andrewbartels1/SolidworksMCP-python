@@ -31,6 +31,7 @@ from .base import (
 )
 from .mock_bodies import MockBodiesMixin
 from .mock_drawing_pack import MockDrawingPackMixin
+from .mock_drawing_sheets import MockDrawingSheetsMixin
 from .mock_equations import MockEquationsMixin
 from .mock_sheet_metal import MockSheetMetalMixin
 from .mock_swept import MockSweptMixin
@@ -145,6 +146,7 @@ class _BoolCallable:
 
 
 class MockSolidWorksAdapter(
+    MockDrawingSheetsMixin,
     MockBodiesMixin,
     MockSheetMetalMixin,
     MockSweptMixin,

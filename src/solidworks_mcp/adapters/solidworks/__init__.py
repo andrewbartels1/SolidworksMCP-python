@@ -5,6 +5,7 @@ from .bodies import SolidWorksBodiesMixin
 from .configurations import SolidWorksConfigurationsMixin
 from .documentation import SolidWorksDocumentationMixin
 from .drawing_pack import SolidWorksDrawingPackMixin
+from .drawing_sheets import SolidWorksDrawingSheetsMixin
 from .drawing_standard import SolidWorksDrawingStandardMixin
 from .equations import SolidWorksEquationsMixin
 from .features import SolidWorksFeaturesMixin
@@ -22,6 +23,7 @@ __all__ = [
     "SolidWorksConfigurationsMixin",
     "SolidWorksDocumentationMixin",
     "SolidWorksDrawingPackMixin",
+    "SolidWorksDrawingSheetsMixin",
     "SolidWorksDrawingStandardMixin",
     "SolidWorksEquationsMixin",
     "SolidWorksFeaturesMixin",

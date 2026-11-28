@@ -397,6 +397,25 @@ class ScaleBodyParameters(BaseModel):
     bodies: list[str] | None = None
 
 
+class AddSheetParameters(BaseModel):
+    """A new drawing sheet.
+
+    Attributes:
+        name (str): The sheet's name.
+        sheet_format (str): A format name (``a3 - iso``) or a ``.slddrt`` path.
+        paper_size (str | None): a4 to a0; read from the format name when None.
+        scale (str): The sheet scale, e.g. ``1:2``.
+        projection (str | None): ``first`` or ``third`` angle; the active
+            sheet's when None.
+    """
+
+    name: str
+    sheet_format: str = "a3 - iso"
+    paper_size: str | None = None
+    scale: str = "1:1"
+    projection: str | None = None
+
+
 class LoftParameters(BaseModel):
     """Parameters for loft operations.
 
@@ -924,6 +943,47 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="scale_body is not implemented by this adapter",
+        )
+
+    async def list_sheets(self) -> AdapterResult[dict[str, Any]]:
+        """The active drawing's sheets: name, paper, scale, projection, active.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_sheets is not implemented by this adapter",
+        )
+
+    async def add_sheet(
+        self, params: AddSheetParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a sheet to the active drawing and make it the active one.
+
+        Args:
+            params: The name, format, paper, scale and projection.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="add_sheet is not implemented by this adapter",
+        )
+
+    async def activate_sheet(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Make a sheet of the active drawing the active one.
+
+        Args:
+            name: The sheet.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="activate_sheet is not implemented by this adapter",
         )
 
     @abstractmethod
