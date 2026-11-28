@@ -73,7 +73,11 @@ class SolidWorksBodiesMixin:
         """
         adapter: Any = self
         model = adapter.currentModel
-        kind = adapter._attempt(lambda: model.GetType(), default=None)
+        # GetType is read as a property or a call: a document not flagged for
+        # its interfaces (COM pitfall #5) gives the value itself.
+        kind = adapter._attempt(
+            lambda: adapter._get_attr_or_call(model, "GetType"), default=None
+        )
         if kind != _PART:
             raise InputRefused(
                 "The body tools read a part's solid bodies; make a part the "

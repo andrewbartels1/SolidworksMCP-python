@@ -34,6 +34,13 @@ class _SelectionHarness(SolidWorksSelectionMixin):
             )
         return AdapterResult(status=AdapterResultStatus.SUCCESS, data=data)
 
+    def _sync_current_model_from_active(self):
+        """Mirror PyWin32Adapter's resync (flagging is tested on the adapter)."""
+        active = getattr(self.swApp, "ActiveDoc", None) if self.swApp else None
+        if active is not None:
+            self.currentModel = active
+        return self.currentModel
+
     def _attempt(self, operation, default=None):
         try:
             return operation()
@@ -886,6 +893,31 @@ class TestPyWin32AdapterBranches:
 
         assert result.is_success
         assert adapter.currentModel is active_doc
+
+    @pytest.mark.asyncio
+    async def test_list_features_flags_the_active_doc_it_adopts(
+        self, monkeypatch
+    ) -> None:
+        """The adopted ActiveDoc is flagged for its type (COM pitfall #5)."""
+        adapter = self._build_adapter(monkeypatch)
+        flagged: list[tuple[object, int]] = []
+        monkeypatch.setattr(
+            "solidworks_mcp.adapters.solidworks.io._sw_type_info.flag_doc",
+            lambda doc, kind: flagged.append((doc, kind)) or 0,
+        )
+        active_doc = SimpleNamespace(
+            GetType=Mock(return_value=1),
+            FirstFeature=Mock(return_value=None),
+            FeatureManager=SimpleNamespace(GetFeatureCount=Mock(return_value=0)),
+        )
+        adapter.swApp = SimpleNamespace(ActiveDoc=active_doc)
+        adapter.currentModel = None
+
+        result = await adapter.list_features()
+
+        assert result.is_success
+        assert adapter.currentModel is active_doc
+        assert flagged == [(active_doc, 1)]
 
     @pytest.mark.asyncio
     async def test_list_features_handles_none_feature_in_reverse_fallback(

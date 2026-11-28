@@ -127,6 +127,10 @@ class _Harness(bodies.SolidWorksBodiesMixin):
         except Exception:
             return default
 
+    def _get_attr_or_call(self, obj: Any, attr_name: str) -> Any:
+        attr = getattr(obj, attr_name, None)
+        return attr() if callable(attr) else attr
+
     def _handle_com_operation(self, name: str, operation: Any) -> AdapterResult[Any]:
         try:
             data = operation()
@@ -467,3 +471,15 @@ async def test_a_scale(
     assert [b.Name for b in (pin, block) if b.selected] == list(selected)
     assert all(mark == 1 for b in (pin, block) for _, mark in b.selected)
     assert result.data["about"] == params.about
+
+
+@pytest.mark.asyncio
+async def test_an_unflagged_part_is_still_a_part(deleted: list[str]) -> None:
+    """GetType read as a property value (an unflagged dispatch) is a part."""
+    part = _Part(_pin())
+    part.GetType = 1  # type: ignore[assignment, method-assign]
+
+    result = await _Harness(part).list_bodies()
+
+    assert result.is_success, result.error
+    assert result.data["count"] == 1
