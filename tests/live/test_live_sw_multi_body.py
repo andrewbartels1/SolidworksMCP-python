@@ -4,7 +4,8 @@
    on its top edge, so a quarter of the sphere, 8,377.6 mm³, is shared.
    Union (89,132.7 mm³), cube minus sphere (55,622.4), sphere minus cube
    (25,132.7) and intersection (8,377.6), each shown, then deleted. Then the
-   exclusive or, from copies and two subtracts: two pieces, 80,755.2 mm³.
+   exclusive or, from copies, two subtracts and a move back: two pieces,
+   80,755.2 mm³.
    On purpose: an unknown body, and an intersection of bodies that don't
    touch.
 2. A split and a keep: the block split at the Right Plane into two halves of
@@ -195,8 +196,9 @@ async def test_boolean_logic_on_a_cube_and_a_sphere(scratch: Any) -> None:
     Union, cube minus sphere, sphere minus cube and intersection are one
     ``combine_bodies`` each. The exclusive or (keep what only one of them
     holds, drop the shared quarter) has no SolidWorks feature, so it is
-    built from tools: copy both bodies aside, cut each original by the
-    other's copy, and the two pieces left are the answer.
+    built from tools: copy both bodies aside, take the cube minus the sphere
+    on one pair and the sphere minus the cube on the other, then move the
+    sphere's piece back: the two pieces left are the answer.
     """
     adapter = scratch.adapter
     tools = await _tools(adapter)
@@ -245,9 +247,10 @@ async def test_boolean_logic_on_a_cube_and_a_sphere(scratch: Any) -> None:
     assert refused["status"] == "error", refused
     assert refused["error_type"] == "feature_not_built", refused
 
+    # Each pair is cut within itself: the copies are 100 mm from the originals.
     steps = (
-        ("step 2: the cube minus the sphere's copy", cube, sphere_copy),
-        ("step 3: the sphere minus the cube's copy", sphere, cube_copy),
+        ("step 2: on the left, the cube minus the sphere", cube, sphere),
+        ("step 3: on the right, the sphere minus the cube", sphere_copy, cube_copy),
     )
     for label, main, tool in steps:
         call = {"operation": "subtract", "main_body": main, "tool_bodies": [tool]}
@@ -257,6 +260,18 @@ async def test_boolean_logic_on_a_cube_and_a_sphere(scratch: Any) -> None:
         evidence(
             f"exclusive or, {label}", _brief(bodies), call=f"combine_bodies({call})"
         )
+
+    # Step 4: slide the sphere's three quarters back onto the bitten cube.
+    caps = next(b["name"] for b in bodies if b["bounding_box_mm"]["min"][0] > 50)
+    back = {"bodies": [caps], "translate": [-COPY_OFFSET_MM, 0, 0]}
+    await _ok(await tools["move_copy_body"](back))
+    bodies = await _bodies(tools)
+    _show(adapter, bodies)
+    evidence(
+        "exclusive or, step 4: the sphere's three quarters moved back onto the cube",
+        _brief(bodies),
+        call=f"move_copy_body({back})",
+    )
 
     expected = CUBE_MM3 + SPHERE_MM3 - 2 * SHARED_MM3
     evidence(
