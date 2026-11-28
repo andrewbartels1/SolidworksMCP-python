@@ -14,6 +14,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Colours** (queue item 36): `set_appearance` colours the whole part, one
+  feature, one body or the face at a point (`[r, g, b]` or `#rrggbb`, with
+  transparency), or with `reset` removes a level's own colour;
+  `get_appearance` reads the colour that shows and the level it comes from.
+  A face's colour shows over its feature's, a feature's over its body's, a
+  body's over the part's. Each colour is read back from SolidWorks, which
+  takes it as an array of doubles: a plain list was misread.
+- **Reference and analysis extras** (queue item 39):
+  `create_coordinate_system` at a point, axes along the model's (its
+  transform read back); `create_center_of_mass_point`;
+  `create_bounding_box` with the stock size; `get_section_properties`, a
+  planar face's area, centroid and second moments of area. 171 tools in
+  all. Beta until the live demo; the live tests pass on SolidWorks 2026.
 - **Multi-body tools** (queue item 35): `list_bodies` names a part's solid
   bodies with each one's volume and bounding box; `combine_bodies` adds,
   subtracts or keeps the common volume of bodies (a mould core: a block
@@ -91,6 +104,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Bandit alert on the body tools.** The body operation's reply-fields
+  callback was named `extra`, which Bandit's rule B610 reads as Django's
+  `QuerySet.extra` (an SQL risk). There is no SQL; the callback is now
+  `own_fields`.
 - **Tools after `delete_feature` see the part again.** `list_features` (which
   `delete_feature` runs) and `get_selected_entities` took over SolidWorks's
   active document without flagging its methods, so the next tool read

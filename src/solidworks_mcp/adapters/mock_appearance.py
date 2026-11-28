@@ -116,12 +116,16 @@ class MockAppearanceMixin:
         return own
 
     def _showing(self, chain: list[tuple[str, str]]) -> dict[str, Any]:
-        """The colour that shows, walking up the chain."""
-        for level, key in chain:
-            color = rules.color_reply(self._values(level, key))
-            if color is not None:
-                return {**color, "level": level}
-        return {"color": None, "hex": None, "transparency": None, "level": None}
+        """The colour that shows, walking up the chain.
+
+        Every chain ends at the part, which always has a colour here.
+        """
+        level, color = next(
+            (level, color)
+            for level, key in chain
+            if (color := rules.color_reply(self._values(level, key))) is not None
+        )
+        return {**color, "level": level}
 
     def _named(self, kind: str, target: AppearanceTarget) -> dict[str, Any]:
         """The reply field naming the target."""
