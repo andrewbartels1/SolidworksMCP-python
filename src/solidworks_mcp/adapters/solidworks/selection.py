@@ -41,10 +41,12 @@ class SolidWorksSelectionMixin:
     async def list_features(
         self, include_suppressed: bool = False, max_assembly_depth: int = 2
     ) -> AdapterResult[list[dict[str, Any]]]:
-        sw_app = getattr(self, "swApp", None)
-        active_model = getattr(sw_app, "ActiveDoc", None) if sw_app else None
-        if active_model is not None:
-            self.currentModel = active_model
+        # Resync from ActiveDoc, flagged for its type: a raw ActiveDoc left as
+        # currentModel resolves zero-arg methods such as GetType as property
+        # values, which later tools then misread (COM pitfall #5).
+        sync = getattr(self, "_sync_current_model_from_active", None)
+        if callable(sync):
+            self._attempt(sync, default=None)
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR,
@@ -233,10 +235,9 @@ class SolidWorksSelectionMixin:
             omitted rather than failing the whole call -- a partial
             description is more useful than none.
         """
-        sw_app = getattr(self, "swApp", None)
-        active_model = getattr(sw_app, "ActiveDoc", None) if sw_app else None
-        if active_model is not None:
-            self.currentModel = active_model
+        sync = getattr(self, "_sync_current_model_from_active", None)
+        if callable(sync):
+            self._attempt(sync, default=None)
         if not self.currentModel:
             return AdapterResult(
                 status=AdapterResultStatus.ERROR, error="No active model"

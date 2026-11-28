@@ -139,6 +139,67 @@ follows the Hole Wizard's drill depth, with no runout.
    description points to `create_thread` and where to find the sizes
    (`list_thread_sizes`).
 
+## Decisions (the user, 2026-11-26, later)
+
+5. Metric runout follows the ISO 3508 rules, normal ≈ 2.5P and short ≈
+   1.25P, with the standard cited. The rounded printed table is **not**
+   shipped as data for now; that waits until we look into it further.
+6. Inch runout (2026-11-27): start with the ISO 3508 rule applied to the
+   inch pitch (P = 1 / TPI), as a reasoned default, not a standard. The
+   reply labels it (`runout_basis`, e.g. "ISO 3508 rule applied to the
+   inch pitch; no free inch standard dimensions a runout"), and a runout
+   length the user gives overrides it.
+7. Sizes (2026-11-27): every standard ISO metric size from M1 to about M10
+   (and the larger ones the library has), coarse and fine. M3, M4, M5 and
+   M6 are the most used, with their bolt head types (socket head, button,
+   countersunk, hex), so tests and examples centre on those. The library's
+   ISO tapped-hole table (62 rows, coarse and fine) is the source; the head
+   types match `create_hole`'s fastener types (`list_hole_sizes`).
+
+## Inch runout: NBS Handbook H28 (1969), Part I
+
+H28 is the US government's *Screw-Thread Standards for Federal Services*,
+in the public domain:
+[nbshandbook28-1969p1.pdf](https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook28-1969p1.pdf).
+It is a 28 MB scan, read here through its text layer. What it gives:
+
+- **Definitions (Section 1).**
+  - 3.11, *incomplete thread*: crests, roots or both not fully formed,
+    "resulting from their intersection with the cylindrical or end surface
+    of the work or the vanish cone. It may occur at either end of the
+    thread."
+  - 3.13, *vanish thread* ("Partial Thread, Washout Thread, or Thread
+    Run-out"): the part of the incomplete thread "not fully formed at root
+    or at crest and root. It is produced by the chamfer at the starting end
+    of the thread forming tool."
+  - 3.15, *total thread*: the complete thread plus all of the incomplete
+    thread, vanish thread included.
+- **A length, at the start only (6.26, length of complete thread).**
+  Vanish threads are not part of the complete thread, "However, on
+  commercial fasteners where there are unfilled crests at the start of
+  rolled threads or a chamfer at the start of a thread, not exceeding two
+  pitches in length, this is traditionally included in the specified thread
+  length." Where a minimum number or length of complete threads matters,
+  "the specification shall so state."
+- **No runout length or table** for Unified (UN, UNC, UNF, UNEF) threads.
+  Section 2 (Unified threads: form, series, classes, tolerances, length of
+  engagement, limits, gages) has no runout or undercut dimensions; the
+  word "undercut" appears only for gage clearance.
+
+So no free inch standard found so far dimensions a runout:
+
+- **ASME B1.1 (Unified threads):** paywalled.
+- **ASME B1.15 (UNJ):** says one to two pitches, but for UNJ only.
+- **ASME B18.2.1:** the fastener tables, with a transition thread length,
+  also paywalled.
+
+Unified and ISO metric threads share the 60° basic profile (ISO 68-1; H28
+Section 2 says Unified threads agree with the international standard).
+ISO 3508's rule is stated in pitches. Applying it to an inch pitch
+(1 / TPI) is therefore a reasoned default, **not** a standard. If used, the
+reply must say so (e.g. `runout_basis`), and a length the user gives
+overrides it. This needs the user's decision.
+
 ## Open questions for the spec (first draft)
 
 1. Standards in the first version: ISO metric and UTS inch, then the rest

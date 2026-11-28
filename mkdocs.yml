@@ -50,6 +50,7 @@ nav:
       - All Tools: user-guide/tool-catalog/index.md
       - Modeling: user-guide/tool-catalog/modeling.md
       - Equations: user-guide/tool-catalog/equations.md
+      - Bodies: user-guide/tool-catalog/bodies.md
       - Assembly: user-guide/tool-catalog/assembly.md
       - Sketching: user-guide/tool-catalog/sketching.md
       - Drawing: user-guide/tool-catalog/drawing.md

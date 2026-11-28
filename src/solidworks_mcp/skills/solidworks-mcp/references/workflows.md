@@ -124,6 +124,25 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
 5. Both sweeps report `volume_change`; a cut that removes nothing fails
    and is removed. Check with `verify_model`.
 
+## Several bodies in one part (a mould core, a part cut in two)
+
+1. Make each body with `create_extrusion` and `merge_result: false` (or
+   `create_revolve` the same way). `list_bodies` names them, with each
+   one's volume and box; the body tools take those names.
+2. A mould core or a pocket: `combine_bodies` with `operation`
+   `subtract`, the block as `main_body` and the part as `tool_bodies`.
+   `add` joins touching bodies; `common` keeps what they share.
+3. Cut a part in two (to print it in halves): `split_body` with a plane,
+   e.g. "Right Plane"; the reply's `made` names the pieces.
+4. Copies: `move_copy_body` with `as_copy` and `copies`; move with
+   `translate` or `rotate`, one per call.
+5. `delete_bodies` (or `keep: true`) and `scale_body` finish it.
+   SolidWorks renames bodies as features change them, so read
+   `bodies_after` from each reply, or `list_bodies`, before the next call.
+6. Each reply gives the counts and volumes before and after; a step that
+   did nothing fails and is undone. `save_body_as_part` saves one body
+   as its own part.
+
 ## Changing an existing model
 
 1. `open_model`, then `list_features` and `list_model_dimensions`.

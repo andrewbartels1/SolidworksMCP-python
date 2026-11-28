@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 159,
+  "total": 165,
   "by_level": {
    "stable": 149,
-   "beta": 2,
+   "beta": 8,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -269,6 +269,13 @@
     "summary": "Close the active document, saving it first only if asked."
    },
    {
+    "name": "combine_bodies",
+    "family": "bodies",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Combine bodies of the active part: add them, subtract tool bodies from a main body, or keep their common volume."
+   },
+   {
     "name": "compare_drawing_versions",
     "family": "drawing_analysis",
     "level": "stable",
@@ -456,6 +463,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Place a model's three standard views (front, top and side) on the active drawing sheet in one call."
+   },
+   {
+    "name": "delete_bodies",
+    "family": "bodies",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Delete bodies from the active part, or with keep=true keep only the named ones."
    },
    {
     "name": "delete_configuration",
@@ -724,6 +738,13 @@
     "summary": "List the materials in the installed SolidWorks material libraries."
    },
    {
+    "name": "list_bodies",
+    "family": "bodies",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "List the active part's solid bodies by name, with each one's volume and bounding box."
+   },
+   {
     "name": "list_components",
     "family": "modeling",
     "level": "stable",
@@ -829,6 +850,13 @@
     "summary": "Mirror solid bodies or features of the active part about a plane."
    },
    {
+    "name": "move_copy_body",
+    "family": "bodies",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Move bodies of the active part by a translation and a rotation, or copy them up to 50 times."
+   },
+   {
     "name": "open_model",
     "family": "modeling",
     "level": "stable",
@@ -932,6 +960,13 @@
     "level": "deprecated",
     "reason": "use `save_file`.",
     "summary": "Save the active part in place, or as a new .sldprt with the target path checked first."
+   },
+   {
+    "name": "scale_body",
+    "family": "bodies",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Scale bodies of the active part, uniformly or per axis, about their centroid or the origin."
    },
    {
     "name": "search_solidworks_api_help",
@@ -1088,6 +1123,13 @@
     "summary": "Demonstrate the sketch steps: draw a 5 mm circle at the origin on the Top plane and close the sketch."
    },
    {
+    "name": "split_body",
+    "family": "bodies",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Split the active part's bodies with a plane or a sketch, keeping every piece in the part."
+   },
+   {
     "name": "suppress_feature",
     "family": "modeling",
     "level": "stable",
@@ -1127,11 +1169,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 286,
+   "covered": 295,
    "total": 2838
   },
   "api": {
-   "covered": 329,
+   "covered": 338,
    "total": 5985
   },
   "interfaces": [
@@ -1228,6 +1270,7 @@
      "InsertProtrusionBlend2",
      "InsertProtrusionSwept4",
      "InsertRib",
+     "InsertScale",
      "InsertSketch",
      "InsertSketchForEdgeFlange",
      "InsertSketchText",
@@ -1240,6 +1283,7 @@
      "SaveAs2",
      "SaveAs3",
      "SaveBMP",
+     "Scale",
      "Select",
      "SetBendState",
      "SetSaveFlag",
@@ -1297,6 +1341,7 @@
      "GetExplodedViewNames",
      "GetMaterialPropertyName2",
      "GetPartBox",
+     "InsertCombineFeature",
      "InsertMirrorFeature",
      "SetMaterialPropertyName2",
      "ShowExploded"
@@ -1371,18 +1416,24 @@
      "GetFeatureCount",
      "GetFlatPatternFolder",
      "HoleWizard5",
+     "InsertCombineFeature",
      "InsertCosmeticThread3",
      "InsertCutSwept5",
+     "InsertDeleteBody2",
      "InsertFeatureChamfer",
      "InsertMirrorFeature",
+     "InsertMoveCopyBody2",
      "InsertMultiFaceDraft",
      "InsertProtrusionBlend2",
      "InsertProtrusionSwept4",
      "InsertRefPlane",
      "InsertReferencePoint",
      "InsertRib",
+     "InsertScale",
      "InsertSheetMetalBaseFlange2",
-     "InsertSheetMetalEdgeFlange2"
+     "InsertSheetMetalEdgeFlange2",
+     "PostSplitBody2",
+     "PreSplitBody2"
     ],
     "total": 268
    },

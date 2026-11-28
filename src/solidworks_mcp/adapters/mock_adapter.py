@@ -29,6 +29,7 @@ from .base import (
     SolidWorksFeature,
     SolidWorksModel,
 )
+from .mock_bodies import MockBodiesMixin
 from .mock_drawing_pack import MockDrawingPackMixin
 from .mock_equations import MockEquationsMixin
 from .mock_sheet_metal import MockSheetMetalMixin
@@ -144,6 +145,7 @@ class _BoolCallable:
 
 
 class MockSolidWorksAdapter(
+    MockBodiesMixin,
     MockSheetMetalMixin,
     MockSweptMixin,
     MockTemplatesMixin,
@@ -1410,6 +1412,7 @@ class MockSolidWorksAdapter(
 
         feature_key = feature.id or feature.name
         self._features[feature_key] = feature
+        self._note_extrusion(feature_id, sketch, params.depth, params.merge_result)
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -1853,6 +1856,11 @@ class MockSolidWorksAdapter(
         self._sketch_entity_ids.add(circle_id)
         # create_helix checks its base sketch holds one circle.
         self._circles().setdefault(self._current_sketch, []).append(float(radius))
+        # The body tools size an extrusion from its sketch's shapes.
+        self._note_shape(
+            self._current_sketch,
+            ("circle", float(center_x), float(center_y), float(radius)),
+        )
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,
@@ -1933,6 +1941,10 @@ class MockSolidWorksAdapter(
 
         rect_id = f"Rectangle{random.randint(1000, 9999)}"
         self._sketch_entity_ids.add(rect_id)
+        self._note_shape(
+            self._current_sketch,
+            ("rect", float(x1), float(y1), float(x2), float(y2), from_center),
+        )
 
         return AdapterResult(
             status=AdapterResultStatus.SUCCESS,

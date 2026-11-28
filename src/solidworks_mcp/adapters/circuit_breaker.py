@@ -17,14 +17,19 @@ from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
+    CombineBodiesParameters,
+    DeleteBodiesParameters,
     ExtrusionParameters,
     HelixParameters,
     LoftParameters,
     MassProperties,
+    MoveCopyBodyParameters,
     RevolveParameters,
+    ScaleBodyParameters,
     SolidWorksAdapter,
     SolidWorksFeature,
     SolidWorksModel,
+    SplitBodyParameters,
     SweepParameters,
 )
 
@@ -1289,6 +1294,62 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         return await self._execute_with_circuit_breaker(
             "create_helix",
             lambda: self.adapter.create_helix(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def list_bodies(self) -> AdapterResult[dict[str, Any]]:
+        """The active part's solid bodies. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_bodies", lambda: self.adapter.list_bodies(), input_dict={}
+        )
+
+    async def combine_bodies(
+        self, params: CombineBodiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Combine bodies. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "combine_bodies",
+            lambda: self.adapter.combine_bodies(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def split_body(
+        self, params: SplitBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Split bodies. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "split_body",
+            lambda: self.adapter.split_body(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def move_copy_body(
+        self, params: MoveCopyBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Move or copy bodies. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "move_copy_body",
+            lambda: self.adapter.move_copy_body(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def delete_bodies(
+        self, params: DeleteBodiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Delete or keep bodies. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "delete_bodies",
+            lambda: self.adapter.delete_bodies(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def scale_body(
+        self, params: ScaleBodyParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Scale bodies. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "scale_body",
+            lambda: self.adapter.scale_body(params),
             input_dict=_to_input_dict(params),
         )
 
