@@ -20,6 +20,8 @@ TOOLSETS: dict[str, frozenset[str]] = {
             "modeling",
             "equations",
             "bodies",
+            "appearance",
+            "reference_extras",
             "assembly",
             "sketching",
             "file_management",

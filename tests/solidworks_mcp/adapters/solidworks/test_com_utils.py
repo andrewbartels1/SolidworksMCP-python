@@ -13,6 +13,7 @@ from solidworks_mcp.adapters.solidworks.com_utils import (
     dispatch_array,
     double_array,
     long_array,
+    long_ref,
     string_array,
     strip_op_prefix,
 )
@@ -128,3 +129,25 @@ class TestLongArray:
 
         monkeypatch.setattr(builtins, "__import__", no_pythoncom)
         assert long_array([0, 1]) == (0, 1)
+
+
+class TestLongRef:
+    def test_variant_on_windows(self, monkeypatch) -> None:
+        fake_w32 = SimpleNamespace(VARIANT=lambda vt, value: ("VARIANT", vt, value))
+        monkeypatch.setitem(
+            sys.modules, "pythoncom", SimpleNamespace(VT_BYREF=0x4000, VT_I4=3)
+        )
+        monkeypatch.setitem(sys.modules, "win32com", SimpleNamespace(client=fake_w32))
+        monkeypatch.setitem(sys.modules, "win32com.client", fake_w32)
+        assert long_ref(2.0) == ("VARIANT", 0x4003, 2)
+
+    def test_plain_int_without_pywin32(self, monkeypatch) -> None:
+        real_import = builtins.__import__
+
+        def no_pythoncom(name, *args, **kwargs):
+            if name == "pythoncom":
+                raise ImportError(name)
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_pythoncom)
+        assert long_ref() == 0

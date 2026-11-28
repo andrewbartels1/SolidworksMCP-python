@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 165,
+  "total": 171,
   "by_level": {
    "stable": 149,
-   "beta": 8,
+   "beta": 14,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -272,7 +272,7 @@
     "name": "combine_bodies",
     "family": "bodies",
     "level": "beta",
-    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "reason": "new: passed its live demo (boolean logic on a cube and a sphere), not yet in wide use.",
     "summary": "Combine bodies of the active part: add them, subtract tool bodies from a main body, or keep their common volume."
    },
    {
@@ -311,11 +311,32 @@
     "summary": "Start a sheet-metal part: a base flange from a sketch, with its thickness, bend radius and K-factor."
    },
    {
+    "name": "create_bounding_box",
+    "family": "reference_extras",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Add SolidWorks's Bounding Box feature around the active part's bodies and give the stock size."
+   },
+   {
+    "name": "create_center_of_mass_point",
+    "family": "reference_extras",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Add SolidWorks's Center of Mass point to the active part, at its centre of mass."
+   },
+   {
     "name": "create_configuration",
     "family": "file_management",
     "level": "stable",
     "reason": "",
     "summary": "Add a configuration to the active part or assembly, e.g. a long and a short version of one part."
+   },
+   {
+    "name": "create_coordinate_system",
+    "family": "reference_extras",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Add a coordinate system with its origin at a point, axes along the model's."
    },
    {
     "name": "create_cut_extrude",
@@ -468,7 +489,7 @@
     "name": "delete_bodies",
     "family": "bodies",
     "level": "beta",
-    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "reason": "new: passed its live demo (boolean logic on a cube and a sphere), not yet in wide use.",
     "summary": "Delete bodies from the active part, or with keep=true keep only the named ones."
    },
    {
@@ -661,6 +682,13 @@
     "summary": "Look up a SolidWorks API enum's members and their integer values."
    },
    {
+    "name": "get_appearance",
+    "family": "appearance",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Read the colour the active part, a feature, a body or the face at a point shows, and where it comes from."
+   },
+   {
     "name": "get_custom_properties",
     "family": "engineering_data",
     "level": "stable",
@@ -703,6 +731,13 @@
     "summary": "Report the active document's title, path, type, configuration, unsaved changes, feature count, rebuild status and file details."
    },
    {
+    "name": "get_section_properties",
+    "family": "reference_extras",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Read the area, centroid and second moments of area of a planar face, picked by a point on it."
+   },
+   {
     "name": "get_selected_entities",
     "family": "file_management",
     "level": "stable",
@@ -741,7 +776,7 @@
     "name": "list_bodies",
     "family": "bodies",
     "level": "beta",
-    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "reason": "new: passed its live demo (boolean logic on a cube and a sphere), not yet in wide use.",
     "summary": "List the active part's solid bodies by name, with each one's volume and bounding box."
    },
    {
@@ -853,7 +888,7 @@
     "name": "move_copy_body",
     "family": "bodies",
     "level": "beta",
-    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "reason": "new: passed its live demo (boolean logic on a cube and a sphere), not yet in wide use.",
     "summary": "Move bodies of the active part by a translation and a rotation, or copy them up to 50 times."
    },
    {
@@ -965,7 +1000,7 @@
     "name": "scale_body",
     "family": "bodies",
     "level": "beta",
-    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "reason": "new: passed its live demo (boolean logic on a cube and a sphere), not yet in wide use.",
     "summary": "Scale bodies of the active part, uniformly or per axis, about their centroid or the origin."
    },
    {
@@ -988,6 +1023,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Select a feature, sketch, plane or component by name in the active document."
+   },
+   {
+    "name": "set_appearance",
+    "family": "appearance",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Colour the active part, one feature, one body or the face at a point, or remove a colour."
    },
    {
     "name": "set_component_state",
@@ -1126,7 +1168,7 @@
     "name": "split_body",
     "family": "bodies",
     "level": "beta",
-    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "reason": "new: passed its live demo (boolean logic on a cube and a sphere), not yet in wide use.",
     "summary": "Split the active part's bodies with a plane or a sketch, keeping every piece in the part."
    },
    {
@@ -1169,11 +1211,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 295,
+   "covered": 314,
    "total": 2838
   },
   "api": {
-   "covered": 338,
+   "covered": 350,
    "total": 5985
   },
   "interfaces": [
@@ -1261,7 +1303,9 @@
      "GetUserPreferenceStringValue",
      "GetUserPreferenceToggle",
      "GraphicsRedraw2",
+     "Insert3DSketch",
      "InsertAxis2",
+     "InsertCoordinateSystem",
      "InsertDatumTag2",
      "InsertFeatureShell",
      "InsertGtol",
@@ -1310,13 +1354,16 @@
      "CustomPropertyManager",
      "DeleteSelection2",
      "GetAnnotations",
+     "GetCoordinateSystemTransformByName",
      "GetMassProperties",
+     "GetSectionProperties2",
      "GetUserPreferenceInteger",
      "GetUserPreferenceToggle",
      "GetWhatsWrong",
      "GetWhatsWrongCount",
      "InsertBomTable4",
      "IsExploded",
+     "RemoveMaterialProperty",
      "SaveAs",
      "SaveAs2",
      "SaveAs3",
@@ -1416,11 +1463,14 @@
      "GetFeatureCount",
      "GetFlatPatternFolder",
      "HoleWizard5",
+     "InsertCenterOfMass",
      "InsertCombineFeature",
+     "InsertCoordinateSystem",
      "InsertCosmeticThread3",
      "InsertCutSwept5",
      "InsertDeleteBody2",
      "InsertFeatureChamfer",
+     "InsertGlobalBoundingBox",
      "InsertMirrorFeature",
      "InsertMoveCopyBody2",
      "InsertMultiFaceDraft",
@@ -1457,6 +1507,7 @@
      "CreateSketchSlot",
      "CreateSpline2",
      "CreateTangentArc",
+     "Insert3DSketch",
      "InsertSketch",
      "SketchExtend",
      "SketchOffset2",
@@ -1483,11 +1534,13 @@
      "FeatureByName",
      "FirstFeature",
      "GetBodies2",
+     "GetBody",
      "GetBox",
      "GetChildren",
      "GetConfigurationNames",
      "GetConstrainedStatus",
      "GetID",
+     "GetMaterialPropertyValues2",
      "GetModelDoc2",
      "GetPathName",
      "GetSuppression2",
@@ -1496,9 +1549,12 @@
      "IsEnvelope",
      "IsFixed",
      "IsSuppressed",
+     "RemoveMaterialProperty",
+     "RemoveMaterialProperty2",
      "Select",
      "Select2",
      "Select4",
+     "SetMaterialPropertyValues2",
      "SetSuppression2"
     ],
     "total": 147
@@ -1506,6 +1562,7 @@
    {
     "name": "IFeature",
     "covered": [
+     "GetBody",
      "GetBox",
      "GetChildren",
      "GetDefinition",
@@ -1514,6 +1571,7 @@
      "GetFirstDisplayDimension",
      "GetFirstSubFeature",
      "GetID",
+     "GetMaterialPropertyValues2",
      "GetNameForSelection",
      "GetNextDisplayDimension",
      "GetNextFeature",
@@ -1525,8 +1583,11 @@
      "IsSuppressed2",
      "ModifyDefinition",
      "Parameter",
+     "RemoveMaterialProperty",
+     "RemoveMaterialProperty2",
      "Select",
      "Select2",
+     "SetMaterialPropertyValues2",
      "SetSuppression2"
     ],
     "total": 115

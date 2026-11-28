@@ -397,6 +397,64 @@ class ScaleBodyParameters(BaseModel):
     bodies: list[str] | None = None
 
 
+class AppearanceTarget(BaseModel):
+    """What a colour is read from or set on: one of these, or none for the part.
+
+    Attributes:
+        feature (str | None): A feature, by its name in the tree.
+        body (str | None): A solid body, as ``list_bodies`` names it.
+        face_point (list[float] | None): ``[x, y, z]`` mm on a face.
+    """
+
+    feature: str | None = None
+    body: str | None = None
+    face_point: list[float] | None = None
+
+
+class AppearanceParameters(AppearanceTarget):
+    """A colour to set on a target, or ``reset`` to remove the target's own.
+
+    Attributes:
+        color (list[int] | str | None): ``[r, g, b]`` 0-255 or ``#rrggbb``.
+        transparency (float): 0 opaque to 1 clear.
+        reset (bool): Remove the target's own colour instead.
+    """
+
+    color: list[int] | str | None = None
+    transparency: float = 0.0
+    reset: bool = False
+
+
+class CoordinateSystemParameters(BaseModel):
+    """A coordinate system at a point, with the model's axes.
+
+    Attributes:
+        origin (list[float]): ``[x, y, z]`` mm.
+    """
+
+    origin: list[float]
+
+
+class BoundingBoxParameters(BaseModel):
+    """SolidWorks's Bounding Box feature around the part's bodies.
+
+    Attributes:
+        include_hidden (bool): Include hidden bodies.
+    """
+
+    include_hidden: bool = False
+
+
+class SectionPropertiesParameters(BaseModel):
+    """A planar face, picked by a point on it.
+
+    Attributes:
+        face_point (list[float]): ``[x, y, z]`` mm on the face.
+    """
+
+    face_point: list[float]
+
+
 class LoftParameters(BaseModel):
     """Parameters for loft operations.
 
@@ -924,6 +982,97 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="scale_body is not implemented by this adapter",
+        )
+
+    async def set_appearance(
+        self, params: AppearanceParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Colour the part, a feature, a body or a face, or remove a colour.
+
+        Args:
+            params: The target, the colour and transparency, or ``reset``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="set_appearance is not implemented by this adapter",
+        )
+
+    async def get_appearance(
+        self, params: AppearanceTarget
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read the colour a target shows, and the level it comes from.
+
+        Args:
+            params: The target; none for the part.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_appearance is not implemented by this adapter",
+        )
+
+    async def create_coordinate_system(
+        self, params: CoordinateSystemParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A coordinate system at a point, with the model's axes.
+
+        Args:
+            params: The origin.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_coordinate_system is not implemented by this adapter",
+        )
+
+    async def create_center_of_mass_point(self) -> AdapterResult[dict[str, Any]]:
+        """SolidWorks's Center of Mass reference point on the active part.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_center_of_mass_point is not implemented by this adapter",
+        )
+
+    async def create_bounding_box(
+        self, params: BoundingBoxParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """SolidWorks's Bounding Box feature around the part's bodies.
+
+        Args:
+            params: Whether to include hidden bodies.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_bounding_box is not implemented by this adapter",
+        )
+
+    async def get_section_properties(
+        self, params: SectionPropertiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Area, centroid and second moments of area of a planar face.
+
+        Args:
+            params: A point on the face.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="get_section_properties is not implemented by this adapter",
         )
 
     @abstractmethod

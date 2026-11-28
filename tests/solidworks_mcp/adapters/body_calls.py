@@ -38,6 +38,11 @@ IDS = [call[0] for call in CALLS]
 
 def recorder() -> Any:
     """A mock adapter whose body methods record their arguments."""
+    return recorder_for(IDS)
+
+
+def recorder_for(names: list[str]) -> Any:
+    """A mock adapter whose methods ``names`` record their arguments."""
     from solidworks_mcp.adapters.base import AdapterResult, AdapterResultStatus
     from solidworks_mcp.adapters.mock_adapter import MockSolidWorksAdapter
 
@@ -49,5 +54,5 @@ def recorder() -> Any:
 
         return call
 
-    body = {name: method(name) for name in IDS}
+    body = {name: method(name) for name in names}
     return type("_Recorder", (MockSolidWorksAdapter,), body)({})

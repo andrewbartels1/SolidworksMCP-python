@@ -17,7 +17,11 @@ from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
+    AppearanceParameters,
+    AppearanceTarget,
+    BoundingBoxParameters,
     CombineBodiesParameters,
+    CoordinateSystemParameters,
     DeleteBodiesParameters,
     ExtrusionParameters,
     HelixParameters,
@@ -26,6 +30,7 @@ from .base import (
     MoveCopyBodyParameters,
     RevolveParameters,
     ScaleBodyParameters,
+    SectionPropertiesParameters,
     SolidWorksAdapter,
     SolidWorksFeature,
     SolidWorksModel,
@@ -1350,6 +1355,64 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         return await self._execute_with_circuit_breaker(
             "scale_body",
             lambda: self.adapter.scale_body(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def set_appearance(
+        self, params: AppearanceParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Colour a target, or remove its colour. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "set_appearance",
+            lambda: self.adapter.set_appearance(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def get_appearance(
+        self, params: AppearanceTarget
+    ) -> AdapterResult[dict[str, Any]]:
+        """Read a target's colour. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "get_appearance",
+            lambda: self.adapter.get_appearance(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def create_coordinate_system(
+        self, params: CoordinateSystemParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A coordinate system at a point. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_coordinate_system",
+            lambda: self.adapter.create_coordinate_system(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def create_center_of_mass_point(self) -> AdapterResult[dict[str, Any]]:
+        """The Center of Mass point. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_center_of_mass_point",
+            lambda: self.adapter.create_center_of_mass_point(),
+            input_dict={},
+        )
+
+    async def create_bounding_box(
+        self, params: BoundingBoxParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """The Bounding Box feature. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_bounding_box",
+            lambda: self.adapter.create_bounding_box(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def get_section_properties(
+        self, params: SectionPropertiesParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A face's section properties. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "get_section_properties",
+            lambda: self.adapter.get_section_properties(params),
             input_dict=_to_input_dict(params),
         )
 

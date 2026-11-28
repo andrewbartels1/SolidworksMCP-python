@@ -255,6 +255,50 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
     ErrorRule(
         error_type=INVALID_INPUT,
         hint=(
+            "Give one target: a feature (list_features), a body (list_bodies) "
+            "or a face_point [x, y, z] mm on a face, or none for the part. A "
+            "color is [r, g, b] 0-255 or '#rrggbb'; reset removes a feature's, "
+            "body's or face's own colour."
+        ),
+        patterns=(
+            r"Give one target, not",
+            r"No feature named '[^']*'; list_features names them",
+            r"No face at \[",
+            r"color .* (is not '#rrggbb'|must be \[r, g, b\])",
+            r"Give a color",
+            r"reset removes a feature's",
+            r"transparency must be 0",
+            r"(face_point|origin) must be \[x, y, z\]",
+        ),
+    ),
+    ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
+            "A part has one Center of Mass point and one bounding box at most, "
+            "and both need a solid body. Section properties need a point on a "
+            "planar face."
+        ),
+        patterns=(
+            r"The part has no solid body",
+            r"The part has (a Center of Mass point|a bounding box) already",
+            r"(couldn't take a section of|gave no section properties for) that face",
+        ),
+    ),
+    ErrorRule(
+        error_type="feature_not_built",
+        hint=(
+            "SolidWorks made nothing. Check the part has a solid body and the "
+            "inputs, then read the tree with list_features."
+        ),
+        patterns=(
+            r"SolidWorks (made no|drew no) (coordinate system|Center of Mass "
+            r"point|bounding box|origin point)",
+            r"SolidWorks did not keep the colour",
+        ),
+    ),
+    ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
             "face_point must lie on a flat face of the active part's body, in "
             "mm. Read the faces' centres with select_face_edges, or sketch on "
             "a plane instead."

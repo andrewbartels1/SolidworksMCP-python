@@ -71,6 +71,22 @@ These read SolidWorks' installed files and never start it
 
     [**6 tools available** :octicons-arrow-right-24:](tool-catalog/bodies.md)
 
+- :material-palette:{ .lg .middle } **Appearance Tools**
+
+    ---
+
+    Colour the part, a feature, a body or one face, and read back the colour that shows.
+
+    [**2 tools available** :octicons-arrow-right-24:](tool-catalog/appearance.md)
+
+- :material-axis-arrow:{ .lg .middle } **Reference and Analysis Extras**
+
+    ---
+
+    A coordinate system at a point, the centre-of-mass point, the bounding box and a face's section properties.
+
+    [**4 tools available** :octicons-arrow-right-24:](tool-catalog/reference-extras.md)
+
 - :material-cogs:{ .lg .middle } **Assembly Tools**
 
     ---
@@ -201,7 +217,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 165 Tools**
+**Total: 171 Tools**
 
 ## Deprecated tools
 
