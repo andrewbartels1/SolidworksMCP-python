@@ -81,7 +81,12 @@
       - a split and a delete: a block split at Right Plane, one half kept;
       - copies and a scale: a block copied three times, one copy scaled by
         2.
-- [ ] 7.2 (All three passed live 2026-11-26 in an unattended run: core
-      15,214.6 mm³, halves 8,000 + 8,000, kept 8,000, copies 16,000, scaled
-      44,000; each refusal `invalid_input`.) The user runs the demos; fix what they find; record the GIF
-- [ ] 7.3 Promote the tools as the user decides; commit; ask before pushing
+- [x] 7.2 The user ran the demos 2026-11-27. The mould core was replaced,
+      at the user's request, by boolean logic on a cube and a sphere (union
+      89,132.7, both subtracts 55,622.4 and 25,132.7, intersection 8,377.6,
+      exclusive or 80,755.2 mm³). Two fixes from the runs: list_features and
+      get_selected_entities adopted ActiveDoc unflagged, so list_bodies after
+      delete_feature took the part for no part; the exclusive or now cuts
+      each pair within itself. Split and keep, copies and scale passed. The
+      boolean GIF is in docs/demos.md.
+- [x] 7.3 The user kept the six tools in beta; push approved.

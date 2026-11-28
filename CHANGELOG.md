@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   elsewhere, a split that makes no new body) fails and is undone. How each
   SolidWorks call takes its bodies was measured by probes on SolidWorks
   2026: a move with both a translation and a rotation is refused, since
-  SolidWorks would apply only the rotation. Beta until the live demo.
+  SolidWorks would apply only the rotation. Beta; checked live on a cube
+  and a sphere (every boolean, and an exclusive or from copies; see Demos).
 - **Helices and swept cuts** (queue item 34): the path most mechanical
   sweeps follow, and a sweep that removes material, so an agent can model a
   spring, a modelled thread or a helical groove without a macro. 159 tools
@@ -90,6 +91,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tools after `delete_feature` see the part again.** `list_features` (which
+  `delete_feature` runs) and `get_selected_entities` took over SolidWorks's
+  active document without flagging its methods, so the next tool read
+  `GetType` as a value and took the part for no part: `list_bodies` after a
+  `delete_feature` said "make a part the active document". Both now adopt the
+  document the way the file tools do.
 - **`create_hole` puts the hole exactly at `face_point`.** SolidWorks puts a
   Hole Wizard hole where the face was picked, and the pick landed about
   0.04 mm off: a Ø6 hole asked for at (-20, 20, -12) mm had its axis at

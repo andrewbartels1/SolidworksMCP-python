@@ -1118,6 +1118,50 @@ be used instead.
 4. `create_cut_sweep({"path": "Helix/Spiral1", "profile": "Helix/Spiral1"})`, refused on purpose
 5. `create_cut_sweep({"path": "Helix/Spiral1", "profile": "Sketch3"})`
 
+## Several bodies {#bodies}
+
+Source: [`tests/live/test_live_sw_multi_body.py`](https://github.com/andrewbartels1/SolidworksMCP-python/blob/main/tests/live/test_live_sw_multi_body.py).
+
+### Boolean logic on a cube and a sphere {#boolean-logic}
+
+![A blue 40 mm cube and an orange sphere on its top edge: joined, each cut by the other, their common quarter, then the exclusive or built from copies](assets/demos/multi-body/test_boolean_logic_on_a_cube_and_a_sphere-motion.gif)
+
+> *Example prompt:* Make a 40 mm cube and a 20 mm sphere centred on its
+> top edge, as separate bodies, and show me every boolean of the two.
+
+**What it shows.** Every boolean of two bodies, each one measured and then
+deleted so the next starts from the same cube and sphere. The sphere sits
+on the middle of the cube's top edge, so exactly a quarter of it,
+8,377.6 mm³, is inside the cube, and every result has an exact volume:
+
+| Boolean | Tools | Expected | Measured |
+| --- | --- | --- | --- |
+| A 40 mm cube and, unmerged, a 20 mm sphere | `create_extrusion`, `create_revolve` | 64,000 + 33,510.3 mm³ | 64,000 + 33,510.3 mm³ |
+| Union | `combine_bodies` add | 89,132.7 mm³, one body | 89,132.7 mm³ |
+| Cube minus sphere | `combine_bodies` subtract | 55,622.4 mm³ | 55,622.4 mm³ |
+| Sphere minus cube | `combine_bodies` subtract | 25,132.7 mm³ | 25,132.7 mm³ |
+| Intersection | `combine_bodies` common | 8,377.6 mm³ | 8,377.6 mm³ |
+| Exclusive or: both, less the shared quarter | `move_copy_body`, `combine_bodies` ×2, `move_copy_body` | 80,755.2 mm³, two bodies | 80,755.2 mm³ |
+
+SolidWorks has no exclusive-or feature, so it is built from the tools:
+copy both bodies 100 mm aside, take the cube minus the sphere on one pair
+and the sphere minus the cube on the other, then move the sphere's piece
+back. Two calls fail **on purpose**: a body name that doesn't exist
+(`invalid_input`, with the bodies there are) and an intersection of bodies
+100 mm apart, which SolidWorks can't build (`feature_not_built`). The
+colours are the demo's staging, not a tool: cube material is blue, sphere
+material orange.
+
+**Tool calls**
+
+1. `create_part`, a 40 mm square on Top, `create_extrusion({"depth": 40})`
+2. On Front: `add_centerline`, a half circle (`add_arc` three-point) and `add_line`; `create_revolve({"angle": 360, "merge_result": false})`
+3. `list_bodies` names them: `Boss-Extrude1` (cube) and `Revolve1` (sphere)
+4. `combine_bodies({"operation": "add", "main_body": "Boss-Extrude1", "tool_bodies": ["Revolve1"]})`, then `delete_feature({"name": "Combine1"})`; the same for subtract both ways and common
+5. `move_copy_body({"bodies": ["Boss-Extrude1", "Revolve1"], "translate": [100, 0, 0], "as_copy": true})`
+6. `combine_bodies` subtract on each pair, `move_copy_body` the sphere's piece back by `[-100, 0, 0]`
+7. `verify_model({"volume_mm3": 80755.2, "solid_body_count": 2})`
+
 ## Run a demo yourself
 
 The demos need Windows, SolidWorks open and idle, and the project's `.venv`.
