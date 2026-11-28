@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Drawing sheets** (queue item 37, first part): `list_sheets` lists a
+  drawing's sheets with each one's paper size, scale and projection and
+  which is active; `add_sheet` adds one with a format (`a3 - iso`), paper
+  size, scale and projection, and makes it active; `activate_sheet`
+  chooses the active sheet, so views and notes can go on a second sheet.
+  A name in use or a missing sheet is refused with the sheets listed. 168
+  tools in all. Beta until the live demo; the live test passes on
+  SolidWorks 2026.
 - **Multi-body tools** (queue item 35): `list_bodies` names a part's solid
   bodies with each one's volume and bounding box; `combine_bodies` adds,
   subtracts or keeps the common volume of bodies (a mould core: a block

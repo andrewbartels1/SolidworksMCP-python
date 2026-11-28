@@ -30,6 +30,7 @@ from .solidworks import (
     SolidWorksConfigurationsMixin,
     SolidWorksDocumentationMixin,
     SolidWorksDrawingPackMixin,
+    SolidWorksDrawingSheetsMixin,
     SolidWorksDrawingStandardMixin,
     SolidWorksEquationsMixin,
     SolidWorksFeaturesMixin,
@@ -1724,6 +1725,7 @@ class _FeatureSelectionService:
 
 
 class PyWin32Adapter(
+    SolidWorksDrawingSheetsMixin,
     SolidWorksAssemblyMixin,
     SolidWorksBodiesMixin,
     SolidWorksSheetMetalMixin,

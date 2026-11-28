@@ -321,6 +321,19 @@ SUPPORT_LEVELS: dict[str, Support] = {
         SupportLevel.BETA,
         "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
     ),
+    # Queue item 37: beta until the drawing-sheets live demo.
+    "activate_sheet": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    "add_sheet": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    "list_sheets": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
     "delete_feature": _STABLE,
     "get_dimension": _STABLE,
     "insert_component": _STABLE,

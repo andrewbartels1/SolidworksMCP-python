@@ -95,6 +95,14 @@ These read SolidWorks' installed files and never start it
 
     [**14 tools available** :octicons-arrow-right-24:](tool-catalog/drawing.md)
 
+- :material-file-multiple:{ .lg .middle } **Drawing Sheet Tools**
+
+    ---
+
+    A drawing's sheets: list them, add one with a format and scale, and choose the active one.
+
+    [**3 tools available** :octicons-arrow-right-24:](tool-catalog/drawing-sheets.md)
+
 - :material-file-cog:{ .lg .middle } **Drawing Automation**
 
     ---
@@ -201,7 +209,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 165 Tools**
+**Total: 168 Tools**
 
 ## Deprecated tools
 

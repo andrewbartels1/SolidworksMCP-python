@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 165,
+  "total": 168,
   "by_level": {
    "stable": 149,
-   "beta": 8,
+   "beta": 11,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -22,6 +22,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Make an already-open document the active one, so the next tools act on it."
+   },
+   {
+    "name": "activate_sheet",
+    "family": "drawing_sheets",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Make a sheet of the active drawing the active one, so new views and notes go on it."
    },
    {
     "name": "add_arc",
@@ -155,6 +162,13 @@
     "level": "stable",
     "reason": "",
     "summary": "Draw a closed, axis-aligned rectangle in the open sketch from two opposite corners, in mm."
+   },
+   {
+    "name": "add_sheet",
+    "family": "drawing_sheets",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Add a sheet to the active drawing, with a format, paper size and scale, and make it the active sheet."
    },
    {
     "name": "add_sketch_chamfer",
@@ -801,6 +815,13 @@
     "summary": "List every document open in SolidWorks and say which one is active."
    },
    {
+    "name": "list_sheets",
+    "family": "drawing_sheets",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "List the active drawing's sheets with each one's paper size, scale and projection, and which is active."
+   },
+   {
     "name": "load_assembly",
     "family": "file_management",
     "level": "deprecated",
@@ -1169,11 +1190,11 @@
  "com": {
   "type_library": "83A33D31-27C5-11CE-BFD4-00400513BB57x0x34x0",
   "core": {
-   "covered": 295,
+   "covered": 299,
    "total": 2838
   },
   "api": {
-   "covered": 338,
+   "covered": 342,
    "total": 5985
   },
   "interfaces": [
@@ -1376,6 +1397,7 @@
    {
     "name": "IDrawingDoc",
     "covered": [
+     "ActivateSheet",
      "ActivateView",
      "AutoBalloon5",
      "AutoDimension",
@@ -1391,9 +1413,12 @@
      "FeatureByName",
      "GetCurrentSheet",
      "GetFirstView",
+     "GetSheetNames",
      "GetViews",
      "InsertModelAnnotations3",
-     "SetupSheet5"
+     "NewSheet4",
+     "SetupSheet5",
+     "Sheet"
     ],
     "total": 272
    },

@@ -16,6 +16,7 @@ from .base import (
     AdapterHealth,
     AdapterResult,
     AdapterResultStatus,
+    AddSheetParameters,
     CombineBodiesParameters,
     DeleteBodiesParameters,
     ExtrusionParameters,
@@ -1169,6 +1170,26 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Scale bodies. Using the pool."""
         return await self._execute_with_pool(
             "scale_body", lambda adapter: adapter.scale_body(params)
+        )
+
+    async def list_sheets(self) -> AdapterResult[dict[str, Any]]:
+        """The drawing's sheets. Using the pool."""
+        return await self._execute_with_pool(
+            "list_sheets", lambda adapter: adapter.list_sheets()
+        )
+
+    async def add_sheet(
+        self, params: AddSheetParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """Add a sheet. Using the pool."""
+        return await self._execute_with_pool(
+            "add_sheet", lambda adapter: adapter.add_sheet(params)
+        )
+
+    async def activate_sheet(self, name: str) -> AdapterResult[dict[str, Any]]:
+        """Activate a sheet. Using the pool."""
+        return await self._execute_with_pool(
+            "activate_sheet", lambda adapter: adapter.activate_sheet(name)
         )
 
     async def create_loft(
