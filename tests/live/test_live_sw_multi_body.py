@@ -107,6 +107,8 @@ def _show(adapter: Any, bodies: list[dict[str, Any]]) -> None:
             body.MaterialPropertyValues2 = [*rgb, 1.0, 1.0, 0.3, 0.3, 0.0, 0.0]
 
     adapter._attempt(paint, default=None)
+    # A body left selected shows in the highlight colour, hiding its own.
+    adapter._attempt(lambda: model.ClearSelection2(True), default=None)
     adapter._attempt(lambda: model.ShowNamedView2("", _ISO_VIEW), default=None)
     adapter._zoom_to_fit(model)
 
