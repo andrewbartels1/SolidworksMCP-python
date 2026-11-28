@@ -39,6 +39,7 @@ _RESPONSE_KEYS = {
     "length_m",
     "length_mm",
     "measured_change",
+    "runout_mm",
     "start_point_mm",
     "system_value",
     "usage_instructions",

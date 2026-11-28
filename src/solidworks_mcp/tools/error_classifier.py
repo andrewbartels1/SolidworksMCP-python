@@ -255,6 +255,30 @@ DEFAULT_RULES: tuple[ErrorRule, ...] = (
     ErrorRule(
         error_type=INVALID_INPUT,
         hint=(
+            "Use a size from list_thread_sizes, and pick the circular edge where "
+            "the thread starts: a rod of the nominal diameter (external) or a "
+            "hole of about the tap drill (internal)."
+        ),
+        patterns=(
+            r"No thread size '",
+            r"No edge at \[",
+            r"is not a circle; a thread starts",
+            r"wants a (rod|hole \(about the tap drill\)) of about",
+            r"(standard|kind|hand) must be",
+            r"length must be greater than 0",
+        ),
+    ),
+    ErrorRule(
+        error_type="feature_not_built",
+        hint=(
+            "SolidWorks made no thread. Check the edge is a cylinder's end and "
+            "the size suits it, then retry."
+        ),
+        patterns=(r"SolidWorks made no thread",),
+    ),
+    ErrorRule(
+        error_type=INVALID_INPUT,
+        hint=(
             "face_point must lie on a flat face of the active part's body, in "
             "mm. Read the faces' centres with select_face_edges, or sketch on "
             "a plane instead."

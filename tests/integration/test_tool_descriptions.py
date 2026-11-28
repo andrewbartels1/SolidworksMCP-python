@@ -35,6 +35,7 @@ _MODULES = [
     "server_admin",
     "sketching",
     "template_management",
+    "threads",
     "vba_generation",
 ]
 

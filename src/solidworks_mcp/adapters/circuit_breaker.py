@@ -31,6 +31,7 @@ from .base import (
     SolidWorksModel,
     SplitBodyParameters,
     SweepParameters,
+    ThreadParameters,
 )
 
 T = TypeVar("T")
@@ -1350,6 +1351,24 @@ class CircuitBreakerAdapter(SolidWorksAdapter):
         return await self._execute_with_circuit_breaker(
             "scale_body",
             lambda: self.adapter.scale_body(params),
+            input_dict=_to_input_dict(params),
+        )
+
+    async def list_thread_sizes(self, standard: str) -> AdapterResult[dict[str, Any]]:
+        """The thread profiles' sizes. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "list_thread_sizes",
+            lambda: self.adapter.list_thread_sizes(standard),
+            input_dict={"standard": standard},
+        )
+
+    async def create_thread(
+        self, params: ThreadParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A modelled thread. Through the circuit breaker."""
+        return await self._execute_with_circuit_breaker(
+            "create_thread",
+            lambda: self.adapter.create_thread(params),
             input_dict=_to_input_dict(params),
         )
 

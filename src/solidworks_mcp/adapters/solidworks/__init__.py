@@ -15,6 +15,7 @@ from .sheet_metal import SolidWorksSheetMetalMixin
 from .sketch import SolidWorksSketchMixin
 from .swept import SolidWorksSweptMixin
 from .templates import SolidWorksTemplatesMixin
+from .threads import SolidWorksThreadsMixin
 
 __all__ = [
     "SolidWorksAssemblyMixin",
@@ -32,4 +33,5 @@ __all__ = [
     "SolidWorksSketchMixin",
     "SolidWorksSweptMixin",
     "SolidWorksTemplatesMixin",
+    "SolidWorksThreadsMixin",
 ]

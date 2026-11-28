@@ -296,7 +296,7 @@ SUPPORT_LEVELS: dict[str, Support] = {
         SupportLevel.BETA,
         "new: checked live once (a spring and a threaded rod), not yet in wide use.",
     ),
-    # Queue item 35: beta until the multi-body live demo.
+    # Queue item 35: passed the live demo 2026-11-27; beta for a release.
     "combine_bodies": Support(
         SupportLevel.BETA,
         "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
@@ -318,6 +318,15 @@ SUPPORT_LEVELS: dict[str, Support] = {
         "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
     ),
     "split_body": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    # Queue item 43: beta until the threads live demo.
+    "create_thread": Support(
+        SupportLevel.BETA,
+        "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    ),
+    "list_thread_sizes": Support(
         SupportLevel.BETA,
         "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
     ),

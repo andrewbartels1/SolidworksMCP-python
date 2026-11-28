@@ -208,6 +208,8 @@ TOOL_HINTS: dict[str, ToolHints] = {
     "move_copy_body": _adds("Move/Copy Body"),
     "delete_bodies": _discards("Delete/Keep Bodies"),
     "scale_body": _adds("Scale Body"),
+    "list_thread_sizes": _reads("List Thread Sizes"),
+    "create_thread": _adds("Create Thread"),
     "create_loft": _adds("Create Loft"),
     "insert_component": _adds("Insert Component"),
     "add_mate": _adds("Add Mate"),

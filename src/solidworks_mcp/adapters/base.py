@@ -397,6 +397,27 @@ class ScaleBodyParameters(BaseModel):
     bodies: list[str] | None = None
 
 
+class ThreadParameters(BaseModel):
+    """A modelled thread with SolidWorks's Thread feature.
+
+    Attributes:
+        kind (str): ``external`` (die) or ``internal`` (tap).
+        standard (str): ``metric`` or ``inch``.
+        size (str): A profile size, e.g. ``M6x1.0`` or ``1/4-20``.
+        edge_point (list[float]): ``[x, y, z]`` mm on the circular edge where
+            the thread starts.
+        length (float): The thread's length, mm.
+        hand (str): ``right`` or ``left``.
+    """
+
+    kind: str = "external"
+    standard: str = "metric"
+    size: str
+    edge_point: list[float]
+    length: float
+    hand: str = "right"
+
+
 class LoftParameters(BaseModel):
     """Parameters for loft operations.
 
@@ -924,6 +945,36 @@ class SolidWorksAdapter(ABC):
         return AdapterResult(
             status=AdapterResultStatus.ERROR,
             error="scale_body is not implemented by this adapter",
+        )
+
+    async def list_thread_sizes(self, standard: str) -> AdapterResult[dict[str, Any]]:
+        """The sizes SolidWorks's thread profiles hold for a standard.
+
+        Args:
+            standard: ``metric`` or ``inch``.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="list_thread_sizes is not implemented by this adapter",
+        )
+
+    async def create_thread(
+        self, params: ThreadParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A modelled thread, external or internal, measured.
+
+        Args:
+            params: The kind, standard, size, edge, length and hand.
+
+        Returns:
+            AdapterResult[dict[str, Any]]: Error unless the adapter implements it.
+        """
+        return AdapterResult(
+            status=AdapterResultStatus.ERROR,
+            error="create_thread is not implemented by this adapter",
         )
 
     @abstractmethod

@@ -71,6 +71,14 @@ These read SolidWorks' installed files and never start it
 
     [**6 tools available** :octicons-arrow-right-24:](tool-catalog/bodies.md)
 
+- :material-screw-machine-flat-top:{ .lg .middle } **Thread Tools**
+
+    ---
+
+    Modelled threads at standard sizes: external or internal, coarse or fine, with depth and runout.
+
+    [**2 tools available** :octicons-arrow-right-24:](tool-catalog/threads.md)
+
 - :material-cogs:{ .lg .middle } **Assembly Tools**
 
     ---
@@ -201,7 +209,7 @@ These read SolidWorks' installed files and never start it
 
 </div>
 
-**Total: 165 Tools**
+**Total: 167 Tools**
 
 ## Deprecated tools
 

@@ -109,7 +109,22 @@ A cut or a `create_hole` hole that already exists can be repeated instead:
 5. `set_flat_pattern` with `flat: true` gives the blank's size; check it,
    `export_flat_pattern` for the DXF, then `flat: false` to fold it back.
 
-## A spring or a modelled thread (a helix and a sweep)
+## A standard thread (a bolt, a tapped hole)
+
+1. `list_thread_sizes` (`metric` or `inch`) names the sizes SolidWorks
+   holds, with coarse or fine, the basic depth and the runout. M3 to M6
+   are the common bolt sizes.
+2. External: extrude a rod of the nominal diameter (M6: 6 mm), then
+   `create_thread` with `size`, `length` and `edge_point` on the rod's end
+   edge. Internal: `create_hole` with `hole_type` tapped makes the tap
+   drill; then `create_thread` with `kind` internal and `edge_point` on the
+   hole's edge at its opening.
+3. Leave the reply's `runout_mm` (normal) between the thread's end and a
+   shoulder or head. A thread that cuts nothing fails and is removed.
+4. When the user mentions fasteners and a hole is tapped, ask whether to
+   model its thread; `add_cosmetic_thread` only marks one for drawings.
+
+## A spring or a custom thread (a helix and a sweep)
 
 1. `create_part`, `create_sketch` on "Top", one `add_circle` (the helix's
    diameter; its centre is on the axis), `exit_sketch`.

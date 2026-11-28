@@ -30,6 +30,7 @@ from .base import (
     SolidWorksModel,
     SplitBodyParameters,
     SweepParameters,
+    ThreadParameters,
 )
 
 T = TypeVar("T")
@@ -1169,6 +1170,20 @@ class ConnectionPoolAdapter(SolidWorksAdapter):
         """Scale bodies. Using the pool."""
         return await self._execute_with_pool(
             "scale_body", lambda adapter: adapter.scale_body(params)
+        )
+
+    async def list_thread_sizes(self, standard: str) -> AdapterResult[dict[str, Any]]:
+        """The thread profiles' sizes. Using the pool."""
+        return await self._execute_with_pool(
+            "list_thread_sizes", lambda adapter: adapter.list_thread_sizes(standard)
+        )
+
+    async def create_thread(
+        self, params: ThreadParameters
+    ) -> AdapterResult[dict[str, Any]]:
+        """A modelled thread. Using the pool."""
+        return await self._execute_with_pool(
+            "create_thread", lambda adapter: adapter.create_thread(params)
         )
 
     async def create_loft(

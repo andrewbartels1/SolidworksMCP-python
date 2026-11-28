@@ -35,6 +35,7 @@ from .mock_equations import MockEquationsMixin
 from .mock_sheet_metal import MockSheetMetalMixin
 from .mock_swept import MockSweptMixin
 from .mock_templates import MockTemplatesMixin
+from .mock_threads import MockThreadsMixin
 from .solidworks.documentation import MATERIAL_PROPERTIES
 from .solidworks.drawing_standard import gtol_problem
 from .solidworks.features import _AXIS_PLANE_PAIRS
@@ -145,6 +146,7 @@ class _BoolCallable:
 
 
 class MockSolidWorksAdapter(
+    MockThreadsMixin,
     MockBodiesMixin,
     MockSheetMetalMixin,
     MockSweptMixin,
