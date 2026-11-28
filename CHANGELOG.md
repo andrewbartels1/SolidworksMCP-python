@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Modelled threads** (queue item 43): `list_thread_sizes` lists the
+  sizes SolidWorks's own thread profiles hold, metric or inch (M1.2 to
+  M64, #0 to 4 in), each with coarse or fine pitch, the ISO 68-1 basic depth
+  and the ISO 3508 runout (normal 2.5P, short 1.25P; for inch the same rule
+  on 1/TPI, labelled a reasoned default). `create_thread` cuts an external
+  (die) or internal (tap) thread with SolidWorks's Thread feature at the
+  circular edge picked by a point, checks the cylinder's diameter against
+  the size first, and fails and undoes a thread that cuts nothing.
+  `create_hole`'s description points to it for fasteners. 167 tools in
+  all. Beta until the live demo; the live tests pass on SolidWorks 2026
+  (an M6 rod, a 1/4-20 rod, an M6 tapped hole).
 - **Multi-body tools** (queue item 35): `list_bodies` names a part's solid
   bodies with each one's volume and bounding box; `combine_bodies` adds,
   subtracts or keeps the common volume of bodies (a mould core: a block

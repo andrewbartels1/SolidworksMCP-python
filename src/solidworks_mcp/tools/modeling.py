@@ -3388,8 +3388,10 @@ async def register_modeling_tools(
         Hole Wizard library (`list_hole_sizes`): an unknown size is refused, with the
         nearest ones, before anything is made. A simple hole can't be through all in
         SolidWorks, so it is made blind through the part (`end_condition_used`, with
-        a warning). It fails when the volume doesn't change. Needs: an open part with
-        a flat face at `face_point`. Changes: adds a hole feature. Returns: `hole`
+        a warning). It fails when the volume doesn't change. A tapped hole's thread
+        is not modelled; when fasteners matter, ask whether to add one with
+        `create_thread` (`kind` internal, sizes from `list_thread_sizes`) at the
+        hole's edge. Needs: an open part with a flat face at `face_point`. Changes: adds a hole feature. Returns: `hole`
         with `name`, `hole_count`, `hole_type`, `standard`, `fastener` (the hole type
         used), `size`, `end_condition`, `end_condition_used`, and `volume_before`,
         `volume_after` and `volume_change` (mm³).

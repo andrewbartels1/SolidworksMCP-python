@@ -25,6 +25,7 @@ from .modeling import register_modeling_tools
 from .server_admin import register_server_admin_tools
 from .sketching import register_sketching_tools
 from .template_management import register_template_management_tools
+from .threads import register_thread_tools
 from .vba_generation import register_vba_generation_tools
 
 
@@ -45,6 +46,7 @@ async def register_tools(mcp: FastMCP, adapter: Any, config: Any) -> int:
     await register_modeling_tools(mcp, adapter, config)
     await register_equation_tools(mcp, adapter, config)
     await register_body_tools(mcp, adapter, config)
+    await register_thread_tools(mcp, adapter, config)
     await register_assembly_tools(mcp, adapter, config)
     await register_sketching_tools(mcp, adapter, config)
     await register_drawing_tools(mcp, adapter, config)

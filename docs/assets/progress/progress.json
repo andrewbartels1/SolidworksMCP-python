@@ -1,9 +1,9 @@
 {
  "tools": {
-  "total": 165,
+  "total": 167,
   "by_level": {
    "stable": 149,
-   "beta": 8,
+   "beta": 10,
    "experimental": 0,
    "planned": 0,
    "deprecated": 8
@@ -465,6 +465,13 @@
     "summary": "Place a model's three standard views (front, top and side) on the active drawing sheet in one call."
    },
    {
+    "name": "create_thread",
+    "family": "threads",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "Cut a modelled thread, external (a bolt) or internal (a tapped hole), at a standard size."
+   },
+   {
     "name": "delete_bodies",
     "family": "bodies",
     "level": "beta",
@@ -799,6 +806,13 @@
     "level": "stable",
     "reason": "",
     "summary": "List every document open in SolidWorks and say which one is active."
+   },
+   {
+    "name": "list_thread_sizes",
+    "family": "threads",
+    "level": "beta",
+    "reason": "new: checked on SolidWorks by a scratch run, not yet by a live demo.",
+    "summary": "List the standard thread sizes SolidWorks holds, metric or inch, with coarse or fine pitch, depth and runout."
    },
    {
     "name": "load_assembly",
@@ -1173,7 +1187,7 @@
    "total": 2838
   },
   "api": {
-   "covered": 338,
+   "covered": 340,
    "total": 5985
   },
   "interfaces": [

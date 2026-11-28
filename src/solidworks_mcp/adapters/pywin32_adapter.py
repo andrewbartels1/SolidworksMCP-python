@@ -40,6 +40,7 @@ from .solidworks import (
     SolidWorksSketchMixin,
     SolidWorksSweptMixin,
     SolidWorksTemplatesMixin,
+    SolidWorksThreadsMixin,
     bitmap,
     default_entities,
 )
@@ -1724,6 +1725,7 @@ class _FeatureSelectionService:
 
 
 class PyWin32Adapter(
+    SolidWorksThreadsMixin,
     SolidWorksAssemblyMixin,
     SolidWorksBodiesMixin,
     SolidWorksSheetMetalMixin,
